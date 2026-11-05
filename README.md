@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 8 (Polish & release)**. Builds for **Windows, macOS and Linux**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 9 (macOS & Linux)**. Builds and runs on **Windows, macOS and Linux**. Miu scans, explains every item, and cleans what you choose. Everything goes to the **Recycle Bin (Windows) or Trash (macOS, Linux)** and can be undone from the Activity page.
 
 | Home | Analyze |
 |---|---|
@@ -148,7 +148,7 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 6. ~~**Network drives and sync**~~ ✅
 7. ~~**Cloud backup**~~ ✅
 8. ~~**Polish and release**~~ ✅ · onboarding, installers for all three systems, update check, crash and database safety.
-9. **macOS and Linux releases.**
+9. ~~**macOS and Linux**~~ ✅ · Trash, Keychain / Secret Service, start at login, OS-specific junk rules.
 
 ## Download
 Get the file for your system from the [latest release](https://github.com/khangkhangg/Smart-Drive-Storage/releases/latest):

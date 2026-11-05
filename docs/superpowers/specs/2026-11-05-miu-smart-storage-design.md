@@ -803,10 +803,10 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F8.8 Docs
 
 ### Phase 9 — macOS & Linux
-- [ ] F9.1 macOS adapters
-- [ ] F9.2 Linux adapters
-- [ ] F9.3 OS junk rules
-- [ ] F9.4 Packaging
+- [x] F9.1 macOS adapters — Trash, Keychain, LaunchAgent, power (notarization needs an Apple ID)
+- [x] F9.2 Linux adapters — Secret Service keyring with file fallback, freedesktop Trash, XDG autostart
+- [x] F9.3 OS junk rules
+- [x] F9.4 Packaging — .dmg/.zip, .deb, .tar.gz, AppImage
 
 ---
 
