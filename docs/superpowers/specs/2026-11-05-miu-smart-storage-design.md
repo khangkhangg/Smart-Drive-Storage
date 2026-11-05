@@ -782,15 +782,15 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F6.5 Sync runner + UI
 
 ### Phase 7 — Cloud backup
-- [ ] F7.1 Provider abstraction + OAuth
-- [ ] F7.2 Google Drive
-- [ ] F7.3 OneDrive
-- [ ] F7.4 Dropbox
-- [ ] F7.5 S3-compatible
-- [ ] F7.6 Plan editor
-- [ ] F7.7 Backup runner
-- [ ] F7.8 Back-up-then-free
-- [ ] F7.9 Restore
+- [x] F7.1 Provider abstraction + OAuth
+- [x] F7.2 Google Drive
+- [x] F7.3 OneDrive
+- [x] F7.4 Dropbox
+- [x] F7.5 S3-compatible
+- [x] F7.6 Plan editor
+- [x] F7.7 Backup runner
+- [x] F7.8 Back-up-then-free
+- [x] F7.9 Restore
 
 ### Phase 8 — Polish & Release
 - [ ] F8.1 Onboarding

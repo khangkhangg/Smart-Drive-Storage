@@ -72,3 +72,9 @@ Older versions are kept. You can restore any file to where it was or to another 
 5. App: the accounts service, `BackupService` (preview, run, verify, free, versions, restore, retries) against the in-memory provider, schedules, and Back up first.
 6. UI: the Cloud backup tab (accounts, editor, plans, preview, restore). Headless tests and a screenshot.
 7. Docs, independent review, fix pass, push.
+
+## Known limits (at the end of the milestone)
+- **Folder picker:** the plan editor takes a list of folders (one per line), not the tri-state folder tree from the spec.
+- **Metered networks:** no automatic pause, because .NET has no cross-platform way to tell; the bandwidth limit and quiet hours cover it for now.
+- **Resuming:** a stopped backup continues per file. A single huge file starts its upload again (provider upload sessions only resume within a run).
+- **Real accounts:** Google Drive, OneDrive and Dropbox are tested against recorded request and response shapes, not against the real services. Before release, run a smoke test with real accounts.

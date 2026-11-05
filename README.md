@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 6 (Network drives & sync)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 7 (Cloud backup)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -41,9 +41,9 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 |---|---|
 | ![Network drives](docs/screenshots/network.png) | ![Sync jobs](docs/screenshots/sync.png) |
 
-| Notification | |
+| Cloud backup | Notification |
 |---|---|
-| ![Notification](docs/screenshots/notification.png) | |
+| ![Cloud backup](docs/screenshots/backup.png) | ![Notification](docs/screenshots/notification.png) |
 
 | Splash | About |
 |---|---|
@@ -92,6 +92,12 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
   - If a run would empty a folder (an unplugged drive?) or set aside most of it, Miu refuses and explains why.
   - A file changed on both sides keeps both versions: `name (conflict 2026-11-05).ext`.
   - Interrupted copies resume, and you never get a half-written file.
+- **Cloud backup** to **Google Drive, OneDrive, Dropbox** or **S3-compatible storage** (AWS, Backblaze B2, Wasabi, Cloudflare R2, MinIO):
+  - Modes: **Copy new and changed**, **Mirror**, or **Back up, then free space**. The last one moves files you haven't touched for N days to the Recycle Bin, but only after their cloud copy is checked.
+  - Every upload is verified with the provider's checksum, compared with one Miu computes while reading the file. Replaced or removed cloud files are kept as older versions (you choose how many). Interrupted backups continue where they stopped. You can set a bandwidth limit.
+  - **Restore** any file to where it was or to another folder. A different file in the way is never replaced; the restored copy is saved as "name (restored date)".
+  - **Back up first** in Review & Clean uploads and checks everything before cleaning.
+  - Miu only gets access to its own folder: Google `drive.file`, and the OneDrive and Dropbox app folders. Tokens and keys are kept in the system's secure store.
 - **For developers:** clean one project's rebuildable folders, or every idle project at once. **Docker** shows its disk usage and offers safe prunes: build cache, unused image layers and stopped containers. Volumes are never touched.
 - **Folders that hold cleanable files** are labelled with how much inside is safe, e.g. "4.8 GB to clean".
 
@@ -135,8 +141,26 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 3. ~~**Learning rules**~~ ✅ · ~~duplicates, Types view~~ ✅
 4. ~~**Background and schedules**~~ ✅
 5. ~~**Telegram**~~ ✅
-6. ~~**Network drives and sync**~~ ✅ · next: **cloud backup** (Google Drive, OneDrive, Dropbox, S3).
-7. **macOS and Linux releases.**
+6. ~~**Network drives and sync**~~ ✅
+7. ~~**Cloud backup**~~ ✅
+8. **Polish and release:** onboarding, installer and auto-update.
+9. **macOS and Linux releases.**
+
+## Cloud sign-in setup (for builds)
+S3-compatible storage works out of the box. Google Drive, OneDrive and Dropbox need Miu's own app registrations, which have no secrets you must protect: they're public "desktop" clients that use PKCE. To enable them:
+1. Copy `docs/cloud-clients.example.json` to `cloud-clients.json` next to `Miu.App.exe`.
+2. Fill in the IDs. You can also use the environment variables `MIU_GOOGLE_CLIENT_ID`, `MIU_GOOGLE_CLIENT_SECRET`, `MIU_MICROSOFT_CLIENT_ID` and `MIU_DROPBOX_CLIENT_ID`.
+
+How to register each one:
+- **Google:** create a Desktop OAuth client with the scope `https://www.googleapis.com/auth/drive.file`.
+- **Microsoft:**
+  - Register a public client app.
+  - Add the redirect `http://localhost` under "Mobile and desktop applications".
+  - Add the delegated permissions `Files.ReadWrite.AppFolder`, `offline_access` and `User.Read`.
+- **Dropbox:**
+  - Create an "App folder" app.
+  - Add the redirect `http://localhost:53682/`.
+  - Turn on the scopes `files.content.read`, `files.content.write` and `files.metadata.read`.
 
 ## License
 Free. A license file will be added before the first public release.

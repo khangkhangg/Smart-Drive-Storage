@@ -6,3 +6,6 @@ obj/
 TestResults/
 .superpowers/
 *.db
+
+# Local cloud sign-in registrations
+src/Miu.App/cloud-clients.json

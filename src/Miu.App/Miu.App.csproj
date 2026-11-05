@@ -26,4 +26,8 @@
     <None Include="../../rules/builtin/*.json" Link="rules/builtin/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Optional: sign-in app registrations for Google Drive / OneDrive / Dropbox (see README). -->
+    <None Include="cloud-clients.json" Condition="Exists('cloud-clients.json')" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
