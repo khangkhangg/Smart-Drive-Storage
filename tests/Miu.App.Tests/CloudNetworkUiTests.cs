@@ -106,6 +106,8 @@ public sealed class CloudNetworkUiTests : IDisposable
         cn.PreviewText.Should().Contain("empty");
 
         File.WriteAllText(Path.Combine(src, "keep0.txt"), "x");
+        // Same content and date as the target's copy, so it counts as unchanged on any machine.
+        File.SetLastWriteTimeUtc(Path.Combine(src, "keep0.txt"), File.GetLastWriteTimeUtc(Path.Combine(dst, "keep0.txt")));
         await cn.PreviewAsync(cn.Jobs.Single());
         cn.PreviewRefused.Should().BeTrue(); // "set aside 29 of 30": you may decide
         await cn.RunAnywayCommand.ExecuteAsync(null);

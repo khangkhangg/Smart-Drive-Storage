@@ -36,7 +36,9 @@ public static class CrashReporter
         {
             var dir = Folder(dataDir);
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{(fatal ? Prefix : ProblemPrefix)}{DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture)}.txt");
+            var stem = $"{(fatal ? Prefix : ProblemPrefix)}{DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture)}";
+            var path = Path.Combine(dir, stem + ".txt");
+            for (var i = 2; File.Exists(path); i++) path = Path.Combine(dir, $"{stem}-{i:00}.txt"); // two in the same millisecond
             File.WriteAllText(path,
                 $"Miu Smart Storage {AppInfo.Version} ({kind})\n" +
                 $"Time: {DateTime.Now:O}\n" +
