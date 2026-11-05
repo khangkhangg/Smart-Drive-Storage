@@ -9,5 +9,6 @@
     <Using Include="FluentAssertions" />
     <ProjectReference Include="../../src/Miu.Platform.Portable/Miu.Platform.Portable.csproj" />
     <ProjectReference Include="../../src/Miu.Platform.Windows/Miu.Platform.Windows.csproj" />
+    <ProjectReference Include="../../src/Miu.Platform.MacOS/Miu.Platform.MacOS.csproj" />
   </ItemGroup>
 </Project>

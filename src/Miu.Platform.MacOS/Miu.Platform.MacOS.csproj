@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Miu.Platform.Abstractions/Miu.Platform.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

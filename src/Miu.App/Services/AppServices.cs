@@ -117,10 +117,13 @@ public sealed class AppServices : IDisposable
         };
     }
 
-    private static ISecretStore DefaultSecrets() =>
-        OperatingSystem.IsWindows()
-            ? new WindowsCredentialStore()
-            : new FileSecretStore(Path.GetDirectoryName(MiuDatabase.DefaultPath)!);
+    private static ISecretStore DefaultSecrets()
+    {
+        if (OperatingSystem.IsWindows()) return new WindowsCredentialStore();
+        if (OperatingSystem.IsMacOS()) return new Miu.Platform.MacOS.MacKeychain();
+        var file = new FileSecretStore(Path.GetDirectoryName(MiuDatabase.DefaultPath)!);
+        return OperatingSystem.IsLinux() ? new LinuxKeyring(file) : file;
+    }
 
     private static INetworkDrives DefaultNetworkDrives() =>
         OperatingSystem.IsWindows()
@@ -131,6 +134,7 @@ public sealed class AppServices : IDisposable
     {
         if (OperatingSystem.IsWindows()) return new WindowsRunKey();
         if (OperatingSystem.IsLinux()) return new LinuxAutostart();
+        if (OperatingSystem.IsMacOS()) return new Miu.Platform.MacOS.MacLaunchAgent();
         return new NoStartupRegistration();
     }
 
@@ -138,6 +142,7 @@ public sealed class AppServices : IDisposable
     {
         if (OperatingSystem.IsWindows()) return new WindowsPowerState();
         if (OperatingSystem.IsLinux()) return new LinuxPowerState();
+        if (OperatingSystem.IsMacOS()) return new Miu.Platform.MacOS.MacPowerState();
         return new AlwaysPlugged();
     }
 
@@ -145,7 +150,8 @@ public sealed class AppServices : IDisposable
     {
         if (OperatingSystem.IsWindows()) return new WindowsRecycleBin();
         if (OperatingSystem.IsLinux()) return new FreedesktopTrash();
-        return new UnsupportedRecycleBin(); // macOS arrives in Phase 9
+        if (OperatingSystem.IsMacOS()) return new Miu.Platform.MacOS.MacTrash();
+        return new UnsupportedRecycleBin();
     }
 
     public void Dispose() => Database.Dispose();

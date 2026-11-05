@@ -19,6 +19,7 @@
     <ProjectReference Include="../Miu.Data/Miu.Data.csproj" />
     <ProjectReference Include="../Miu.Platform.Portable/Miu.Platform.Portable.csproj" />
     <ProjectReference Include="../Miu.Platform.Windows/Miu.Platform.Windows.csproj" />
+    <ProjectReference Include="../Miu.Platform.MacOS/Miu.Platform.MacOS.csproj" />
     <ProjectReference Include="../Miu.Notify/Miu.Notify.csproj" />
     <ProjectReference Include="../Miu.Cloud/Miu.Cloud.csproj" />
   </ItemGroup>

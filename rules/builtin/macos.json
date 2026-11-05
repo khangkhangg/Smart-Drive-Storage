@@ -1,0 +1,124 @@
+{
+  "rules": [
+    {
+      "id": "mac.xcode-deriveddata",
+      "match": {
+        "path": "**/Library/Developer/Xcode/DerivedData/*",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Xcode build cache (DerivedData). Xcode rebuilds it the next time you build.",
+      "priority": 480
+    },
+    {
+      "id": "mac.xcode-archives",
+      "match": {
+        "path": "**/Library/Developer/Xcode/Archives/**"
+      },
+      "conditions": {
+        "olderThanDays": 90
+      },
+      "verdict": "Review",
+      "reason": "Old Xcode app archives. Keep the ones you may need to resubmit or symbolicate.",
+      "priority": 480
+    },
+    {
+      "id": "mac.ios-devicesupport",
+      "match": {
+        "path": "**/Library/Developer/Xcode/{iOS,watchOS,tvOS,visionOS} DeviceSupport/*",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Debug symbols for a device OS version. Xcode downloads them again when you connect that device.",
+      "priority": 480
+    },
+    {
+      "id": "mac.coresimulator-caches",
+      "match": {
+        "path": "**/Library/Developer/CoreSimulator/Caches/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Simulator caches. Rebuilt automatically.",
+      "priority": 480
+    },
+    {
+      "id": "mac.xcode-previews",
+      "match": {
+        "path": "**/Library/Developer/Xcode/UserData/Previews/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "SwiftUI preview builds. Rebuilt when you open a preview.",
+      "priority": 480
+    },
+    {
+      "id": "mac.homebrew-cache",
+      "match": {
+        "path": "**/Library/Caches/Homebrew/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Homebrew downloads. Homebrew fetches them again if needed (same as brew cleanup).",
+      "priority": 480
+    },
+    {
+      "id": "mac.cocoapods-cache",
+      "match": {
+        "path": "**/Library/Caches/CocoaPods/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "CocoaPods download cache. Re-downloaded on the next pod install.",
+      "priority": 480
+    },
+    {
+      "id": "mac.app-caches",
+      "match": {
+        "path": "**/Library/Caches/*",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "An app's cache folder. Usually safe to remove (the app rebuilds it), but it may slow that app down once.",
+      "priority": 300
+    },
+    {
+      "id": "mac.logs",
+      "match": {
+        "path": "**/Library/Logs/**"
+      },
+      "conditions": {
+        "olderThanDays": 30
+      },
+      "verdict": "Safe",
+      "reason": "Old log files.",
+      "priority": 480
+    },
+    {
+      "id": "mac.ds-store",
+      "match": {
+        "path": "**/.DS_Store",
+        "isDir": false
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Finder view settings. Finder recreates it when you open the folder.",
+      "priority": 480
+    },
+    {
+      "id": "mac.trash-installers",
+      "match": {
+        "path": "**/Downloads/*.{dmg,pkg}"
+      },
+      "conditions": {
+        "olderThanDays": 30
+      },
+      "verdict": "Review",
+      "reason": "Old installer. You can usually download it again if you need it.",
+      "priority": 480
+    }
+  ]
+}
