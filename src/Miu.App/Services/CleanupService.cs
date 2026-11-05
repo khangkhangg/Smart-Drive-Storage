@@ -15,7 +15,7 @@ public sealed record CleanProgress(string Phase, int Done, int Total, string Cur
 public sealed class CleanupService(AppServices services)
 {
     /// <summary>
-    /// Moves items to the Recycle Bin one at a time, reporting each. Cancelling (<paramref name="ct"/>) means "stop after
+    /// Moves items to the Recycle Bin, big ones one at a time and small ones in batches, reporting each step. Cancelling (<paramref name="ct"/>) means "stop after
     /// this item": the item being moved always finishes, everything already moved is logged for Undo, the rest is left.
     /// </summary>
     public async Task<CleanupOutcome> CleanAsync(IReadOnlyList<CartItem> items, ScanSession? session, string origin,
@@ -52,17 +52,20 @@ public sealed class CleanupService(AppServices services)
         long bytesDone = 0;
         var moved = 0;
         var stopped = false;
-        foreach (var i in items)
+        var movingTotal = items.Sum(x => x.Bytes);
+        foreach (var batch in Batches(items))
         {
             if (ct.IsCancellationRequested) { stopped = true; break; }
-            progress?.Report(new CleanProgress("moving", moved, items.Count, i.Name, i.Bytes, bytesDone, items.Sum(x => x.Bytes)));
-            var r = await services.Recycler.RecycleAsync([i.Path], null, CancellationToken.None);
+            var first = batch[0];
+            var label = batch.Count == 1 ? first.Name : $"{first.Name} and {batch.Count - 1} more";
+            progress?.Report(new CleanProgress("moving", moved, items.Count, label, batch.Sum(b => b.Bytes), bytesDone, movingTotal));
+            var r = await services.Recycler.RecycleAsync(batch.Select(b => b.Path).ToList(), null, CancellationToken.None);
             movedItems.AddRange(r.Recycled);
             failed.AddRange(r.Failed);
-            bytesDone += i.Bytes;
-            moved++;
+            bytesDone += batch.Sum(b => b.Bytes);
+            moved += batch.Count;
         }
-        progress?.Report(new CleanProgress("moving", moved, items.Count, "", 0, bytesDone, items.Sum(x => x.Bytes)));
+        progress?.Report(new CleanProgress("moving", moved, items.Count, "", 0, bytesDone, movingTotal));
         var recycleResult = new RecycleResult(movedItems, failed);
         var notStarted = items.Count - moved;
         var result = new RecycleResult(recycleResult.Recycled, [.. blocked, .. recycleResult.Failed]);
@@ -86,6 +89,31 @@ public sealed class CleanupService(AppServices services)
         }
         return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed, stopped, notStarted);
     }
+
+    /// <summary>
+    /// Groups small items so thousands of files don't take thousands of Recycle Bin calls; big items (and folders over
+    /// <see cref="BatchBytes"/>) go alone, so you can stop between them.
+    /// </summary>
+    public static IEnumerable<List<CartItem>> Batches(IReadOnlyList<CartItem> items)
+    {
+        var batch = new List<CartItem>();
+        long bytes = 0;
+        foreach (var i in items)
+        {
+            if (batch.Count > 0 && (batch.Count >= BatchCount || bytes + i.Bytes > BatchBytes))
+            {
+                yield return batch;
+                batch = [];
+                bytes = 0;
+            }
+            batch.Add(i);
+            bytes += i.Bytes;
+        }
+        if (batch.Count > 0) yield return batch;
+    }
+
+    public const int BatchCount = 100;
+    public const long BatchBytes = 256L * 1024 * 1024;
 
     /// <summary>
     /// Why this item can't be cleaned without losing work git doesn't have, or null. Checks the repository the item is

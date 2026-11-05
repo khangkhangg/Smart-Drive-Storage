@@ -65,7 +65,8 @@ public sealed class CleanProgressTests : IDisposable
         var bin = new GatedBin("b.bin");
         var vm = new MainWindowViewModel(AppServices.Create(":memory:", bin, secrets: new TelegramServiceTests.MemorySecrets()),
             new AutomationTests.FakeNotifier(), _ => new TelegramServiceTests.FakeTelegram()) { Onboarding = null };
-        vm.OpenReview([Item("a.bin", 100), Item("b.bin", 300), Item("c.bin", 600)], "Review", "cart");
+        const long MB = 1_000_000; // big enough that each goes on its own (not batched)
+        vm.OpenReview([Item("a.bin", 100 * MB), Item("b.bin", 300 * MB), Item("c.bin", 600 * MB)], "Quick Clean", "quick-clean");
         var review = vm.Review!;
         var cleaning = review.CleanCommand.ExecuteAsync(null);
 
@@ -73,7 +74,7 @@ public sealed class CleanProgressTests : IDisposable
         await Until(() => review.ProgressText.StartsWith("Moving 2"));
         review.IsWorking.Should().BeTrue();
         review.IsIdle.Should().BeFalse();
-        review.ProgressText.Should().Contain("Moving 2 of 3").And.Contain("b.bin").And.Contain("of 1000 B done");
+        review.ProgressText.Should().Contain("Moving 2 of 3").And.Contain("b.bin").And.Contain(" done");
         review.ProgressValue.Should().BeApproximately(60, 0.01); // largest first: c.bin (600 of 1000 bytes) is done
 
         ReviewViewModel.SlowAfter = TimeSpan.Zero;
@@ -106,10 +107,45 @@ public sealed class CleanProgressTests : IDisposable
         var reports = new List<CleanProgress>();
         var s = AppServices.Create(":memory:", new CleanupServiceTests.FakeBin(), secrets: new TelegramServiceTests.MemorySecrets());
         var progress = new SyncProgressList(reports);
-        await new CleanupService(s).CleanAsync([Item("x.bin", 10), Item("y.bin", 30)], null, "cart", progress);
+        const long Big = 200_000_000; // two of these don't fit in one batch
+        await new CleanupService(s).CleanAsync([Item("x.bin", Big), Item("y.bin", Big)], null, "cart", progress);
         reports.Select(r => (r.Phase, r.Done, r.Current)).Should().Equal(
             ("checking", 0, "x.bin"), ("checking", 1, "y.bin"), ("moving", 0, "x.bin"), ("moving", 1, "y.bin"), ("moving", 2, ""));
-        reports[^1].BytesDone.Should().Be(40);
+        reports[^1].BytesDone.Should().Be(2 * Big);
+    }
+
+    [Fact]
+    public async Task Thousands_of_small_files_go_in_batches_and_report_each_batch()
+    {
+        var reports = new List<CleanProgress>();
+        var bin = new CountingBin();
+        var s = AppServices.Create(":memory:", bin, secrets: new TelegramServiceTests.MemorySecrets());
+        var items = Enumerable.Range(0, 250).Select(i => Item($"f{i:000}.log", 1000)).ToList();
+        var outcome = await new CleanupService(s).CleanAsync(items, null, "quick-clean", new SyncProgressList(reports));
+        bin.Calls.Should().Equal(100, 100, 50);
+        outcome.Count.Should().Be(250);
+        reports.Where(r => r.Phase == "moving").Select(r => (r.Done, r.Current)).Should().Equal(
+            (0, "f000.log and 99 more"), (100, "f100.log and 99 more"), (200, "f200.log and 49 more"), (250, ""));
+    }
+
+    [Fact]
+    public void Big_items_are_never_batched_with_others()
+    {
+        CartItem I(long b) => new("/x/" + b, "n", b, Verdict.Safe, "t");
+        var batches = CleanupService.Batches([I(5), I(300_000_000), I(6), I(7)]).Select(b => b.Count).ToList();
+        batches.Should().Equal(1, 1, 2);
+    }
+
+    private sealed class CountingBin : IRecycleBin
+    {
+        public List<int> Calls { get; } = [];
+        public bool IsSupported => true;
+        public Task<RecycleResult> RecycleAsync(IReadOnlyList<string> paths, IProgress<int>? progress, CancellationToken ct)
+        {
+            Calls.Add(paths.Count);
+            return Task.FromResult(new RecycleResult(paths.Select(p => new RecycledItem(p, "/trash/" + Path.GetFileName(p), 1000)).ToList(), []));
+        }
+        public Task<RestoreResult> RestoreAsync(IReadOnlyList<RecycledItem> items, CancellationToken ct) => Task.FromResult(new RestoreResult([], []));
     }
 
     private sealed class SyncProgressList(List<CleanProgress> list) : IProgress<CleanProgress>
