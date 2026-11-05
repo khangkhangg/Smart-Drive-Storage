@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             xmlns:c="using:Miu.App.Controls"
+             x:Class="Miu.App.Views.OnboardingView"
+             x:DataType="vm:OnboardingViewModel">
+  <Border Width="680" Background="{DynamicResource MiuCardBg}" CornerRadius="16" BoxShadow="0 12 40 0 #40000000" Padding="32,28">
+    <StackPanel Spacing="18">
+      <StackPanel Orientation="Horizontal" Spacing="14">
+        <c:MiuLogo Width="56" Height="56" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Classes="h1" FontSize="24" Text="Welcome to Miu" />
+          <TextBlock Classes="caption" Text="{Binding StepText}" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Step 1 -->
+      <StackPanel Spacing="10" IsVisible="{Binding IsStep1}">
+        <TextBlock Classes="h2" Text="What should Miu look at first?" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Miu only looks. Nothing is cleaned unless you choose it, and everything goes to the Recycle Bin or Trash first, so you can undo it." />
+        <ItemsControl ItemsSource="{Binding Locations}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:OnboardingLocation">
+              <CheckBox IsChecked="{Binding IsChecked}" Margin="0,4">
+                <StackPanel>
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap" />
+                </StackPanel>
+              </CheckBox>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Step 2 -->
+      <StackPanel Spacing="10" IsVisible="{Binding IsStep2}">
+        <TextBlock Classes="h2" Text="Should Miu keep an eye on things?" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="In the background, Miu can run your automations, warn you when a drive is getting full, and send a weekly summary. It starts when you sign in and lives in the tray. You can change this any time in Settings." />
+        <ToggleSwitch IsChecked="{Binding RunInBackground}" OnContent="Yes, run in the background" OffContent="No, only when I open Miu" />
+      </StackPanel>
+
+      <!-- Step 3 -->
+      <StackPanel Spacing="10" IsVisible="{Binding IsStep3}">
+        <TextBlock Classes="h2" Text="Extras (you can skip these)" />
+        <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding SetUpTelegramCommand}" Padding="16,10">
+          <StackPanel>
+            <TextBlock Text="Get alerts on Telegram" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" Text="Clean, snooze or check your drives from your phone." />
+          </StackPanel>
+        </Button>
+        <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding SetUpCloudCommand}" Padding="16,10">
+          <StackPanel>
+            <TextBlock Text="Back up to the cloud" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" Text="Google Drive, OneDrive, Dropbox or S3. Optionally free space once files are safely uploaded." />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <Button Classes="secondary" Content="Skip setup" Command="{Binding SkipCommand}" />
+        <Button Grid.Column="2" Classes="secondary" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}" Margin="0,0,8,0" />
+        <Button Grid.Column="3" Classes="primary" Content="{Binding NextText}" Command="{Binding NextCommand}" />
+      </Grid>
+    </StackPanel>
+  </Border>
+</UserControl>

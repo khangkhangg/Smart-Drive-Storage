@@ -69,7 +69,7 @@
             <StackPanel>
               <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Classes="caption" Text="{Binding StacksText}" />
-              <TextBlock Classes="caption" Text="{Binding GitText}" Foreground="#8A4600" FontWeight="SemiBold" IsVisible="{Binding GitWarning}" />
+              <TextBlock Classes="caption" Text="{Binding GitText}" Foreground="{DynamicResource MiuWarnFg}" FontWeight="SemiBold" IsVisible="{Binding GitWarning}" />
               <TextBlock Classes="caption" Text="{Binding GitText}" IsVisible="{Binding !GitWarning}" />
             </StackPanel>
             <TextBlock Grid.Column="1" Classes="muted" Text="{Binding LastActivityText}" VerticalAlignment="Center" />

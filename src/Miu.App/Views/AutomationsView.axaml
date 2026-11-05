@@ -62,7 +62,7 @@
             <TextBox Text="{Binding Name}" Width="260" />
           </StackPanel>
           <TextBlock Text="{Binding Preview}" FontStyle="Italic" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding AutoCleanNote}" Foreground="#8A4600" TextWrapping="Wrap"
+          <TextBlock Text="{Binding AutoCleanNote}" Foreground="{DynamicResource MiuWarnFg}" TextWrapping="Wrap"
                      IsVisible="{Binding AutoCleanNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <Button Classes="primary" Content="Save automation" Command="{Binding SaveCommand}" HorizontalAlignment="Left" />
         </StackPanel>
@@ -89,7 +89,7 @@
                   <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Button Classes="secondary" Content="Run now" Command="{Binding RunNowCommand}" />
                     <Button Classes="secondary" Content="Edit" Command="{Binding EditCommand}" />
-                    <Button Content="Delete" Command="{Binding DeleteCommand}" Background="Transparent" Foreground="#A4262C" />
+                    <Button Content="Delete" Command="{Binding DeleteCommand}" Background="Transparent" Foreground="{DynamicResource MiuDangerFg}" />
                   </StackPanel>
                 </Grid>
               </Border>

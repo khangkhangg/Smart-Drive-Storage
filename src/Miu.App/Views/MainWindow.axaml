@@ -10,6 +10,18 @@
         Width="1360" Height="860" MinWidth="900" MinHeight="600"
         Background="{DynamicResource MiuShellBg}"
         TransparencyLevelHint="Mica, AcrylicBlur, None">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+1" Command="{Binding GoToPageCommand}" CommandParameter="1" />
+    <KeyBinding Gesture="Ctrl+2" Command="{Binding GoToPageCommand}" CommandParameter="2" />
+    <KeyBinding Gesture="Ctrl+3" Command="{Binding GoToPageCommand}" CommandParameter="3" />
+    <KeyBinding Gesture="Ctrl+4" Command="{Binding GoToPageCommand}" CommandParameter="4" />
+    <KeyBinding Gesture="Ctrl+5" Command="{Binding GoToPageCommand}" CommandParameter="5" />
+    <KeyBinding Gesture="Ctrl+6" Command="{Binding GoToPageCommand}" CommandParameter="6" />
+    <KeyBinding Gesture="Ctrl+7" Command="{Binding GoToPageCommand}" CommandParameter="7" />
+    <KeyBinding Gesture="Ctrl+8" Command="{Binding GoToPageCommand}" CommandParameter="8" />
+    <KeyBinding Gesture="Ctrl+9" Command="{Binding GoToPageCommand}" CommandParameter="9" />
+  </Window.KeyBindings>
+
   <Grid ColumnDefinitions="232,*">
     <DockPanel Grid.Column="0" Margin="12,18,12,16">
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="10,0,0,20">
@@ -96,6 +108,15 @@
         </ContentControl.DataTemplates>
       </ContentControl>
       </DockPanel>
+    </Border>
+
+    <!-- First run -->
+    <Border Grid.ColumnSpan="2" IsVisible="{Binding HasOnboarding}" Background="#66000000">
+      <ContentControl Content="{Binding Onboarding}" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="vm:OnboardingViewModel"><v:OnboardingView /></DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
     </Border>
 
     <!-- Review & Clean sheet -->

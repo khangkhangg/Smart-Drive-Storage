@@ -52,6 +52,7 @@ public partial class MainWindowViewModel : ObservableObject
             new("Settings", "M12,9 A3,3 0 1 1 11.99,9 Z M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M5,5 L7,7 M17,17 L19,19 M5,19 L7,17 M17,7 L19,5", Settings),
             new("About", "M12,3 A9,9 0 1 1 11.99,3 Z M12,11 L12,17 M12,7.5 L12,8", About),
         ];
+        if (!services.Settings.GetBool(Miu.Data.SettingKeys.OnboardingDone, false)) onboarding = new OnboardingViewModel(this);
         selectedNav = NavItems[0];
         currentPage = Home;
     }
@@ -84,6 +85,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsReviewOpen => Review is not null;
     public bool HasNotice => Notice is not null;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasOnboarding))] private OnboardingViewModel? onboarding;
+    public bool HasOnboarding => Onboarding is not null;
 
     /// <summary>Shown when something unexpected went wrong on screen (it was logged; Miu keeps running).</summary>
     public void ShowProblem(Exception ex) =>
@@ -211,6 +215,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public void Navigate(object page) => SelectedNav = NavItems.First(n => n.Page == page);
+
+    /// <summary>Ctrl+1 … Ctrl+9 go to the pages in sidebar order.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void GoToPage(string? number)
+    {
+        if (int.TryParse(number, out var n) && n >= 1 && n <= NavItems.Count && !IsReviewOpen && !HasOnboarding) SelectedNav = NavItems[n - 1];
+    }
 
     public void OnScanCompleted(ScanSession session)
     {

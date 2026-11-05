@@ -32,11 +32,13 @@ public partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             CrashReporter.Install(DataDir, ex => _vm?.ShowProblem(ex));
             var background = desktop.Args?.Contains("--background") == true;
+            _analyzePath = StartupArgs.AnalyzePath(desktop.Args);
             // One Miu at a time: a second start asks the running one to show its window, then quits.
             _instanceLock = SingleInstance.TryAcquire(DataDir);
             if (_instanceLock is null)
             {
-                if (!background) SingleInstance.SignalShow(DataDir);
+                if (_analyzePath is not null) SingleInstance.SignalAnalyze(DataDir, _analyzePath);
+                else if (!background) SingleInstance.SignalShow(DataDir);
                 desktop.Shutdown();
                 base.OnFrameworkInitializationCompleted();
                 return;
@@ -84,6 +86,7 @@ public partial class App : Application
         }
         await minimum;
         _vm = new MainWindowViewModel(services);
+        SettingsViewModel.ApplyTheme(services.Settings.Get(SettingKeys.Theme));
         if (services.RecoveredFrom is { } from)
             _vm.Notice = new NoticeViewModel(_vm, "Miu's database was damaged, so it was restored from its most recent backup.",
                 $"Backup used: {from}. The damaged file was kept next to it.", 0);
@@ -117,6 +120,7 @@ public partial class App : Application
         _timer.Start();
         await ReconnectSharesAsync(); // before sign-in syncs, which may use them
         _ = _vm.CheckForUpdatesAsync(force: false);
+        if (_analyzePath is { } first) { _analyzePath = null; _ = AnalyzeAsync(first); }
         if (!showWindow) await _vm.Automation.RunAtSignInAsync();
         await SafeTick();
     }
@@ -198,6 +202,20 @@ public partial class App : Application
 
     private static string DataDir => Path.GetDirectoryName(MiuDatabase.DefaultPath)!;
 
+    private string? _analyzePath;
+    private FileSystemWatcher? _analyzeWatcher;
+
+    /// <summary>"Analyze with Miu": shows Miu and scans that folder.</summary>
+    private async Task AnalyzeAsync(string path)
+    {
+        if (_vm is null) { _analyzePath = path; return; }
+        ShowMain();
+        _vm.Onboarding = null;
+        _vm.Navigate(_vm.Analyze);
+        try { await _vm.Analyze.ScanPathAsync(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     private void WatchForShowSignal()
     {
         try
@@ -205,6 +223,13 @@ public partial class App : Application
             _signalWatcher = new FileSystemWatcher(DataDir, SingleInstance.ShowSignal) { EnableRaisingEvents = true };
             _signalWatcher.Changed += (_, _) => Dispatcher.UIThread.Post(ShowMain);
             _signalWatcher.Created += (_, _) => Dispatcher.UIThread.Post(ShowMain);
+            _analyzeWatcher = new FileSystemWatcher(DataDir, SingleInstance.AnalyzeSignal) { EnableRaisingEvents = true };
+            void OnAnalyze() => Dispatcher.UIThread.Post(() =>
+            {
+                if (SingleInstance.ReadAnalyzeSignal(DataDir) is { } path) _ = AnalyzeAsync(path);
+            });
+            _analyzeWatcher.Changed += (_, _) => OnAnalyze();
+            _analyzeWatcher.Created += (_, _) => OnAnalyze();
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException) { }
     }

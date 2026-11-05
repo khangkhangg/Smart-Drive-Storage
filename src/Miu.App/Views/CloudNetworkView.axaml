@@ -82,7 +82,7 @@
                 </StackPanel>
                 <TextBlock Text="{Binding NetworkMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}"
                            IsVisible="{Binding !NetworkMessageIsError}" />
-                <TextBlock Text="{Binding NetworkMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E"
+                <TextBlock Text="{Binding NetworkMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}"
                            IsVisible="{Binding NetworkMessageIsError}" />
               </StackPanel>
             </Border>
@@ -128,7 +128,7 @@
           <StackPanel Spacing="16" Margin="0,16,0,0">
             <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}"
                        IsVisible="{Binding !SyncMessageIsError}" />
-            <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E"
+            <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}"
                        IsVisible="{Binding SyncMessageIsError}" />
 
             <!-- Preview sheet -->
@@ -222,7 +222,7 @@
         <TabItem Header="Cloud backup">
           <StackPanel Spacing="16" Margin="0,16,0,0" DataContext="{Binding Backup}" x:DataType="vm:CloudBackupViewModel">
             <TextBlock Text="{Binding PlanMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" IsVisible="{Binding !PlanMessageIsError}" />
-            <TextBlock Text="{Binding PlanMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E" IsVisible="{Binding PlanMessageIsError}" />
+            <TextBlock Text="{Binding PlanMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}" IsVisible="{Binding PlanMessageIsError}" />
 
             <!-- Preview -->
             <Border Classes="card" Padding="20" IsVisible="{Binding HasPreview}" BorderBrush="{DynamicResource MiuSafeFg}" BorderThickness="1">
@@ -320,7 +320,7 @@
                   </StackPanel>
                 </Expander>
                 <TextBlock Text="{Binding AccountMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" IsVisible="{Binding !AccountMessageIsError}" />
-                <TextBlock Text="{Binding AccountMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E" IsVisible="{Binding AccountMessageIsError}" />
+                <TextBlock Text="{Binding AccountMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}" IsVisible="{Binding AccountMessageIsError}" />
               </StackPanel>
             </Border>
 

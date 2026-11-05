@@ -29,6 +29,8 @@ public class ScreenshotTests
                 telegramApi: _ => new TelegramServiceTests.FakeTelegram());
             var window = new MainWindow { DataContext = vm, Width = 1360, Height = 860 };
             window.Show();
+            Save(window, Path.Combine(outDir, "onboarding.png"));
+            vm.Onboarding = null;
             await vm.Analyze.ScanPathAsync(root);
 
             vm.Navigate(vm.Home);

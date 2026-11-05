@@ -70,7 +70,7 @@
                   <TextBlock Grid.Column="2" Classes="muted" Text="{Binding Reason}" TextWrapping="Wrap" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SourceText}" VerticalAlignment="Center" Margin="8,0" />
                   <ToggleSwitch Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEdit}" OnContent="" OffContent="" VerticalAlignment="Center" />
-                  <Button Grid.Column="5" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanEdit}" Background="Transparent" Foreground="#A4262C" VerticalAlignment="Center" />
+                  <Button Grid.Column="5" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanEdit}" Background="Transparent" Foreground="{DynamicResource MiuDangerFg}" VerticalAlignment="Center" />
                 </Grid>
               </Border>
             </DataTemplate>

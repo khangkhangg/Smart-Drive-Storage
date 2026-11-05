@@ -15,6 +15,8 @@
           <SolidColorBrush x:Key="MiuTrack" Color="#E8E8E8" />
           <SolidColorBrush x:Key="MiuSafeBg" Color="#E6F2E6" />
           <SolidColorBrush x:Key="MiuSafeFg" Color="#0E700E" />
+          <SolidColorBrush x:Key="MiuDangerFg" Color="#B3261E" />
+          <SolidColorBrush x:Key="MiuWarnFg" Color="#8A4600" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="MiuShellBg" Color="#1C1C1C" />
@@ -28,6 +30,8 @@
           <SolidColorBrush x:Key="MiuTrack" Color="#3A3A3A" />
           <SolidColorBrush x:Key="MiuSafeBg" Color="#1E3A1E" />
           <SolidColorBrush x:Key="MiuSafeFg" Color="#7FD37F" />
+          <SolidColorBrush x:Key="MiuDangerFg" Color="#FF8A80" />
+          <SolidColorBrush x:Key="MiuWarnFg" Color="#FFB74D" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <SolidColorBrush x:Key="MiuAccent" Color="#005FB8" />

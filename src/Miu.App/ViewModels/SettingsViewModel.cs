@@ -22,6 +22,10 @@ public partial class SettingsViewModel : ObservableObject
         quietHoursEnabled = int.TryParse(_s.Get(SettingKeys.QuietStartHour), out var qs) && int.TryParse(_s.Get(SettingKeys.QuietEndHour), out _);
         quietStart = quietHoursEnabled ? qs : 22;
         quietEnd = int.TryParse(_s.Get(SettingKeys.QuietEndHour), out var qe) ? qe : 7;
+        theme = _s.Get(SettingKeys.Theme) is { } t && Themes.Contains(t) ? t : "System";
+        autoUpdateCheck = _s.GetBool(SettingKeys.AutoUpdateCheck, true);
+        explorerMenu = OperatingSystem.IsWindows() && Miu.Platform.Windows.WindowsExplorerMenu.IsRegistered;
+        exportFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) is { Length: > 0 } docs ? docs : shell.Home.HomeFolder;
         _loading = false;
         Telegram = new TelegramSettingsViewModel(shell);
     }
@@ -38,6 +42,77 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int quietStart;
     [ObservableProperty] private int quietEnd;
     [ObservableProperty] private string pauseText = "";
+
+    // ---------- Appearance, updates, data, Explorer ----------
+    public IReadOnlyList<string> Themes { get; } = ["System", "Light", "Dark"];
+    [ObservableProperty] private string theme = "System";
+    [ObservableProperty] private bool autoUpdateCheck = true;
+    [ObservableProperty] private string updateStatus = "";
+    [ObservableProperty] private bool isCheckingUpdates;
+    [ObservableProperty] private string exportFolder = "";
+    [ObservableProperty] private string exportStatus = "";
+    [ObservableProperty] private bool explorerMenu;
+    [ObservableProperty] private string explorerStatus = "";
+    public bool IsWindows => OperatingSystem.IsWindows();
+    public string DataFolder => System.IO.Path.GetDirectoryName(MiuDatabase.DefaultPath)!;
+
+    partial void OnThemeChanged(string value)
+    {
+        if (_loading) return;
+        _s.Set(SettingKeys.Theme, value);
+        ApplyTheme(value);
+    }
+
+    /// <summary>Applies "System", "Light" or "Dark" to the whole app.</summary>
+    public static void ApplyTheme(string? value)
+    {
+        if (Avalonia.Application.Current is not { } app) return;
+        app.RequestedThemeVariant = value switch
+        {
+            "Light" => Avalonia.Styling.ThemeVariant.Light,
+            "Dark" => Avalonia.Styling.ThemeVariant.Dark,
+            _ => Avalonia.Styling.ThemeVariant.Default,
+        };
+    }
+
+    partial void OnAutoUpdateCheckChanged(bool value)
+    {
+        if (!_loading) _s.SetBool(SettingKeys.AutoUpdateCheck, value);
+    }
+
+    [RelayCommand]
+    private async Task CheckUpdates()
+    {
+        IsCheckingUpdates = true;
+        UpdateStatus = "Checking…";
+        try { UpdateStatus = await _shell.CheckForUpdatesAsync(force: true); }
+        finally { IsCheckingUpdates = false; }
+    }
+
+    [RelayCommand]
+    private void Export()
+    {
+        try { ExportStatus = "Saved to " + Services.ExportService.Export(_shell.Services, ExportFolder.Trim(), DateTime.Now) + ". It has no passwords, tokens or keys."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { ExportStatus = "Couldn't save: " + ex.Message; }
+    }
+
+    [RelayCommand]
+    private void OpenDataFolder() => Services.ShellIntegration.Open(DataFolder);
+
+    partial void OnExplorerMenuChanged(bool value)
+    {
+        if (_loading || !OperatingSystem.IsWindows()) return;
+        try
+        {
+            if (value) Miu.Platform.Windows.WindowsExplorerMenu.Register(Environment.ProcessPath ?? "Miu.exe");
+            else Miu.Platform.Windows.WindowsExplorerMenu.Unregister();
+            ExplorerStatus = value ? "Right-click any folder or drive in Explorer and choose “Analyze with Miu”." : "Removed from Explorer.";
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            ExplorerStatus = "Couldn't change the Explorer menu: " + ex.Message;
+        }
+    }
 
     partial void OnRunInBackgroundChanged(bool value)
     {

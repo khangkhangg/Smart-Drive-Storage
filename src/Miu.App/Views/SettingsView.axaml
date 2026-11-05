@@ -77,10 +77,61 @@
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Button Classes="secondary" Content="Send a test message" Command="{Binding SendTestCommand}" />
-              <Button Content="Unpair" Command="{Binding UnpairCommand}" Background="Transparent" Foreground="#A4262C" />
+              <Button Content="Unpair" Command="{Binding UnpairCommand}" Background="Transparent" Foreground="{DynamicResource MiuDangerFg}" />
             </StackPanel>
           </StackPanel>
           <TextBlock Classes="muted" Text="{Binding Status}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Appearance" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Theme" VerticalAlignment="Center" />
+            <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="140" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Updates" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Check for new versions once a day" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoUpdateCheck}" />
+          </Grid>
+          <TextBlock Classes="caption" TextWrapping="Wrap" Text="Miu only asks GitHub for the list of releases. Nothing is installed without you: you'll see a Download button." />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="secondary" Content="Check now" Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsCheckingUpdates}" />
+            <TextBlock Text="{Binding UpdateStatus}" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding IsWindows}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="h2" Text="“Analyze with Miu” in Explorer" />
+              <TextBlock Classes="muted" Text="Adds it to the right-click menu of folders and drives." TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding ExplorerMenu}" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding ExplorerStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Your data" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Everything Miu knows stays on this computer. Export your settings, rules, automations, sync jobs and backup plans to a file (without any passwords or keys)." />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox Text="{Binding ExportFolder}" Width="360" />
+            <Button Classes="secondary" Content="Export" Command="{Binding ExportCommand}" />
+            <Button Classes="secondary" Content="Open Miu's data folder" Command="{Binding OpenDataFolderCommand}" />
+          </StackPanel>
+          <TextBlock Classes="caption" Text="{Binding ExportStatus}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 

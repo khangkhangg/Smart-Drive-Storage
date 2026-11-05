@@ -60,8 +60,56 @@ public static class SingleInstance
         catch (UnauthorizedAccessException) { return null; }
     }
 
+    public const string AnalyzeSignal = "analyze.signal";
+
+    /// <summary>Asks the running Miu to analyze a folder (from "Analyze with Miu" or "Open with").</summary>
+    public static void SignalAnalyze(string dir, string path)
+    {
+        try { File.WriteAllText(Path.Combine(dir, AnalyzeSignal), path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    public static string? ReadAnalyzeSignal(string dir)
+    {
+        try
+        {
+            var f = Path.Combine(dir, AnalyzeSignal);
+            if (!File.Exists(f)) return null;
+            var path = File.ReadAllText(f).Trim();
+            File.Delete(f);
+            return path.Length > 0 ? path : null;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
     public static void SignalShow(string dir)
     {
         try { File.WriteAllText(Path.Combine(dir, ShowSignal), DateTime.UtcNow.ToString("O")); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+}
+
+public static class StartupArgs
+{
+    /// <summary>The folder to analyze: "--analyze &lt;path&gt;", or a folder passed on its own (Linux "Open with", macOS).</summary>
+    public static string? AnalyzePath(IReadOnlyList<string>? args)
+    {
+        if (args is null) return null;
+        for (var i = 0; i < args.Count; i++)
+        {
+            if (args[i] == "--analyze") return i + 1 < args.Count && IsFolder(args[i + 1]) ? Full(args[i + 1]) : null;
+            if (!args[i].StartsWith("--", StringComparison.Ordinal) && IsFolder(args[i])) return Full(args[i]);
+        }
+        return null;
+    }
+
+    private static bool IsFolder(string p)
+    {
+        try { return Directory.Exists(p.Trim().Trim('"')); } catch (Exception e) when (e is ArgumentException or IOException) { return false; }
+    }
+
+    private static string Full(string p)
+    {
+        var t = p.Trim().Trim('"');
+        return t.Length == 2 && t[1] == ':' ? t + "\\" : Path.GetFullPath(t); // "D:" means the drive's root
     }
 }

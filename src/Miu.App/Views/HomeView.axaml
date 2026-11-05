@@ -103,7 +103,7 @@
                       <TextBlock Classes="muted" Text="{Binding UsedText}" />
                       <TextBlock Grid.Column="1" Classes="muted" Text="{Binding FreeText}" />
                     </Grid>
-                    <TextBlock Text="{Binding ForecastText}" IsVisible="{Binding HasForecast}" Foreground="#8A4600" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ForecastText}" IsVisible="{Binding HasForecast}" Foreground="{DynamicResource MiuWarnFg}" FontSize="12" FontWeight="SemiBold" />
                   </StackPanel>
                 </Border>
               </Button>
