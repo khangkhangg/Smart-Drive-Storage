@@ -6,7 +6,8 @@ using System.Text.Json;
 namespace Miu.App.Services;
 
 /// <param name="DownloadUrl">The file for this system (installer, .dmg, AppImage…), or null to use the release page.</param>
-public sealed record UpdateInfo(string Version, string PageUrl, string? DownloadUrl, string? AssetName, string Notes);
+/// <param name="ChecksumUrl">The release's SHA256SUMS file, used to check a download before it's offered.</param>
+public sealed record UpdateInfo(string Version, string PageUrl, string? DownloadUrl, string? AssetName, string Notes, string? ChecksumUrl = null, bool IsPrerelease = false);
 
 /// <summary>
 /// Asks GitHub for the newest release. Nothing is downloaded or installed without you: Miu shows the version and a
@@ -14,28 +15,103 @@ public sealed record UpdateInfo(string Version, string PageUrl, string? Download
 /// </summary>
 public sealed class UpdateService(HttpClient http, string repository = "khangkhangg/Smart-Drive-Storage")
 {
-    public async Task<UpdateInfo?> CheckAsync(string currentVersion, CancellationToken ct = default)
+    /// <param name="includePrereleases">Also offer test builds (pre-releases), for people who want the newest changes first.</param>
+    public async Task<UpdateInfo?> CheckAsync(string currentVersion, CancellationToken ct = default, bool includePrereleases = false)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{repository}/releases/latest");
-        req.Headers.UserAgent.Add(new ProductInfoHeaderValue("MiuSmartStorage", currentVersion.Split('+')[0]));
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        var url = includePrereleases
+            ? $"https://api.github.com/repos/{repository}/releases?per_page=15"
+            : $"https://api.github.com/repos/{repository}/releases/latest";
+        using var req = Request(url, currentVersion);
         using var r = await http.SendAsync(req, ct);
         if (r.StatusCode == System.Net.HttpStatusCode.NotFound) return null; // no release yet
         r.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync(ct));
-        var root = doc.RootElement;
-        if (root.TryGetProperty("draft", out var d) && d.GetBoolean()) return null;
-        if (root.TryGetProperty("prerelease", out var p) && p.GetBoolean()) return null;
-        var version = (root.GetProperty("tag_name").GetString() ?? "").TrimStart('v', 'V');
-        if (Compare(version, currentVersion) <= 0) return null;
-        var assets = root.TryGetProperty("assets", out var a) && a.ValueKind == JsonValueKind.Array
-            ? a.EnumerateArray().Select(x => (Name: x.GetProperty("name").GetString() ?? "", Url: x.GetProperty("browser_download_url").GetString() ?? "")).ToList()
-            : [];
-        var pick = AssetFor(assets.Select(x => x.Name).ToList(), CurrentOs(), RuntimeInformation.OSArchitecture, LinuxInstallKind());
-        var url = pick is null ? null : assets.First(x => x.Name == pick).Url;
-        var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
-        return new UpdateInfo(version, root.GetProperty("html_url").GetString() ?? "", url, pick, notes.Length > 600 ? notes[..600] + "…" : notes);
+        var releases = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().ToList() : [doc.RootElement];
+        UpdateInfo? best = null;
+        foreach (var root in releases)
+        {
+            if (root.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
+            var pre = root.TryGetProperty("prerelease", out var p) && p.GetBoolean();
+            if (pre && !includePrereleases) continue;
+            var version = (root.GetProperty("tag_name").GetString() ?? "").TrimStart('v', 'V');
+            if (Compare(version, currentVersion) <= 0 || (best is not null && Compare(version, best.Version) <= 0)) continue;
+            var assets = root.TryGetProperty("assets", out var a) && a.ValueKind == JsonValueKind.Array
+                ? a.EnumerateArray().Select(x => (Name: x.GetProperty("name").GetString() ?? "", Url: x.GetProperty("browser_download_url").GetString() ?? "")).ToList()
+                : [];
+            var pick = AssetFor(assets.Select(x => x.Name).ToList(), CurrentOs(), RuntimeInformation.OSArchitecture, LinuxInstallKind());
+            var download = pick is null ? null : assets.First(x => x.Name == pick).Url;
+            var sums = assets.FirstOrDefault(x => x.Name.Equals("SHA256SUMS", StringComparison.OrdinalIgnoreCase) || x.Name.EndsWith("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)).Url;
+            var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
+            best = new UpdateInfo(version, root.GetProperty("html_url").GetString() ?? "", download, pick,
+                notes.Length > 600 ? notes[..600] + "…" : notes, string.IsNullOrEmpty(sums) ? null : sums, pre);
+        }
+        return best;
     }
+
+    private static HttpRequestMessage Request(string url, string currentVersion)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.UserAgent.Add(new ProductInfoHeaderValue("MiuSmartStorage", currentVersion.Split('+')[0]));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        return req;
+    }
+
+    /// <summary>Where downloaded updates go: Downloads/Miu updates.</summary>
+    public static string DownloadFolder()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, "Downloads", "Miu updates");
+    }
+
+    /// <summary>
+    /// Downloads the update for this system into <paramref name="folder"/>, through a .partial file, and checks it
+    /// against the release's SHA256SUMS when there is one. A file that doesn't match is deleted, never offered.
+    /// </summary>
+    public async Task<string> DownloadAsync(UpdateInfo u, string folder, IProgress<double>? progress, CancellationToken ct = default)
+    {
+        if (u.DownloadUrl is null || u.AssetName is null) throw new InvalidOperationException("This release has no file for your system.");
+        if (u.AssetName.IndexOfAny(['/', '\\']) >= 0 || u.AssetName.Contains("..", StringComparison.Ordinal)) throw new InvalidOperationException("Odd file name in the release.");
+        Directory.CreateDirectory(folder);
+        var final = Path.Combine(folder, u.AssetName);
+        var partial = final + ".partial";
+        using (var r = await http.GetAsync(u.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+        {
+            r.EnsureSuccessStatusCode();
+            var total = r.Content.Headers.ContentLength;
+            await using var src = await r.Content.ReadAsStreamAsync(ct);
+            await using var dst = File.Create(partial);
+            var buf = new byte[81920];
+            long done = 0;
+            int n;
+            while ((n = await src.ReadAsync(buf, ct)) > 0)
+            {
+                await dst.WriteAsync(buf.AsMemory(0, n), ct);
+                done += n;
+                if (total > 0) progress?.Report((double)done / total.Value);
+            }
+        }
+        if (u.ChecksumUrl is { } sumsUrl)
+        {
+            var sums = await http.GetStringAsync(sumsUrl, ct);
+            var expected = ExpectedHash(sums, u.AssetName);
+            string actual;
+            await using (var f = File.OpenRead(partial)) actual = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(f, ct));
+            if (expected is null || !expected.Equals(actual, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(partial);
+                throw new InvalidOperationException(expected is null
+                    ? "The release's checksum list doesn't mention this file, so Miu didn't keep it."
+                    : "The download doesn't match the release's checksum, so Miu deleted it. Try again later.");
+            }
+        }
+        File.Move(partial, final, overwrite: true);
+        return final;
+    }
+
+    /// <summary>The SHA-256 for a file in a SHA256SUMS list ("hash  name" or "hash *name").</summary>
+    public static string? ExpectedHash(string sums, string name) =>
+        sums.Split('\n').Select(l => l.Trim().Split((char[])[' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries))
+            .Where(p => p.Length == 2 && p[1].TrimStart('*').Trim() == name).Select(p => p[0]).FirstOrDefault();
 
     public static string CurrentOs() => OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "macos" : "linux";
 

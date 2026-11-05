@@ -29,6 +29,8 @@ public partial class SettingsViewModel : ObservableObject
         quietEnd = int.TryParse(_s.Get(SettingKeys.QuietEndHour), out var qe) ? qe : 7;
         theme = _s.Get(SettingKeys.Theme) is { } t && Themes.Contains(t) ? t : "System";
         autoUpdateCheck = _s.GetBool(SettingKeys.AutoUpdateCheck, true);
+        autoDownloadUpdates = _s.GetBool(SettingKeys.AutoDownloadUpdates, false);
+        includePrereleases = _s.GetBool(SettingKeys.IncludePrereleases, false);
         explorerMenu = OperatingSystem.IsWindows() && Miu.Platform.Windows.WindowsExplorerMenu.IsRegistered;
         exportFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) is { Length: > 0 } docs ? docs : shell.Home.HomeFolder;
         _loading = false;
@@ -52,6 +54,10 @@ public partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<string> Themes { get; } = ["System", "Light", "Dark"];
     [ObservableProperty] private string theme = "System";
     [ObservableProperty] private bool autoUpdateCheck = true;
+    [ObservableProperty] private bool autoDownloadUpdates;
+    [ObservableProperty] private bool includePrereleases;
+    /// <summary>The window's update state (Download / Install now), shown in Settings too.</summary>
+    public MainWindowViewModel Shell => _shell;
     [ObservableProperty] private string updateStatus = "";
     [ObservableProperty] private bool isCheckingUpdates;
     [ObservableProperty] private string exportFolder = "";
@@ -83,6 +89,16 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAutoUpdateCheckChanged(bool value)
     {
         if (!_loading) _s.SetBool(SettingKeys.AutoUpdateCheck, value);
+    }
+
+    partial void OnAutoDownloadUpdatesChanged(bool value)
+    {
+        if (!_loading) _s.SetBool(SettingKeys.AutoDownloadUpdates, value);
+    }
+
+    partial void OnIncludePrereleasesChanged(bool value)
+    {
+        if (!_loading) _s.SetBool(SettingKeys.IncludePrereleases, value);
     }
 
     [RelayCommand]

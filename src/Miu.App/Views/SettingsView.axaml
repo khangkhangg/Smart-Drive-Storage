@@ -159,11 +159,24 @@
             <TextBlock Text="Check for new versions once a day" VerticalAlignment="Center" TextWrapping="Wrap" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoUpdateCheck}" />
           </Grid>
-          <TextBlock Classes="caption" TextWrapping="Wrap" Text="Miu only asks GitHub for the list of releases. Nothing is installed without you: you'll see a Download button." />
-          <StackPanel Orientation="Horizontal" Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Download new versions automatically (you still choose when to install)" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoDownloadUpdates}" />
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Include test builds (pre-releases): newest changes first, may have rough edges" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding IncludePrereleases}" />
+          </Grid>
+          <TextBlock Classes="caption" TextWrapping="Wrap" Text="Miu only asks GitHub for the list of releases. Downloads go to Downloads › Miu updates and are checked against the release's checksums. Nothing is installed without you." />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
             <Button Classes="secondary" Content="Check now" Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsCheckingUpdates}" />
-            <TextBlock Text="{Binding UpdateStatus}" VerticalAlignment="Center" />
-          </StackPanel>
+            <Button Classes="primary" Content="{Binding Shell.AvailableUpdate.Version, StringFormat='Download {0}', FallbackValue='Download'}"
+                    Command="{Binding Shell.DownloadUpdateCommand}" IsVisible="{Binding Shell.CanDownloadUpdate}" />
+            <Button Classes="primary" Content="Install now" Command="{Binding Shell.InstallUpdateCommand}" IsVisible="{Binding Shell.IsUpdateReady}"
+                    ToolTip.Tip="Windows: the installer starts and Miu closes so it can be updated." />
+            <TextBlock Text="{Binding UpdateStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </WrapPanel>
+          <TextBlock Classes="caption" Text="{Binding Shell.UpdateProgress}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
