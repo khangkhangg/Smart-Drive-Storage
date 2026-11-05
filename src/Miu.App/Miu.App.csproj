@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>Miu</AssemblyName>
+    <RootNamespace>Miu.App</RootNamespace>
+    <ApplicationIcon Condition="Exists('Assets/miu.ico')">Assets/miu.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Miu.Core/Miu.Core.csproj" />
+    <ProjectReference Include="../Miu.Dev/Miu.Dev.csproj" />
+    <ProjectReference Include="../Miu.Data/Miu.Data.csproj" />
+    <ProjectReference Include="../Miu.Platform.Portable/Miu.Platform.Portable.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../rules/builtin/*.json" Link="rules/builtin/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+</Project>

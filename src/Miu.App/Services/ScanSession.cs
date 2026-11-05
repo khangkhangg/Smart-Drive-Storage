@@ -1,0 +1,107 @@
+using Miu.Core.Rules;
+using Miu.Core.Scanning;
+using Miu.Dev;
+using Miu.Platform.Abstractions;
+
+namespace Miu.App.Services;
+
+/// <summary>The result of one scan plus everything derived from it: verdicts, projects, safe total.</summary>
+public sealed class ScanSession
+{
+    private readonly RuleEngine _engine;
+    private readonly ProtectedPathGuard _guard;
+    private readonly bool _ci;
+    private readonly Dictionary<int, DetectedProject> _projectsByNode;
+    private readonly Dictionary<int, VerdictResult> _verdicts = new();
+    private readonly Dictionary<int, long> _safeUnder = new();
+    private readonly object _gate = new();
+
+    private ScanSession(ScanTree tree, RuleEngine engine, ProtectedPathGuard guard, bool ci, IReadOnlyList<DetectedProject> projects, DateTime nowUtc)
+    {
+        Tree = tree;
+        _engine = engine;
+        _guard = guard;
+        _ci = ci;
+        Projects = projects;
+        NowUtc = nowUtc;
+        _projectsByNode = projects.ToDictionary(p => p.NodeId);
+    }
+
+    public ScanTree Tree { get; }
+    public IReadOnlyList<DetectedProject> Projects { get; }
+    public DateTime NowUtc { get; }
+    public IReadOnlyList<(int NodeId, VerdictResult Verdict)> SafeItems { get; private set; } = [];
+    public long SafeTotalBytes { get; private set; }
+
+    public static async Task<ScanSession> RunAsync(AppServices services, string path, IProgress<ScanProgress>? progress, CancellationToken ct)
+    {
+        var tree = await services.Scanner.ScanAsync(path, progress, ct);
+        return await Task.Run(() =>
+        {
+            var now = DateTime.UtcNow;
+            var engine = new RuleEngine(services.Rules, services.Guard, services.CaseInsensitivePaths);
+            var session = new ScanSession(tree, engine, services.Guard, services.CaseInsensitivePaths, ProjectDetector.Detect(tree, now), now);
+            session.CollectSafeItems(ct);
+            return session;
+        }, ct);
+    }
+
+    public VerdictResult VerdictFor(int id)
+    {
+        lock (_gate)
+            if (_verdicts.TryGetValue(id, out var cached)) return cached;
+
+        var t = Tree;
+        var parent = t.Parent(id);
+        var facts = new ItemFacts(
+            t.GetFullPath(id), t.Name(id), t.IsDir(id), t.Size(id),
+            t.IsDir(id) ? t.NewestModifiedUtc(id) : t.ModifiedUtc(id), NowUtc,
+            ProjectIdleDaysFor(id),
+            marker => parent >= 0 && t.Children(parent).Any(c => c != id && Glob.IsMatch(marker, t.Name(c), _ci)),
+            marker => t.IsDir(id) && t.Children(id).Any(c => Glob.IsMatch(marker, t.Name(c), _ci)));
+        var result = _engine.Evaluate(facts);
+        lock (_gate) _verdicts[id] = result;
+        return result;
+    }
+
+    /// <summary>Bytes inside this folder that are safe to remove (0 for files and for the safe item itself).</summary>
+    public long SafeBytesUnder(int id) => _safeUnder.GetValueOrDefault(id);
+
+    public DetectedProject? ProjectAt(int id) => _projectsByNode.GetValueOrDefault(id);
+
+    /// <summary>Idle days of the nearest project that contains the item (its own folder excluded).</summary>
+    private int? ProjectIdleDaysFor(int id)
+    {
+        for (var p = Tree.Parent(id); p >= 0; p = Tree.Parent(p))
+            if (_projectsByNode.TryGetValue(p, out var project)) return project.IdleDays;
+        return null;
+    }
+
+    private void CollectSafeItems(CancellationToken ct)
+    {
+        var safe = new List<(int, VerdictResult)>();
+        long total = 0;
+        var stack = new Stack<int>();
+        // The folder being scanned is never itself a suggestion; start with its contents.
+        foreach (var c in Tree.Children(Tree.Root)) stack.Push(c);
+        while (stack.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var id = stack.Pop();
+            var v = VerdictFor(id);
+            if (v.Verdict == Verdict.Safe && Tree.Size(id) > 0)
+            {
+                safe.Add((id, v));
+                total += Tree.Size(id);
+                for (var p = Tree.Parent(id); p >= 0; p = Tree.Parent(p))
+                    _safeUnder[p] = _safeUnder.GetValueOrDefault(p) + Tree.Size(id);
+                continue;
+            }
+            // Keep looking inside folders that are protected only because they contain protected folders (e.g. C:\Users).
+            if (v.Verdict == Verdict.Protected && _guard.Classify(Tree.GetFullPath(id)) == ProtectionKind.InsideProtectedTree) continue;
+            if (Tree.IsDir(id)) foreach (var c in Tree.Children(id)) stack.Push(c);
+        }
+        SafeItems = safe.OrderByDescending(s => Tree.Size(s.Item1)).ToList();
+        SafeTotalBytes = total;
+    }
+}

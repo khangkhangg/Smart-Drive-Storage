@@ -1,5 +1,7 @@
 namespace Miu.Core.Rules;
 
+public enum ProtectionKind { None, InsideProtectedTree, ProtectedExact, AncestorOfProtected }
+
 /// <summary>
 /// The last line of defence: decides whether a path may never be deleted. A path is protected when it
 /// is inside a protected tree, equals a protected exact path, or is an ancestor of either (deleting it
@@ -27,6 +29,20 @@ public sealed class ProtectedPathGuard
 
     public bool IsProtected(string path) => Explain(path) is not null;
 
+    /// <summary>Why a path is protected (by its normalized form, without following links).</summary>
+    public ProtectionKind Classify(string path)
+    {
+        var n = PathNormalizer.Normalize(path, _style);
+        foreach (var t in _trees)
+            if (n.Equals(t, _cmp) || n.StartsWith(WithSep(t), _cmp)) return ProtectionKind.InsideProtectedTree;
+        foreach (var e in _exact)
+            if (n.Equals(e, _cmp)) return ProtectionKind.ProtectedExact;
+        var prefix = WithSep(n);
+        foreach (var t in _trees.Concat(_exact))
+            if (t.StartsWith(prefix, _cmp)) return ProtectionKind.AncestorOfProtected;
+        return ProtectionKind.None;
+    }
+
     /// <summary>A plain-language reason the path is protected, or null when it is not.</summary>
     public string? Explain(string path)
     {
@@ -50,20 +66,13 @@ public sealed class ProtectedPathGuard
         return null;
     }
 
-    private string? ExplainNormalized(string n)
+    private string? ExplainNormalized(string n) => Classify(n) switch
     {
-        foreach (var t in _trees)
-            if (n.Equals(t, _cmp) || n.StartsWith(WithSep(t), _cmp))
-                return "Part of the operating system or installed programs. Remove apps through Settings instead.";
-        foreach (var e in _exact)
-            if (n.Equals(e, _cmp))
-                return "A drive, users folder or your profile folder itself can't be deleted.";
-        var prefix = WithSep(n);
-        foreach (var t in _trees.Concat(_exact))
-            if (t.StartsWith(prefix, _cmp))
-                return "Contains protected system or profile folders.";
-        return null;
-    }
+        ProtectionKind.InsideProtectedTree => "Part of the operating system or installed programs. Remove apps through Settings instead.",
+        ProtectionKind.ProtectedExact => "A drive, users folder or your profile folder itself can't be deleted.",
+        ProtectionKind.AncestorOfProtected => "Contains protected system or profile folders.",
+        _ => null,
+    };
 
     private string WithSep(string p) => p.EndsWith(_sep) ? p : p + _sep;
 

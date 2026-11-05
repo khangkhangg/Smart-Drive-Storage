@@ -66,3 +66,24 @@ public class ProtectedPathGuardTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class ProtectionKindTests
+{
+    private static readonly ProtectedPathGuard Unix = ProtectedPathGuard.ForUnix("/home/u");
+
+    [Theory]
+    [InlineData("/usr/lib", ProtectionKind.InsideProtectedTree)]
+    [InlineData("/home/u", ProtectionKind.ProtectedExact)]
+    [InlineData("/", ProtectionKind.ProtectedExact)]
+    [InlineData("/var", ProtectionKind.ProtectedExact)]
+    [InlineData("/var/lib/x", ProtectionKind.InsideProtectedTree)]
+    [InlineData("/home/u/code", ProtectionKind.None)]
+    public void Classify(string path, ProtectionKind expected) => Unix.Classify(path).Should().Be(expected);
+
+    [Fact]
+    public void Ancestor_only()
+    {
+        var g = new ProtectedPathGuard(["/a/b/c"], [], PathStyle.Unix);
+        g.Classify("/a").Should().Be(ProtectionKind.AncestorOfProtected);
+    }
+}

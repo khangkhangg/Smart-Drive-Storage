@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             x:Class="Miu.App.Views.DevProjectsView"
+             x:DataType="vm:DevProjectsViewModel">
+  <DockPanel Margin="40,32,40,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <TextBlock Classes="h1" Text="Dev projects" />
+      <TextBlock Classes="muted" Text="{Binding SummaryText}" TextWrapping="Wrap" />
+      <TextBlock Classes="caption" Margin="0,4,0,0" TextWrapping="Wrap"
+                 Text="Rebuildable = node_modules, build output, virtual envs and caches that your tools recreate. Your source code is never counted." />
+    </StackPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="2.2*,1.4*,110,90,140" Margin="12,0,12,6" IsVisible="{Binding HasProjects}">
+      <TextBlock Classes="caption" Text="PROJECT" />
+      <TextBlock Grid.Column="1" Classes="caption" Text="LAST ACTIVITY" />
+      <TextBlock Grid.Column="2" Classes="caption" Text="STATUS" />
+      <TextBlock Grid.Column="3" Classes="caption" Text="TOTAL" TextAlignment="Right" />
+      <TextBlock Grid.Column="4" Classes="caption" Text="REBUILDABLE" TextAlignment="Right" />
+    </Grid>
+    <ListBox Classes="rows" ItemsSource="{Binding Projects}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:ProjectRow">
+          <Grid ColumnDefinitions="2.2*,1.4*,110,90,140" DoubleTapped="OnRowDoubleTapped">
+            <StackPanel>
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding StacksText}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding LastActivityText}" VerticalAlignment="Center" />
+            <Border Grid.Column="2" Background="{Binding BucketBg}" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Text="{Binding BucketText}" Foreground="{Binding BucketFg}" FontSize="12" FontWeight="SemiBold" />
+            </Border>
+            <TextBlock Grid.Column="3" Text="{Binding TotalText}" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" />
+            <StackPanel Grid.Column="4" VerticalAlignment="Center" Spacing="4">
+              <TextBlock Text="{Binding RebuildableText}" TextAlignment="Right" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" FontSize="13" />
+              <ProgressBar Classes="size" Value="{Binding RebuildableFraction}" Foreground="{StaticResource MiuSafeSolid}" Height="4" MinHeight="4" Margin="24,0,0,0" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</UserControl>
