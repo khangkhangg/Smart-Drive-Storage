@@ -157,6 +157,61 @@
               </StackPanel>
             </Border>
 
+            <!-- Browse and restore -->
+            <Border Classes="card" Padding="20" IsVisible="{Binding IsRestoreOpen}" BorderBrush="{DynamicResource MiuSafeFg}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="h2" Text="{Binding RestoreTitle}" TextWrapping="Wrap" />
+                  <Button Grid.Column="1" Classes="secondary" Content="Close" Command="{Binding CloseRestoreCommand}" />
+                </Grid>
+                <TextBlock Classes="muted" Text="{Binding RestoreMessage}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Classes="muted" Text="Restore to" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding RestoreTo}" Width="420" ToolTip.Tip="Where it came from, or any other folder" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="secondary" Content="↑ Up" Command="{Binding BackupUpCommand}" IsEnabled="{Binding CanGoUpInBackup}" />
+                  <TextBlock Classes="caption" Text="{Binding RestoreLocation}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <ScrollViewer MaxHeight="360">
+                  <ItemsControl ItemsSource="{Binding RestoreRows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:BackupRow">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                          <TextBlock Text="{Binding Icon}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                          <StackPanel Grid.Column="1">
+                            <Button Classes="secondary" Padding="6,2" Content="{Binding Name}" Command="{Binding OpenCommand}" IsVisible="{Binding IsDir}" HorizontalAlignment="Left" />
+                            <TextBlock Text="{Binding Name}" IsVisible="{Binding IsFile}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="caption" Text="{Binding Details}" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Classes="secondary" Content="Older versions" Command="{Binding VersionsCommand}" IsVisible="{Binding IsFile}" />
+                            <Button Classes="primary" Content="Restore" Command="{Binding RestoreCommand}" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <StackPanel Spacing="6" IsVisible="{Binding HasVersions}">
+                  <TextBlock Text="{Binding VersionsOf, StringFormat='Versions of {0}'}" FontWeight="SemiBold" />
+                  <ItemsControl ItemsSource="{Binding RestoreVersions}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:BackupVersionRow">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                          <StackPanel>
+                            <TextBlock Text="{Binding Label}" />
+                            <TextBlock Classes="caption" Text="{Binding Details}" />
+                          </StackPanel>
+                          <Button Grid.Column="1" Classes="secondary" Content="Restore this version" Command="{Binding RestoreCommand}" VerticalAlignment="Center" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
             <!-- Editor -->
             <Border Classes="card" Padding="20">
               <StackPanel Spacing="12">
@@ -164,50 +219,82 @@
                 <ListBox Classes="segmented" ItemsSource="{Binding JobKinds}" SelectedItem="{Binding JobKind}" HorizontalAlignment="Left">
                   <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
                 </ListBox>
-                <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsDriveBackup}"
-                           Text="Copies your files from a whole drive to a folder on another drive, then only what changed. Windows, programs, swap files and caches are skipped (reinstall programs instead). Older versions of changed files are kept in the backup's .miu-sync-trash." />
-                <WrapPanel ItemSpacing="10" LineSpacing="10">
-                  <StackPanel Spacing="4" IsVisible="{Binding IsFolderJob}">
-                    <TextBlock Classes="caption" Text="From (source)" />
-                    <TextBox Text="{Binding JobSource}" Watermark="C:\Users\you\Pictures" Width="320" />
+                <!-- Disk image -->
+                <StackPanel Spacing="12" IsVisible="{Binding IsDiskImage}">
+                  <TextBlock Classes="muted" TextWrapping="Wrap"
+                             Text="A disk image is a complete copy of a drive, including Windows and your programs, so you can put the whole computer back after a disk failure. Miu uses your system's own tool (wbadmin on Windows, hdiutil on macOS, dd on Linux), asks for admin permission, and never writes to the drive being imaged." />
+                  <WrapPanel ItemSpacing="10" LineSpacing="10">
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="Drive to image" />
+                      <ComboBox ItemsSource="{Binding ImageDrives}" SelectedItem="{Binding ImageSource}" Width="240" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="Save the image on (another drive)" />
+                      <ComboBox ItemsSource="{Binding ImageDrives}" SelectedItem="{Binding ImageTarget}" Width="240" />
+                    </StackPanel>
+                  </WrapPanel>
+                  <TextBlock Text="{Binding ImageMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}" IsVisible="{Binding ImageMessageIsError}" />
+                  <TextBlock Text="{Binding ImageMessage}" TextWrapping="Wrap" IsVisible="{Binding !ImageMessageIsError}" />
+                  <Border Background="{DynamicResource MiuContentBg}" CornerRadius="6" Padding="12" IsVisible="{Binding HasImagePlan}">
+                    <StackPanel Spacing="6">
+                      <TextBlock Classes="caption" Text="This runs:" />
+                      <SelectableTextBlock Text="{Binding ImagePlan.Command.Display, FallbackValue=''}" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="12" TextWrapping="Wrap" />
+                      <TextBlock Classes="caption" Text="{Binding ImagePlan.Command.ImagePath, StringFormat='The image goes to: {0}', FallbackValue=''}" TextWrapping="Wrap" />
+                      <TextBlock Classes="caption" Text="{Binding ImagePlan.Command.RestoreHow, StringFormat='To restore later: {0}', FallbackValue=''}" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock Classes="caption" Text="{Binding ImageProgress}" IsVisible="{Binding IsImaging}" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="secondary" Content="Check" Command="{Binding CheckImageCommand}" />
+                    <Button Classes="primary" Content="Make the image now" Command="{Binding MakeImageCommand}" />
                   </StackPanel>
-                  <StackPanel Spacing="4" IsVisible="{Binding IsDriveBackup}">
-                    <TextBlock Classes="caption" Text="Drive to back up" />
-                    <ComboBox ItemsSource="{Binding SourceDrives}" SelectedItem="{Binding JobSource}" Width="320" />
-                  </StackPanel>
-                  <StackPanel Spacing="4">
-                    <TextBlock Classes="caption" Text="{Binding TargetCaption}" />
-                    <TextBox Text="{Binding JobTarget}" Watermark="{Binding TargetWatermark}" Width="320" AcceptsReturn="{Binding IsFolderJob}" TextWrapping="NoWrap" MinHeight="32" />
-                  </StackPanel>
-                </WrapPanel>
-                <WrapPanel ItemSpacing="8" LineSpacing="10">
-                  <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" IsVisible="{Binding IsFolderJob}" />
-                  <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
-                  <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
-                  <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
-                  <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
-                  <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
-                  <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
-                </WrapPanel>
-                <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" IsVisible="{Binding IsFolderJob}" />
-                <CheckBox IsChecked="{Binding KeepDeletedFiles}" IsVisible="{Binding IsDriveBackup}"
-                          Content="Keep files I delete from the drive in the backup (recommended)" />
-                <CheckBox IsChecked="{Binding RunOnChange}" IsVisible="{Binding IsFolderJob}"
-                          Content="Live mirror: also run about 30 seconds after files in the source change" />
-                <CheckBox IsChecked="{Binding SkipRebuildable}" Content="Skip rebuildable folders (node_modules, .venv, __pycache__, build caches)" />
-                <Expander Header="Skip these (one pattern per line)" IsExpanded="{Binding IsDriveBackup, Mode=OneWay}">
-                  <StackPanel Spacing="6">
-                    <TextBlock Classes="caption" TextWrapping="Wrap"
-                               Text="A name (node_modules, *.tmp) is skipped anywhere. A path (Users/*/AppData/Local/Temp) is from the top of the source. Skipped files are never copied or set aside." />
-                    <TextBox Text="{Binding JobExcludes}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="220" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="12" />
-                  </StackPanel>
-                </Expander>
-                <CheckBox IsChecked="{Binding CompareByHash}" Content="Compare file contents when dates differ (slower, avoids needless copies)" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
-                  <TextBox Text="{Binding JobName}" Width="260" Watermark="Photos to NAS" />
                 </StackPanel>
-                <Button Classes="primary" Content="Save and preview" Command="{Binding SaveJobCommand}" HorizontalAlignment="Left" />
+                <StackPanel Spacing="12" IsVisible="{Binding IsSyncKind}">
+                  <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsDriveBackup}"
+                             Text="Copies your files from a whole drive to a folder on another drive, then only what changed. Windows, programs, swap files and caches are skipped (reinstall programs instead). Older versions of changed files are kept in the backup's .miu-sync-trash." />
+                  <WrapPanel ItemSpacing="10" LineSpacing="10">
+                    <StackPanel Spacing="4" IsVisible="{Binding IsFolderJob}">
+                      <TextBlock Classes="caption" Text="From (source)" />
+                      <TextBox Text="{Binding JobSource}" Watermark="C:\Users\you\Pictures" Width="320" />
+                    </StackPanel>
+                    <StackPanel Spacing="4" IsVisible="{Binding IsDriveBackup}">
+                      <TextBlock Classes="caption" Text="Drive to back up" />
+                      <ComboBox ItemsSource="{Binding SourceDrives}" SelectedItem="{Binding JobSource}" Width="320" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="{Binding TargetCaption}" />
+                      <TextBox Text="{Binding JobTarget}" Watermark="{Binding TargetWatermark}" Width="320" AcceptsReturn="{Binding IsFolderJob}" TextWrapping="NoWrap" MinHeight="32" />
+                    </StackPanel>
+                  </WrapPanel>
+                  <WrapPanel ItemSpacing="8" LineSpacing="10">
+                    <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" IsVisible="{Binding IsFolderJob}" />
+                    <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
+                    <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
+                    <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
+                    <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                    <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
+                    <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                  </WrapPanel>
+                  <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" IsVisible="{Binding IsFolderJob}" />
+                  <CheckBox IsChecked="{Binding KeepDeletedFiles}" IsVisible="{Binding IsDriveBackup}"
+                            Content="Keep files I delete from the drive in the backup (recommended)" />
+                  <CheckBox IsChecked="{Binding RunOnChange}" IsVisible="{Binding IsFolderJob}"
+                            Content="Live mirror: also run about 30 seconds after files in the source change" />
+                  <CheckBox IsChecked="{Binding SkipRebuildable}" Content="Skip rebuildable folders (node_modules, .venv, __pycache__, build caches)" />
+                  <Expander Header="Skip these (one pattern per line)" IsExpanded="{Binding IsDriveBackup, Mode=OneWay}">
+                    <StackPanel Spacing="6">
+                      <TextBlock Classes="caption" TextWrapping="Wrap"
+                                 Text="A name (node_modules, *.tmp) is skipped anywhere. A path (Users/*/AppData/Local/Temp) is from the top of the source. Skipped files are never copied or set aside." />
+                      <TextBox Text="{Binding JobExcludes}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="220" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="12" />
+                    </StackPanel>
+                  </Expander>
+                  <CheckBox IsChecked="{Binding CompareByHash}" Content="Compare file contents when dates differ (slower, avoids needless copies)" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
+                    <TextBox Text="{Binding JobName}" Width="260" Watermark="Photos to NAS" />
+                  </StackPanel>
+                  <Button Classes="primary" Content="Save and preview" Command="{Binding SaveJobCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -228,6 +315,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                           <Button Classes="secondary" Content="Preview / Run" Command="{Binding PreviewCommand}" />
+                          <Button Classes="secondary" Content="Browse &amp; restore" Command="{Binding BrowseCommand}" />
                           <Button Classes="secondary" Content="Delete" Command="{Binding DeleteCommand}" />
                         </StackPanel>
                       </Grid>

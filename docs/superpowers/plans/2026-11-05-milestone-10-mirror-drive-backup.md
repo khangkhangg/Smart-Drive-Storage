@@ -26,12 +26,12 @@
    - pick a drive and a folder on another drive;
    - skips the system, programs, swap files and caches;
    - keeps files you delete; changed files keep their old version in `.miu-sync-trash`.
-3. **Disk image** (next):
+3. **Disk image** (done):
    - Windows: system image with `wbadmin` (needs admin), with progress and checks.
    - macOS: `asr` / `hdiutil`.
    - Linux: `dd` / partclone through `pkexec`.
    - Restoring an image always goes through the OS's own recovery tools.
-4. **Restore UI** (next): browse a backup, restore a file or folder (never overwriting a different local file), and restore older versions from `.miu-sync-trash`.
+4. **Restore UI** (done): browse a backup, restore a file or folder (never overwriting a different local file), and restore older versions from `.miu-sync-trash`.
 
 ## Files
 - `src/Miu.Core/Sync/SyncFilter.cs`: skip lists and the default drive skip list for each OS.
@@ -61,5 +61,8 @@
 - [x] Free-space check before copying
 - [x] Drive backup: drive picker, default skip list, another drive only, keep deleted files
 - [x] Tests: filter, service, watcher, multi-target, drive defaults
-- [ ] Disk image (Windows wbadmin, macOS asr, Linux dd/partclone)
-- [ ] Restore browser and older versions
+- [x] Disk image: Windows wbadmin (system image, -allCritical), macOS hdiutil (startup disk → Time Machine), Linux dd | gzip via pkexec; command shown first, admin prompt, progress, Activity
+- [x] Network: sweep for file sharing (port 445), auto search on open, \\\\name lists shares
+- [x] Restore browser and older versions (never overwrites: “(restored date)” names; .miu-partial copies)
+- [ ] Scheduled disk images (needs a stored admin grant; left out on purpose)
+- [ ] Verify an image after it's made (wbadmin get versions / hdiutil verify / gzip -t)

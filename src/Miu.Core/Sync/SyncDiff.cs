@@ -168,7 +168,10 @@ public static class SyncDiff
 public static class ConflictNames
 {
     /// <summary>"dir/report.docx" → "dir/report (conflict 2026-11-05).docx", then " 2", " 3"… if that name is taken.</summary>
-    public static string For(string relPath, DateOnly date, Func<string, bool> exists)
+    public static string For(string relPath, DateOnly date, Func<string, bool> exists) => For(relPath, date, exists, "conflict");
+
+    /// <param name="word">"conflict", or "restored" for files put back from a backup next to a different local file.</param>
+    public static string For(string relPath, DateOnly date, Func<string, bool> exists, string word)
     {
         var slash = relPath.LastIndexOf('/');
         var dir = slash >= 0 ? relPath[..(slash + 1)] : "";
@@ -178,7 +181,7 @@ public static class ConflictNames
         var tag = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         for (var i = 1; ; i++)
         {
-            var name = $"{dir}{stem} (conflict {tag}{(i == 1 ? "" : " " + i.ToString(CultureInfo.InvariantCulture))}){ext}";
+            var name = $"{dir}{stem} ({word} {tag}{(i == 1 ? "" : " " + i.ToString(CultureInfo.InvariantCulture))}){ext}";
             if (!exists(name)) return name;
         }
     }

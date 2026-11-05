@@ -16,7 +16,9 @@ public partial class ActivityRow(MainWindowViewModel shell, ActionRecord action)
         "recycle" => $"Moved {Count("item", "items")} ({SizeFormatter.Format(action.Bytes)}) to the {shell.Services.RecycleBinName}",
         "sync" => $"Sync set aside {Count("replaced or removed file", "replaced or removed files")} ({SizeFormatter.Format(action.Bytes)}) in .miu-sync-trash",
         "removed" => $"Removed {Count("item", "items")} ({SizeFormatter.Format(action.Bytes)}) without a {shell.Services.RecycleBinName} copy",
+        "failed" when action.Origin == "disk-image" => "Disk image didn't finish",
         "failed" => $"Couldn't clean {Count("item", "items")}",
+        "backup" when action.Origin == "disk-image" => $"Disk image of {action.Items.FirstOrDefault()?.OriginalPath} ({SizeFormatter.Format(action.Bytes)})",
         "rule-added" => "New rule · " + action.Items.FirstOrDefault()?.OriginalPath,
         "rule-changed" => "Rule changed · " + action.Items.FirstOrDefault()?.OriginalPath,
         _ => $"Docker removed {string.Join(", ", action.Items.Take(1).Select(i => i.OriginalPath))}{(action.Items.Count > 1 ? $" and {action.Items.Count - 1} more" : "")} (can't be undone)",
@@ -25,6 +27,7 @@ public partial class ActivityRow(MainWindowViewModel shell, ActionRecord action)
     public string ItemsText => action.Kind switch
     {
         _ when IsRule => "",
+        "backup" or "failed" when action.Origin == "disk-image" => action.Items.FirstOrDefault()?.TrashLocation ?? "",
         "removed" => "Windows removed these but Miu found no copy in the bin: they may be deleted for good. " + Names(),
         "failed" => string.Join("; ", action.Items.Take(3).Select(i => $"{Path.GetFileName(i.OriginalPath)}: {i.TrashLocation}"))
                     + (action.Items.Count > 3 ? $" and {action.Items.Count - 3} more" : ""),
@@ -35,7 +38,7 @@ public partial class ActivityRow(MainWindowViewModel shell, ActionRecord action)
     public string OriginText => action.Kind == "sync" ? (action.Origin == "auto" ? "Scheduled sync" : "Sync") : action.Origin switch
     {
         "quick-clean" => "Quick Clean", "dev-project" => "Dev projects", "docker" => "Docker", "telegram" => "Telegram", "auto" => "Automation",
-        "backup" => "Back up, then free space", "teach" => "Teach Miu", "suggestion" => "Accepted suggestion", "import" => "Rules import", "rules" => "Rules page",
+        "backup" => "Back up, then free space", "teach" => "Teach Miu", "suggestion" => "Accepted suggestion", "import" => "Rules import", "rules" => "Rules page", "disk-image" => "Disk image",
         _ => "Cleanup cart",
     };
     public bool Undone => action.Undone;

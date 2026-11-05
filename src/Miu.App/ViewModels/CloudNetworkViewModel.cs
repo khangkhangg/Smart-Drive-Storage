@@ -36,6 +36,28 @@ public partial class SyncJobRow(CloudNetworkViewModel owner, SyncJob job) : Obse
 
     [RelayCommand] private Task Preview() => owner.PreviewAsync(this);
     [RelayCommand] private void Delete() => owner.DeleteJob(this);
+    [RelayCommand] private void Browse() => owner.OpenRestore(this);
+}
+
+public sealed partial class BackupRow(CloudNetworkViewModel owner, BackupTreeEntry entry)
+{
+    public BackupTreeEntry Entry => entry;
+    public string Name => entry.Name;
+    public bool IsDir => entry.IsDir;
+    public bool IsFile => !entry.IsDir;
+    public string Icon => entry.IsDir ? "📁" : "📄";
+    public string Details => entry.IsDir ? "Folder" : $"{Miu.Core.Formatting.SizeFormatter.Format(entry.Size)} · {entry.ModifiedUtc.ToLocalTime():yyyy-MM-dd HH:mm}";
+
+    [RelayCommand] private void Open() { if (entry.IsDir) owner.ShowBackupFolder(entry.RelPath); }
+    [RelayCommand] private Task Restore() => owner.RestoreItemAsync(entry);
+    [RelayCommand] private void Versions() => owner.ShowVersions(entry);
+}
+
+public sealed partial class BackupVersionRow(CloudNetworkViewModel owner, BackupTreeEntry entry, BackupFileVersion version)
+{
+    public string Label => version.Label;
+    public string Details => $"{Miu.Core.Formatting.SizeFormatter.Format(version.Size)} · changed {version.ModifiedUtc.ToLocalTime():yyyy-MM-dd HH:mm}";
+    [RelayCommand] private Task Restore() => owner.RestoreItemAsync(entry, version);
 }
 
 /// <summary>Cloud &amp; Network: network drives (find, map, scan), sync jobs, and cloud backup (Milestone 7).</summary>
@@ -228,15 +250,18 @@ public partial class CloudNetworkViewModel : ObservableObject
 
     // ---------- What kind of job: folders, or a whole drive ----------
 
-    public IReadOnlyList<string> JobKinds { get; } = ["Sync or mirror folders", "Back up a whole drive"];
+    public IReadOnlyList<string> JobKinds { get; } = ["Sync or mirror folders", "Back up a whole drive", "Make a disk image"];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDriveBackup), nameof(IsFolderJob), nameof(EditorTitle), nameof(TargetCaption), nameof(TargetWatermark))]
+    [NotifyPropertyChangedFor(nameof(IsDriveBackup), nameof(IsFolderJob), nameof(IsDiskImage), nameof(IsSyncKind), nameof(EditorTitle), nameof(TargetCaption), nameof(TargetWatermark))]
     private string jobKind = "Sync or mirror folders";
 
     public bool IsDriveBackup => JobKind == "Back up a whole drive";
-    public bool IsFolderJob => !IsDriveBackup;
-    public string EditorTitle => IsDriveBackup ? "New drive backup" : "New sync job";
+    public bool IsDiskImage => JobKind == "Make a disk image";
+    public bool IsFolderJob => !IsDriveBackup && !IsDiskImage;
+    /// <summary>Sync and drive backup share the job editor; a disk image has its own.</summary>
+    public bool IsSyncKind => !IsDiskImage;
+    public string EditorTitle => IsDiskImage ? "Make a disk image" : IsDriveBackup ? "New drive backup" : "New sync job";
     public string TargetCaption => IsDriveBackup ? "Back up to (a folder on another drive)" : "To (target) · one per line to mirror to several places";
     public string TargetWatermark => IsDriveBackup
         ? (OperatingSystem.IsWindows() ? @"E:\Miu Backups" : "/Volumes/Backup/Miu Backups")
@@ -254,6 +279,14 @@ public partial class CloudNetworkViewModel : ObservableObject
 
     partial void OnJobKindChanged(string value)
     {
+        if (IsDiskImage)
+        {
+            ImageDrives.Clear();
+            foreach (var d in DiskImageService.Drives()) ImageDrives.Add(d);
+            ImageSource ??= ImageDrives.FirstOrDefault();
+            ImageTarget ??= ImageDrives.FirstOrDefault(d => d != ImageSource);
+            return;
+        }
         if (IsDriveBackup)
         {
             JobSource = SourceDrives.FirstOrDefault() ?? "";
@@ -298,6 +331,127 @@ public partial class CloudNetworkViewModel : ObservableObject
         "When I sign in" => WatchSchedule.AtSignIn(),
         _ => null,
     };
+
+    // ---------- Disk image ----------
+
+    private DiskImageService? _images;
+    public DiskImageService Images => _images ??= new DiskImageService(Services);
+    /// <summary>Tests swap in a fake runner.</summary>
+    public void UseImageService(DiskImageService service) => _images = service;
+
+    public ObservableCollection<string> ImageDrives { get; } = [];
+    [ObservableProperty] private string? imageSource;
+    [ObservableProperty] private string? imageTarget;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasImagePlan))] private DiskImagePreview? imagePlan;
+    [ObservableProperty] private string imageMessage = "Pick a drive and where to save its image, then press Check.";
+    [ObservableProperty] private bool imageMessageIsError;
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(MakeImageCommand))] private bool isImaging;
+    [ObservableProperty] private string imageProgress = "";
+    public bool HasImagePlan => ImagePlan?.Command is not null;
+
+    partial void OnImageSourceChanged(string? value) => ImagePlan = null;
+    partial void OnImageTargetChanged(string? value) => ImagePlan = null;
+
+    [RelayCommand]
+    private async Task CheckImage()
+    {
+        var plan = await Images.PreviewAsync(ImageSource ?? "", ImageTarget ?? "");
+        ImagePlan = plan;
+        ImageMessageIsError = plan.Problem is not null;
+        ImageMessage = plan.Problem ?? $"Ready. The image needs about {Miu.Core.Formatting.SizeFormatter.Format(plan.NeededBytes)}. Your system asks for admin permission when it starts, and it can take a while; you can keep using your computer.";
+        MakeImageCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanMakeImage() => HasImagePlan && !IsImaging;
+
+    [RelayCommand(CanExecute = nameof(CanMakeImage))]
+    private async Task MakeImage()
+    {
+        if (ImagePlan is not { } plan) return;
+        IsImaging = true;
+        ImageProgress = "Starting… (approve the admin prompt)";
+        try
+        {
+            var outcome = await Images.RunAsync(plan, new Progress<string>(line => ImageProgress = line));
+            ImageMessageIsError = !outcome.Ok;
+            ImageMessage = outcome.Message;
+        }
+        finally
+        {
+            IsImaging = false;
+            ImageProgress = "";
+        }
+    }
+
+    // ---------- Browse and restore ----------
+
+    private RestoreService Restore => new(() => DateTime.Now);
+
+    public ObservableCollection<BackupRow> RestoreRows { get; } = [];
+    public ObservableCollection<BackupVersionRow> RestoreVersions { get; } = [];
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsRestoreOpen), nameof(RestoreTitle))] private SyncJob? restoreJob;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(RestoreLocation), nameof(CanGoUpInBackup))] private string restoreFolder = "";
+    [ObservableProperty] private string restoreTo = "";
+    [ObservableProperty] private string restoreMessage = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasVersions))] private string versionsOf = "";
+    [ObservableProperty] private bool isRestoring;
+    public bool IsRestoreOpen => RestoreJob is not null;
+    public bool HasVersions => VersionsOf.Length > 0;
+    public bool CanGoUpInBackup => RestoreFolder.Length > 0;
+    public string RestoreTitle => RestoreJob is { } j ? $"Browse and restore: {j.Name}" : "";
+    public string RestoreLocation => RestoreJob is { } j ? Path.Combine(j.Target, RestoreFolder.Replace('/', Path.DirectorySeparatorChar)) : "";
+
+    public void OpenRestore(SyncJobRow row)
+    {
+        RestoreJob = Services.SyncJobs.Get(row.Job.Id) ?? row.Job;
+        RestoreTo = RestoreJob.Source;
+        RestoreMessage = "Pick a file or folder to put back. Nothing on your computer is overwritten: if a different file is already there, the restored one gets “(restored date)” in its name.";
+        ShowBackupFolder("");
+    }
+
+    public void ShowBackupFolder(string rel)
+    {
+        if (RestoreJob is not { } job) return;
+        RestoreFolder = rel;
+        VersionsOf = "";
+        RestoreVersions.Clear();
+        RestoreRows.Clear();
+        foreach (var e in Restore.List(job, rel)) RestoreRows.Add(new BackupRow(this, e));
+        if (RestoreRows.Count == 0) RestoreMessage = Directory.Exists(job.Target) ? "This folder of the backup is empty." : $"Miu can't open {job.Target}. Is the backup drive connected?";
+    }
+
+    [RelayCommand]
+    private void BackupUp()
+    {
+        var i = RestoreFolder.LastIndexOf('/');
+        ShowBackupFolder(i < 0 ? "" : RestoreFolder[..i]);
+    }
+
+    [RelayCommand]
+    private void CloseRestore() => RestoreJob = null;
+
+    public void ShowVersions(BackupTreeEntry e)
+    {
+        if (RestoreJob is not { } job) return;
+        VersionsOf = e.RelPath;
+        RestoreVersions.Clear();
+        foreach (var v in Restore.Versions(job, e.RelPath)) RestoreVersions.Add(new BackupVersionRow(this, e, v));
+    }
+
+    public async Task RestoreItemAsync(BackupTreeEntry e, BackupFileVersion? version = null)
+    {
+        if (RestoreJob is not { } job || IsRestoring) return;
+        if (string.IsNullOrWhiteSpace(RestoreTo)) { RestoreMessage = "Choose where to restore to."; return; }
+        IsRestoring = true;
+        RestoreMessage = $"Restoring {e.Name}…";
+        try
+        {
+            var r = await Restore.RestoreAsync(job, e.RelPath, RestoreTo.Trim(), version);
+            RestoreMessage = r.Summary;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { RestoreMessage = "Couldn't restore: " + ex.Message; }
+        finally { IsRestoring = false; }
+    }
 
     public void LoadJobs()
     {
