@@ -57,7 +57,15 @@ public sealed class CleanupService(AppServices services)
         // Keep whatever couldn't be restored, so Undo can be tried again after the conflict is fixed.
         var left = action.Items.Where(i => !result.Restored.Contains(i.OriginalPath)).ToList();
         if (result.Restored.Count > 0)
-            new LearningService(services).RecordRestored(result.Restored.Select(p => (p, Directory.Exists(p))));
+        {
+            var learning = new LearningService(services);
+            if (action.Origin == "auto")
+                // You undid something Miu cleaned on its own: keep it, so the next run doesn't clean it again.
+                foreach (var p in result.Restored)
+                    learning.Teach(p, Directory.Exists(p), Miu.Core.Learning.DecisionAction.Keep, "Restored after automatic cleaning", null);
+            else
+                learning.RecordRestored(result.Restored.Select(p => (p, Directory.Exists(p))));
+        }
         if (left.Count == 0) services.Actions.MarkUndone(actionId);
         else if (left.Count < action.Items.Count) services.Actions.UpdateItems(actionId, left);
         return result;

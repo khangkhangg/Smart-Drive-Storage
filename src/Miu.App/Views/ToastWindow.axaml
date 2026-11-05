@@ -3,7 +3,7 @@
         xmlns:c="using:Miu.App.Controls"
         x:Class="Miu.App.Views.ToastWindow"
         Title="Miu" Width="380" SizeToContent="Height" CanResize="False"
-        SystemDecorations="None" ShowInTaskbar="False" Topmost="True"
+        SystemDecorations="None" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
         Background="Transparent" TransparencyLevelHint="Transparent"
         Icon="avares://Miu/Assets/miu-256.png">
   <Border Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="8"

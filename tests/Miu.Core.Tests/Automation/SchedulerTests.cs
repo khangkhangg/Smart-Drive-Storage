@@ -72,8 +72,8 @@ public class SchedulerTests
     public void Templates_cover_the_spec()
     {
         var t = WatchTemplates.All("/home/u", "/tmp");
-        t.Select(x => x.Name).Should().Contain(["Downloads tidy", "Temp & caches", "Dev projects", "Low-space guard"]);
-        t.Single(x => x.Name == "Temp & caches").Mode.Should().Be(WatchMode.AutoCleanSafe);
+        t.Select(x => x.Name).Should().Contain(["Downloads tidy", "Dev projects", "Low-space guard"]);
+        if (OperatingSystem.IsWindows()) t.Single(x => x.Name == "Temp & caches").Mode.Should().Be(WatchMode.AutoCleanSafe);
         t.Single(x => x.Name == "Downloads tidy").Path.Should().Be(Path.Combine("/home/u", "Downloads"));
     }
 }

@@ -14,12 +14,10 @@ public static class ScanInsights
             foreach (var g in t.Children(c).Where(t.IsDir).Take(50)) folders[t.GetFullPath(g)] = t.Size(g);
         }
         services.Snapshots.Save(t.RootPath, nowUtc, folders);
-        try
-        {
-            var drive = new DriveInfo(Path.GetPathRoot(t.RootPath) ?? t.RootPath);
-            if (drive.IsReady) services.SpaceSamples.Add(drive.RootDirectory.FullName, nowUtc, drive.TotalSize - drive.TotalFreeSpace, drive.TotalSize);
-        }
-        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { }
+        services.Snapshots.Prune(t.RootPath, keep: 30);
+        if (DriveLookup.DriveFor(t.RootPath) is { } drive)
+            services.SpaceSamples.Add(drive.RootDirectory.FullName, nowUtc, drive.TotalSize - drive.TotalFreeSpace, drive.TotalSize);
+        services.SpaceSamples.Prune(days: 120);
     }
 
     /// <summary>Folders that grew since a scan of the same place at least five days ago.</summary>

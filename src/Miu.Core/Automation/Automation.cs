@@ -91,13 +91,18 @@ public static class Scheduler
 
 public static class WatchTemplates
 {
-    /// <summary>One-tap starting points (spec §5.5).</summary>
+    /// <summary>
+    /// One-tap starting points (spec §5.5). "Temp &amp; caches" is offered on Windows only: on Linux and macOS the temp
+    /// folder is shared with running programs (and often protected or on another file system).
+    /// </summary>
     public static IReadOnlyList<Watch> All(string home, string tempDir) =>
     [
         new(0, "Downloads tidy", System.IO.Path.Combine(home, "Downloads"), WatchMode.Suggest,
             WatchSchedule.Weekly(DayOfWeek.Sunday, new TimeOnly(10, 0)), new WatchFilters(OlderThanDays: 30)),
-        new(0, "Temp & caches", tempDir, WatchMode.AutoCleanSafe,
-            WatchSchedule.Weekly(DayOfWeek.Saturday, new TimeOnly(11, 0)), new WatchFilters(OlderThanDays: 2)),
+        .. OperatingSystem.IsWindows()
+            ? [new Watch(0, "Temp & caches", tempDir, WatchMode.AutoCleanSafe,
+                WatchSchedule.Weekly(DayOfWeek.Saturday, new TimeOnly(11, 0)), new WatchFilters(OlderThanDays: 2))]
+            : Array.Empty<Watch>(),
         new(0, "Dev projects", Directory.Exists(System.IO.Path.Combine(home, "code")) ? System.IO.Path.Combine(home, "code") : home,
             WatchMode.Suggest, WatchSchedule.Monthly(1, new TimeOnly(19, 0)), new WatchFilters()),
         new(0, "Low-space guard", home, WatchMode.NotifyOnly, WatchSchedule.LowSpace(10), new WatchFilters()),

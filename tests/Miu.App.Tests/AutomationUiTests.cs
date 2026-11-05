@@ -94,7 +94,7 @@ public sealed class AutomationUiTests : IDisposable
         vm.Navigate(vm.Settings);
         vm.Settings.RunInBackground = true;
         _startup.Enabled.Should().BeTrue();
-        _startup.Args.Should().Be("--background");
+        _startup.Args.Should().EndWith("--background");
         vm.Settings.RunInBackground = false;
         _startup.Enabled.Should().BeFalse();
         vm.Settings.AllowAutoClean = true;

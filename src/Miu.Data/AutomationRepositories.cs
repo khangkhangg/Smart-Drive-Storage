@@ -52,6 +52,20 @@ public sealed class WatchesRepository(MiuDatabase db)
         return list;
     }
 
+    public Watch? Get(long id) => All().FirstOrDefault(w => w.Id == id);
+
+    /// <summary>
+    /// Changes a watch based on what is stored now (not on a copy that may be minutes old), so a run finishing
+    /// later never reverts an edit, a toggle or a newer next-run time.
+    /// </summary>
+    public Watch? Patch(long id, Func<Watch, Watch> change)
+    {
+        if (Get(id) is not { } current) return null;
+        var updated = change(current) with { Id = id };
+        Update(updated);
+        return updated;
+    }
+
     public void Delete(long id)
     {
         using var cmd = db.Connection.CreateCommand();
@@ -75,6 +89,15 @@ public sealed class JobRunsRepository(MiuDatabase db)
         cmd.Parameters.AddWithValue("$st", status);
         cmd.Parameters.AddWithValue("$b", freedBytes);
         cmd.Parameters.AddWithValue("$sum", summary);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void Prune(long watchId, int keep)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM job_runs WHERE watch_id = $w AND id NOT IN (SELECT id FROM job_runs WHERE watch_id = $w ORDER BY id DESC LIMIT $k)";
+        cmd.Parameters.AddWithValue("$w", watchId);
+        cmd.Parameters.AddWithValue("$k", keep);
         cmd.ExecuteNonQuery();
     }
 
@@ -122,6 +145,20 @@ public sealed class SnapshotsRepository(MiuDatabase db)
         tx.Commit();
     }
 
+    /// <summary>Keeps only the newest snapshots of a scan root.</summary>
+    public void Prune(string root, int keep)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = """
+            DELETE FROM folder_snapshots WHERE scan_id IN (
+              SELECT id FROM scans WHERE root = $r AND id NOT IN (SELECT id FROM scans WHERE root = $r ORDER BY started DESC LIMIT $k));
+            DELETE FROM scans WHERE root = $r AND id NOT IN (SELECT id FROM scans WHERE root = $r ORDER BY started DESC LIMIT $k);
+            """;
+        cmd.Parameters.AddWithValue("$r", root);
+        cmd.Parameters.AddWithValue("$k", keep);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>The newest snapshot of this scan root taken before the given time.</summary>
     public (DateTime Ts, Dictionary<string, long> Folders)? LatestBefore(string root, DateTime beforeUtc)
     {
@@ -158,6 +195,14 @@ public sealed class SpaceSamplesRepository(MiuDatabase db)
         cmd.Parameters.AddWithValue("$t", Iso.Of(tsUtc));
         cmd.Parameters.AddWithValue("$u", used);
         cmd.Parameters.AddWithValue("$T", total);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void Prune(int days)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM space_samples WHERE ts < $t";
+        cmd.Parameters.AddWithValue("$t", Iso.Of(DateTime.UtcNow.AddDays(-days)));
         cmd.ExecuteNonQuery();
     }
 

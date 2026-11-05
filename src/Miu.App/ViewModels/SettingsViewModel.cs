@@ -39,9 +39,23 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnRunInBackgroundChanged(bool value)
     {
         if (_loading) return;
-        _s.SetBool(SettingKeys.RunInBackground, value);
-        if (value) _shell.Services.Startup.Enable(Environment.ProcessPath ?? "Miu", "--background");
-        else _shell.Services.Startup.Disable();
+        try
+        {
+            if (value)
+            {
+                var (exe, args) = Services.StartupCommand.For(Environment.ProcessPath ?? "Miu", System.Reflection.Assembly.GetEntryAssembly()?.Location);
+                _shell.Services.Startup.Enable(exe, args);
+            }
+            else _shell.Services.Startup.Disable();
+            _s.SetBool(SettingKeys.RunInBackground, value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            PauseText = "Couldn't change start-at-sign-in: " + ex.Message;
+            _loading = true;
+            RunInBackground = !value;
+            _loading = false;
+        }
     }
 
     partial void OnAllowAutoCleanChanged(bool value)

@@ -15,7 +15,12 @@ public partial class MainWindowViewModel : ObservableObject
         Services = services;
         Notifier = notifier ?? new ToastNotifier();
         Automation = new AutomationService(services, Notifier, services.Power, () => DateTime.Now,
-            items => { Navigate(Home!); OpenReview(items, "Review suggestions", "cart"); });
+            items =>
+            {
+                ShowWindow?.Invoke(); // Miu may be in the tray
+                Navigate(Home!);
+                if (!IsReviewOpen) OpenReview(items, "Review suggestions", "cart");
+            });
         Cleanup = new CleanupService(services);
         Learning = new LearningService(services);
         Cart = new CartViewModel(this, services.Cart);
@@ -56,6 +61,9 @@ public partial class MainWindowViewModel : ObservableObject
     public SettingsViewModel Settings { get; }
     public AutomationsViewModel Automations { get; }
     public INotifier Notifier { get; }
+
+    /// <summary>Brings the main window back (set by the app; Miu may be hidden in the tray).</summary>
+    public Action? ShowWindow { get; set; }
     public AutomationService Automation { get; }
     public AboutViewModel About { get; }
     public PlaceholderViewModel CloudNetwork { get; }

@@ -87,19 +87,29 @@ public partial class AutomationsViewModel : ObservableObject
     private void UseTemplate(Watch? template)
     {
         if (template is null) return;
-        Save(template with { Id = 0 });
-        Message = $"Added “{template.Name}”. You can change it below.";
+        Message = Save(template with { Id = 0 }) ?? $"Added “{template.Name}”. You can change it below.";
     }
 
-    public void Save(Watch w)
+    /// <summary>Saves a new or edited watch. Returns a reason when it can't be saved.</summary>
+    public string? Save(Watch w)
     {
-        var withNext = w with { NextRunLocal = Scheduler.NextRun(w.Schedule, DateTime.Now) };
-        if (w.Id > 0) _shell.Services.Watches.Update(withNext);
-        else _shell.Services.Watches.Add(withNext);
+        if (!Path.IsPathRooted(w.Path)) return "Use a full path, for example " + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads") + ".";
+        if (w.Mode == WatchMode.AutoCleanSafe && _shell.Automation.IsTooBroadForAutoClean(w.Path))
+            return "Automatic cleaning needs a narrower folder than a whole drive, your home folder or a system location. Choose a subfolder, or let Miu suggest instead.";
+        var next = Scheduler.NextRun(w.Schedule, DateTime.Now);
+        if (w.Id > 0)
+            // Keep what the editor doesn't show: on/off, last result, size filter.
+            _shell.Services.Watches.Patch(w.Id, cur => w with
+            {
+                Enabled = cur.Enabled, LastRunUtc = cur.LastRunUtc, LastResult = cur.LastResult, NextRunLocal = next,
+                Filters = w.Filters with { MinSizeMB = cur.Filters.MinSizeMB },
+            });
+        else _shell.Services.Watches.Add(w with { NextRunLocal = next });
         Load();
+        return null;
     }
 
-    public void SetEnabled(Watch w, bool enabled) => _shell.Services.Watches.Update(w with { Enabled = enabled });
+    public void SetEnabled(Watch w, bool enabled) => _shell.Services.Watches.Patch(w.Id, cur => cur with { Enabled = enabled });
 
     public void Delete(Watch w)
     {
@@ -111,7 +121,7 @@ public partial class AutomationsViewModel : ObservableObject
     {
         Message = $"Running “{w.Name}”…";
         var done = await _shell.Automation.RunAsync(w);
-        Message = done.LastResult ?? "";
+        Message = done?.LastResult ?? "";
         Load();
     }
 }
@@ -206,9 +216,9 @@ public partial class WatchEditorViewModel : ObservableObject
     private void Save()
     {
         if (string.IsNullOrWhiteSpace(Path)) return;
-        _owner.Save(new Watch(_editingId, string.IsNullOrWhiteSpace(Name) ? "My automation" : Name.Trim(), Path.Trim(), Mode(), Schedule(),
+        var error = _owner.Save(new Watch(_editingId, string.IsNullOrWhiteSpace(Name) ? "My automation" : Name.Trim(), Path.Trim(), Mode(), Schedule(),
             new WatchFilters(OlderThanDays: OlderThanDays > 0 ? OlderThanDays : null)));
-        _owner.Message = $"Saved “{Name}”.";
-        _editingId = 0;
+        _owner.Message = error ?? $"Saved “{Name}”.";
+        if (error is null) _editingId = 0;
     }
 }

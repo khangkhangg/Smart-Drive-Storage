@@ -35,11 +35,13 @@ public sealed class ScanSession
 
     public static async Task<ScanSession> RunAsync(AppServices services, string path, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
+        // Read the rules here (the database connection is not shared with background threads).
+        var rules = services.AllRules();
         var tree = await services.Scanner.ScanAsync(path, progress, ct);
         return await Task.Run(() =>
         {
             var now = DateTime.UtcNow;
-            var engine = new RuleEngine(services.AllRules(), services.Guard, services.CaseInsensitivePaths);
+            var engine = new RuleEngine(rules, services.Guard, services.CaseInsensitivePaths);
             var session = new ScanSession(tree, engine, services.Guard, services.CaseInsensitivePaths, ProjectDetector.Detect(tree, now), now);
             session.CollectSafeItems(ct);
             return session;

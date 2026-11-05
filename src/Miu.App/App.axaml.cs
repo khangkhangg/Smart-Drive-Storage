@@ -18,6 +18,8 @@ public partial class App : Application
     private MainWindow? _main;
     private DispatcherTimer? _timer;
     private bool _exiting;
+    private IDisposable? _instanceLock;
+    private FileSystemWatcher? _signalWatcher;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -28,6 +30,16 @@ public partial class App : Application
             // Closing the window may only hide it (background mode), so the app quits explicitly.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             var background = desktop.Args?.Contains("--background") == true;
+            // One Miu at a time: a second start asks the running one to show its window, then quits.
+            _instanceLock = SingleInstance.TryAcquire(DataDir);
+            if (_instanceLock is null)
+            {
+                if (!background) SingleInstance.SignalShow(DataDir);
+                desktop.Shutdown();
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+            WatchForShowSignal();
             if (background)
                 _ = StartAsync(desktop, splash: null, showWindow: false);
             else
@@ -35,6 +47,7 @@ public partial class App : Application
                 var splash = new SplashWindow();
                 desktop.MainWindow = splash;
                 splash.Opened += async (_, _) => await StartAsync(desktop, splash, showWindow: true);
+                splash.Closed += (_, _) => { if (_main is null) desktop.Shutdown(1); }; // closed after a failed start
                 splash.Show();
             }
         }
@@ -43,6 +56,17 @@ public partial class App : Application
 
     /// <summary>Loads the database and rules off the UI thread (splash visible), then opens Miu and starts automations.</summary>
     private async Task StartAsync(IClassicDesktopStyleApplicationLifetime desktop, SplashWindow? splash, bool showWindow)
+    {
+        try { await StartCoreAsync(desktop, splash, showWindow); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine("Miu failed to start: " + ex);
+            if (splash is not null && _main is null) splash.SetStatus("Could not start: " + ex.Message);
+            else Quit(desktop);
+        }
+    }
+
+    private async Task StartCoreAsync(IClassicDesktopStyleApplicationLifetime desktop, SplashWindow? splash, bool showWindow)
     {
         var minimum = Task.Delay(splash is null ? TimeSpan.Zero : MinimumSplashTime);
         AppServices services;
@@ -59,16 +83,19 @@ public partial class App : Application
         await minimum;
         _vm = new MainWindowViewModel(services);
         _main = new MainWindow { DataContext = _vm };
+        _vm.ShowWindow = ShowMain;
         _main.Closing += (_, e) =>
         {
-            if (_exiting || !services.Settings.GetBool(SettingKeys.RunInBackground, false)) { Quit(desktop); return; }
-            e.Cancel = true; // keep running in the tray
-            _main.Hide();
+            var systemShutdown = e.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown;
+            if (_exiting || systemShutdown || !services.Settings.GetBool(SettingKeys.RunInBackground, false)) { Quit(desktop); return; }
+            e.Cancel = true; // keep running in the background
+            HideMain();
         };
         desktop.MainWindow = _main;
         desktop.Exit += (_, _) => services.Dispose();
         CreateTrayIcon(desktop);
         if (showWindow) _main.Show();
+        else if (!TrayIsReliable) { _main.Show(); _main.WindowState = WindowState.Minimized; }
         splash?.Close();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -115,6 +142,32 @@ public partial class App : Application
         TrayIcon.SetIcons(this, [tray]);
     }
 
+    /// <summary>
+    /// Some Linux desktops (GNOME without the AppIndicator extension) show no tray icon. There Miu minimizes
+    /// instead of hiding, so you can always get back to it.
+    /// </summary>
+    private static bool TrayIsReliable => !OperatingSystem.IsLinux();
+
+    private void HideMain()
+    {
+        if (_main is null) return;
+        if (TrayIsReliable) _main.Hide();
+        else _main.WindowState = WindowState.Minimized;
+    }
+
+    private static string DataDir => Path.GetDirectoryName(MiuDatabase.DefaultPath)!;
+
+    private void WatchForShowSignal()
+    {
+        try
+        {
+            _signalWatcher = new FileSystemWatcher(DataDir, SingleInstance.ShowSignal) { EnableRaisingEvents = true };
+            _signalWatcher.Changed += (_, _) => Dispatcher.UIThread.Post(ShowMain);
+            _signalWatcher.Created += (_, _) => Dispatcher.UIThread.Post(ShowMain);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException) { }
+    }
+
     private void ShowMain()
     {
         if (_main is null) return;
@@ -127,6 +180,8 @@ public partial class App : Application
     {
         _exiting = true;
         _timer?.Stop();
+        _signalWatcher?.Dispose();
+        _instanceLock?.Dispose();
         desktop.Shutdown();
     }
 }
