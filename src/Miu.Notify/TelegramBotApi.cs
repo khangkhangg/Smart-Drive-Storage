@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace Miu.Notify;
 
 /// <summary>One incoming update: a text message or a button tap (callback).</summary>
-public sealed record TelegramUpdate(long UpdateId, long ChatId, string? Text, string? CallbackData, string? CallbackId, long? MessageId);
+public sealed record TelegramUpdate(long UpdateId, long ChatId, string? Text, string? CallbackData, string? CallbackId, long? MessageId, bool IsPrivate = true);
 
 public sealed record TelegramButton(string Text, string CallbackData);
 
@@ -44,15 +44,18 @@ public sealed class TelegramBotApi(HttpClient http, string token) : ITelegramApi
             var id = u.GetProperty("update_id").GetInt64();
             if (u.TryGetProperty("message", out var m) && m.TryGetProperty("chat", out var chat))
                 list.Add(new TelegramUpdate(id, chat.GetProperty("id").GetInt64(), m.TryGetProperty("text", out var t) ? t.GetString() : null, null, null,
-                    m.TryGetProperty("message_id", out var mid) ? mid.GetInt64() : null));
+                    m.TryGetProperty("message_id", out var mid) ? mid.GetInt64() : null, IsPrivateChat(chat)));
             else if (u.TryGetProperty("callback_query", out var cb) && cb.TryGetProperty("message", out var cm) && cm.TryGetProperty("chat", out var cchat))
                 list.Add(new TelegramUpdate(id, cchat.GetProperty("id").GetInt64(), null,
                     cb.TryGetProperty("data", out var d) ? d.GetString() : null, cb.GetProperty("id").GetString(),
-                    cm.TryGetProperty("message_id", out var cmid) ? cmid.GetInt64() : null));
+                    cm.TryGetProperty("message_id", out var cmid) ? cmid.GetInt64() : null, IsPrivateChat(cchat)));
             else list.Add(new TelegramUpdate(id, 0, null, null, null, null)); // something else: skip but advance the offset
         }
         return list;
     }
+
+    private static bool IsPrivateChat(JsonElement chat) =>
+        chat.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "private";
 
     public async Task<long> SendMessageAsync(long chatId, string text, IReadOnlyList<IReadOnlyList<TelegramButton>>? buttons, CancellationToken ct)
     {

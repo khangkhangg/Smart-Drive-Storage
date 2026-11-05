@@ -187,12 +187,125 @@ public sealed class TelegramServiceTests : IDisposable
         _api.LastOffset.Should().Be(6);
     }
 
+    private async Task<string> AlertAsync(AppServices s, TelegramService t, params string[] names)
+    {
+        var watchId = s.Watches.Add(new Watch(0, "Crash dumps", _root, WatchMode.Suggest, WatchSchedule.Daily(new TimeOnly(9, 0)), new WatchFilters()));
+        await t.NotifyAsync(new MiuNotification("Crash dumps", "can be cleaned", [], watchId,
+            names.Select(n => new CartItem(Path.Combine(_root, "crash", n), n, 3000, Verdict.Safe, "r")).ToList()));
+        return _api.Sent.Last().Buttons!.SelectMany(r => r).Single(x => x.Text == "Clean now").CallbackData;
+    }
+
+    [AvaloniaFact]
+    public async Task Unpair_works_even_if_the_goodbye_cannot_be_sent()
+    {
+        var (s, t) = Setup();
+        _api.FailSends = new HttpRequestException("offline");
+        await t.HandleAsync(Msg(Me, "/unpair"));
+        t.IsPaired.Should().BeFalse();
+        s.Secrets.Get(TelegramService.TokenKey).Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task Confirm_still_cleans_when_telegram_rejects_the_tap_answer()
+    {
+        var (s, t) = Setup();
+        await t.HandleAsync(Tap(Me, await AlertAsync(s, t, "a.dmp")));
+        var yes = _api.Sent.Last().Buttons!.SelectMany(r => r).Single(x => x.Text == "Yes, clean").CallbackData;
+        _api.FailAnswers = new TelegramApiException("query is too old", 400);
+        await t.HandleAsync(Tap(Me, yes));
+        _bin.Received.Should().ContainSingle();
+        _api.Sent.Last().Text.Should().Contain("Moved 1 item");
+    }
+
+    [AvaloniaFact]
+    public async Task A_failed_clean_is_reported_in_the_chat()
+    {
+        var (s, t) = Setup();
+        await t.HandleAsync(Tap(Me, await AlertAsync(s, t, "a.dmp")));
+        var yes = _api.Sent.Last().Buttons!.SelectMany(r => r).Single(x => x.Text == "Yes, clean").CallbackData;
+        _bin.FailWith = new IOException("disk on fire");
+        await t.HandleAsync(Tap(Me, yes));
+        _api.Sent.Last().Text.Should().StartWith("Couldn't clean");
+    }
+
+    [AvaloniaFact]
+    public async Task Unpairing_expires_old_buttons()
+    {
+        var (s, t) = Setup();
+        var clean = await AlertAsync(s, t, "a.dmp");
+        t.Unpair();
+        await t.ConnectAsync("123:ABC");
+        await t.HandleAsync(Msg(Me, "/pair " + t.StartPairing()));
+        await t.HandleAsync(Tap(Me, clean));
+        _api.Answered.Last().Should().Contain("expired");
+    }
+
+    [AvaloniaFact]
+    public async Task Switching_bots_starts_polling_from_the_beginning()
+    {
+        var (_, t) = Setup();
+        _api.Queue.Enqueue(new TelegramUpdate(900000, Me, "/help", null, null, 1));
+        await t.PollOnceAsync(CancellationToken.None);
+        t.Unpair();
+        await t.ConnectAsync("456:DEF");
+        await t.PollOnceAsync(CancellationToken.None);
+        _api.LastOffset.Should().Be(0);
+    }
+
+    [AvaloniaFact]
+    public async Task Pairing_closes_after_five_wrong_codes()
+    {
+        var (_, t) = Setup(paired: false);
+        await t.ConnectAsync("123:ABC");
+        var code = t.StartPairing();
+        var wrong = code == "000000" ? "111111" : "000000";
+        for (var i = 0; i < 5; i++) await t.HandleAsync(Msg(Stranger, "/pair " + wrong));
+        await t.HandleAsync(Msg(Me, "/pair " + code));
+        t.IsPaired.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task Groups_cannot_be_paired()
+    {
+        var (_, t) = Setup(paired: false);
+        await t.ConnectAsync("123:ABC");
+        var code = t.StartPairing();
+        await t.HandleAsync(new TelegramUpdate(1, -100, "/pair " + code, null, null, 1, IsPrivate: false));
+        t.IsPaired.Should().BeFalse();
+        await t.HandleAsync(Msg(Me, "/pair " + code));
+        t.IsPaired.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public async Task Show_list_fits_in_one_telegram_message()
+    {
+        var (s, t) = Setup();
+        var watchId = s.Watches.Add(new Watch(0, "Crash dumps", _root, WatchMode.Suggest, WatchSchedule.Daily(new TimeOnly(9, 0)), new WatchFilters()));
+        await t.NotifyAsync(new MiuNotification("x", "y", [], watchId,
+            Enumerable.Range(0, 30).Select(i => new CartItem(Path.Combine(_root, i + new string('n', 250)), i + new string('n', 250), 1, Verdict.Safe, "r")).ToList()));
+        var list = _api.Sent.Last().Buttons!.SelectMany(r => r).Single(x => x.Text == "Show list").CallbackData;
+        await t.HandleAsync(Tap(Me, list));
+        _api.Sent.Last().Text.Length.Should().BeLessThanOrEqualTo(4096);
+        _api.Sent.Last().Text.Should().Contain("more");
+    }
+
+    [AvaloniaFact]
+    public async Task Polling_survives_unexpected_errors()
+    {
+        var (_, t) = Setup();
+        _api.FailNext = new InvalidOperationException("weird JSON from a proxy");
+        (await t.PollOnceAsync(CancellationToken.None)).Should().BeFalse();
+        t.LastError.Should().Contain("weird JSON");
+    }
+
     internal sealed class FakeTelegram : ITelegramApi
     {
         public List<(long Chat, string Text, IReadOnlyList<IReadOnlyList<TelegramButton>>? Buttons)> Sent { get; } = [];
         public List<string> Answered { get; } = [];
         public Queue<TelegramUpdate> Queue { get; } = new();
         public Exception? FailNext { get; set; }
+        public Exception? FailSends { get; set; }
+        public Exception? FailAnswers { get; set; }
         public long LastOffset { get; private set; } = -1;
 
         public Task<string> GetMeAsync(CancellationToken ct) => Task.FromResult("MiuTestBot");
@@ -208,12 +321,15 @@ public sealed class TelegramServiceTests : IDisposable
 
         public Task<long> SendMessageAsync(long chatId, string text, IReadOnlyList<IReadOnlyList<TelegramButton>>? buttons, CancellationToken ct)
         {
+            if (FailSends is { } e) throw e;
+            if (text.Length > 4096) throw new TelegramApiException("message is too long", 400);
             Sent.Add((chatId, text, buttons));
             return Task.FromResult((long)Sent.Count);
         }
 
         public Task AnswerCallbackAsync(string callbackId, string? text, CancellationToken ct)
         {
+            if (FailAnswers is { } e) throw e;
             Answered.Add(text ?? "");
             return Task.CompletedTask;
         }

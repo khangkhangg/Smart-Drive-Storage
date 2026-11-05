@@ -16,6 +16,7 @@ public partial class TelegramSettingsViewModel : ObservableObject
         _shell = shell;
         sendAlerts = shell.Services.Settings.GetBool(TelegramNotifier.AlertsKey, true);
         _pairingTimer.Tick += (_, _) => Refresh();
+        shell.Telegram.PairingChanged += () => Dispatcher.UIThread.Post(Refresh);
         Refresh();
     }
 
@@ -43,8 +44,19 @@ public partial class TelegramSettingsViewModel : ObservableObject
             _pairingTimer.Stop();
             PairingCode = "";
             Instruction = "";
-            Status = "Paired ✅ Alerts and commands work in your Telegram chat.";
+            Status = Telegram.LastError is { } err
+                ? "Paired, but Miu can't reach Telegram right now: " + err
+                : "Paired ✅ Alerts and commands work in your Telegram chat.";
         }
+        else if (PairingCode.Length > 0 && !Telegram.IsPairingOpen)
+        {
+            // Expired, too many wrong codes, or unpaired from Telegram.
+            _pairingTimer.Stop();
+            PairingCode = "";
+            Instruction = "";
+            Status = Telegram.IsConnected ? "Pairing closed. Press Connect to get a new code." : "Not connected.";
+        }
+        else if (PairingCode.Length == 0) Status = Telegram.IsConnected ? Status : "Not connected.";
         OnPropertyChanged(nameof(IsPairing));
     }
 
@@ -65,7 +77,7 @@ public partial class TelegramSettingsViewModel : ObservableObject
             Instruction = $"Open Telegram, find @{Telegram.BotUsername} and send:  /pair {PairingCode}   (valid for 10 minutes)";
             _pairingTimer.Start();
         }
-        catch (Exception ex) when (ex is Miu.Notify.TelegramApiException or HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is Miu.Notify.TelegramApiException or HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
         {
             Status = "Couldn't connect: " + ex.Message;
             PairingCode = "";
@@ -79,8 +91,7 @@ public partial class TelegramSettingsViewModel : ObservableObject
     {
         try
         {
-            await Telegram.SendTestAsync();
-            Status = "Test message sent.";
+            Status = await Telegram.SendTestAsync() ? "Test message sent." : "Not paired. Connect and pair first.";
         }
         catch (Exception ex) when (ex is Miu.Notify.TelegramApiException or HttpRequestException or TaskCanceledException)
         {

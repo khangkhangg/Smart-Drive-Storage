@@ -132,10 +132,12 @@ public sealed class CleanupServiceTests : IDisposable
         public List<string> Restored { get; } = [];
         public string[] FailNames { get; init; } = [];
         public string[] RestoreFailNames { get; set; } = [];
+        public Exception? FailWith { get; set; }
         public bool IsSupported => true;
 
         public Task<RecycleResult> RecycleAsync(IReadOnlyList<string> paths, IProgress<int>? progress, CancellationToken ct)
         {
+            if (FailWith is { } e) throw e;
             Received.AddRange(paths);
             var fail = paths.Where(p => FailNames.Contains(Path.GetFileName(p))).ToList();
             var ok = paths.Except(fail).ToList();

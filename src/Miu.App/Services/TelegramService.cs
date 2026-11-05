@@ -18,12 +18,15 @@ public sealed class TelegramService(AppServices services, AutomationService auto
     public const string TokenKey = "telegram.token";
     private static readonly TimeSpan PairingWindow = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan ButtonLifetime = TimeSpan.FromHours(24);
+    private const int MaxPairingTries = 5;
+    private const int MaxMessage = 4000; // Telegram allows 4096
 
     private readonly CleanupService _cleanup = new(services);
     private ITelegramApi? _api;
     private string? _pairingCode;
     private DateTime _pairingUntil;
     private long _offset;
+    private int _pairingTries;
 
     private sealed record Pending(long WatchId, List<PendingItem> Items);
     private sealed record PendingItem(string Path, string Name, long Bytes);
@@ -32,6 +35,13 @@ public sealed class TelegramService(AppServices services, AutomationService auto
     public long? ChatId => services.Telegram.ChatId();
     public bool IsPaired => ChatId is not null && Api is not null;
     public bool IsConnected => Api is not null;
+    public bool IsPairingOpen => _pairingCode is not null && utcNow() <= _pairingUntil;
+
+    /// <summary>Why the last poll failed (shown in Settings), or null when polling works.</summary>
+    public string? LastError { get; private set; }
+
+    /// <summary>Raised when pairing starts or ends, including /unpair from Telegram.</summary>
+    public event Action? PairingChanged;
 
     private ITelegramApi? Api => _api ??= services.Secrets.Get(TokenKey) is { Length: > 0 } t ? apiFactory(t) : null;
 
@@ -42,6 +52,8 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         BotUsername = await api.GetMeAsync(ct);
         services.Secrets.Set(TokenKey, token.Trim());
         _api = api;
+        _offset = 0; // update ids belong to a bot; a new bot starts from its own beginning
+        LastError = null;
     }
 
     /// <summary>A 6-digit code valid for 10 minutes; send "/pair CODE" to your bot.</summary>
@@ -49,6 +61,7 @@ public sealed class TelegramService(AppServices services, AutomationService auto
     {
         _pairingCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6", CultureInfo.InvariantCulture);
         _pairingUntil = utcNow() + PairingWindow;
+        _pairingTries = 0;
         return _pairingCode;
     }
 
@@ -56,9 +69,13 @@ public sealed class TelegramService(AppServices services, AutomationService auto
     {
         services.Telegram.Unpair();
         services.Secrets.Delete(TokenKey);
+        services.RemoteActions.ExpireAll();
         _api = null;
+        _offset = 0;
         _pairingCode = null;
         BotUsername = null;
+        LastError = null;
+        PairingChanged?.Invoke();
     }
 
     /// <summary>One long-poll round. Returns false on a network or API error (the caller waits and retries).</summary>
@@ -67,12 +84,18 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         if (Api is not { } api) return false;
         IReadOnlyList<TelegramUpdate> updates;
         try { updates = await api.GetUpdatesAsync(_offset, 50, ct); }
-        catch (Exception ex) when (ex is HttpRequestException or TelegramApiException or TaskCanceledException && !ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            // Anything (offline, 409 from another poller or a webhook, odd JSON from a proxy): report, back off, retry.
+            LastError = ex is TelegramApiException { Code: 409 }
+                ? "Another program is reading this bot's messages (or a webhook is set). Stop it, or create a new bot for Miu."
+                : ex.Message;
             return false;
         }
+        LastError = null;
         foreach (var u in updates)
         {
+            if (!ReferenceEquals(api, _api)) break; // unpaired or switched bots while this poll was waiting
             _offset = Math.Max(_offset, u.UpdateId + 1);
             try { await HandleAsync(u, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException) { System.Diagnostics.Trace.WriteLine("Telegram update failed: " + ex.Message); }
@@ -86,8 +109,18 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         var delay = TimeSpan.FromSeconds(5);
         while (!ct.IsCancellationRequested)
         {
-            if (Api is null) { await Task.Delay(TimeSpan.FromSeconds(30), ct); continue; }
-            if (await PollOnceAsync(ct)) delay = TimeSpan.FromSeconds(5);
+            bool ok;
+            try
+            {
+                if (Api is null) { await Task.Delay(TimeSpan.FromSeconds(30), ct); continue; }
+                ok = await PollOnceAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LastError = ex.Message; // e.g. the secret store could not be read
+                ok = false;
+            }
+            if (ok) delay = TimeSpan.FromSeconds(5);
             else
             {
                 await Task.Delay(delay, ct);
@@ -102,16 +135,20 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         var paired = ChatId;
 
         // Pairing is the only thing an unknown chat can do, and only with the right code in time.
+        // Only a private chat (not a group, where every member could press buttons) can pair, and wrong guesses close the window.
         if (u.Text is { } t && t.StartsWith("/pair", StringComparison.OrdinalIgnoreCase))
         {
+            if (_pairingCode is null || utcNow() > _pairingUntil || !u.IsPrivate) return;
             var code = t.Length > 5 ? t[5..].Trim() : "";
-            if (_pairingCode is not null && utcNow() <= _pairingUntil && CryptographicOperations.FixedTimeEquals(
-                    Encoding.ASCII.GetBytes(code), Encoding.ASCII.GetBytes(_pairingCode)))
+            if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(code), Encoding.ASCII.GetBytes(_pairingCode)))
             {
-                services.Telegram.Pair(u.ChatId, utcNow());
-                _pairingCode = null;
-                await api.SendMessageAsync(u.ChatId, "Paired ✅ Miu will send you alerts here. Send /help to see what I can do.", null, ct);
+                if (++_pairingTries >= MaxPairingTries) { _pairingCode = null; PairingChanged?.Invoke(); }
+                return;
             }
+            services.Telegram.Pair(u.ChatId, utcNow());
+            _pairingCode = null;
+            PairingChanged?.Invoke();
+            await TrySendAsync(api, u.ChatId, "Paired ✅ Miu will send you alerts here. Send /help to see what I can do.", ct);
             return;
         }
         if (paired is null || u.ChatId != paired) return; // not yours: no reply at all
@@ -128,7 +165,7 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         switch (cmd)
         {
             case "/status":
-                reply = StatusText();
+                reply = await StatusTextAsync();
                 break;
             case "/scan":
                 var lines = new List<string>();
@@ -155,8 +192,8 @@ public sealed class TelegramService(AppServices services, AutomationService auto
                 reply = $"{title}\n{body}";
                 break;
             case "/unpair":
-                await api.SendMessageAsync(chat, "Unpaired. Miu won't listen to this chat any more.", null, ct);
-                Unpair();
+                Unpair(); // first, so a failed goodbye can't leave the chat paired
+                await TrySendAsync(api, chat, "Unpaired. Miu won't listen to this chat any more.", ct);
                 return;
             default:
                 reply = "I can do:\n/status – how full your drives are\n/scan – run your automations now\n/suggest – rule suggestions\n" +
@@ -186,7 +223,11 @@ public sealed class TelegramService(AppServices services, AutomationService auto
             case "y": // confirmed
                 if (Load(services.RemoteActions.TryTake(id, utcNow())) is not { } take) { await Answer(api, u, "This button has expired.", ct); return; }
                 await Answer(api, u, "Cleaning…", ct);
-                await CleanAsync(api, u.ChatId, take, ct);
+                try { await CleanAsync(api, u.ChatId, take, ct); }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    await TrySendAsync(api, u.ChatId, "Couldn't clean: " + ex.Message + " Nothing else was changed.", ct);
+                }
                 return;
             case "x":
                 services.RemoteActions.TryTake(id, utcNow());
@@ -195,8 +236,7 @@ public sealed class TelegramService(AppServices services, AutomationService auto
             case "l":
                 if (Load(services.RemoteActions.Peek(id, utcNow())) is not { } list) { await Answer(api, u, "This button has expired.", ct); return; }
                 await Answer(api, u, null, ct);
-                await api.SendMessageAsync(u.ChatId, string.Join("\n", list.Items.Take(20).Select(i => $"• {i.Name} — {SizeFormatter.Format(i.Bytes)}"))
-                    + (list.Items.Count > 20 ? $"\n…and {list.Items.Count - 20} more" : ""), null, ct);
+                await api.SendMessageAsync(u.ChatId, ListText(list.Items), null, ct);
                 return;
             case "s":
                 var snoozed = services.Watches.Patch(id, w => w with { NextRunLocal = utcNow().ToLocalTime().AddDays(7) });
@@ -244,9 +284,11 @@ public sealed class TelegramService(AppServices services, AutomationService auto
             return;
         }
         var outcome = await _cleanup.CleanAsync(items, session, "telegram", ct: ct);
-        var skipped = p.Items.Count - outcome.Count;
+        var changed = p.Items.Count - items.Count;
+        var failed = items.Count - outcome.Count;
         var text = $"Moved {outcome.Count} {(outcome.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(outcome.FreedBytes)}) to the {services.RecycleBinName}." +
-                   (skipped > 0 ? $" Skipped {skipped} that changed since the alert." : "");
+                   (changed > 0 ? $" Left {changed} alone because {(changed == 1 ? "it" : "they")} changed since the alert." : "") +
+                   (failed > 0 ? $" {failed} couldn't be moved (in use or locked)." : "");
         await api.SendMessageAsync(chat, text, outcome.ActionId > 0 ? [[new TelegramButton("Undo", $"u:{outcome.ActionId}")]] : null, ct);
     }
 
@@ -269,12 +311,43 @@ public sealed class TelegramService(AppServices services, AutomationService auto
         await api.SendMessageAsync(chat, $"{n.Title}\n{n.Body}", buttons, ct);
     }
 
-    public async Task SendTestAsync(CancellationToken ct = default)
+    /// <summary>Sends a hello to the paired chat. False when nothing is paired.</summary>
+    public async Task<bool> SendTestAsync(CancellationToken ct = default)
     {
-        if (Api is { } api && ChatId is { } chat) await api.SendMessageAsync(chat, "Hello from Miu 👋 Alerts will appear here.", null, ct);
+        if (Api is not { } api || ChatId is not { } chat) return false;
+        await api.SendMessageAsync(chat, "Hello from Miu 👋 Alerts will appear here.", null, ct);
+        return true;
     }
 
-    private string StatusText()
+    private static string ListText(IReadOnlyList<PendingItem> items)
+    {
+        var sb = new StringBuilder();
+        var shown = 0;
+        foreach (var i in items.Take(20))
+        {
+            var name = i.Name.Length > 80 ? i.Name[..79] + "…" : i.Name;
+            var line = $"• {name} — {SizeFormatter.Format(i.Bytes)}\n";
+            if (sb.Length + line.Length > MaxMessage - 40) break;
+            sb.Append(line);
+            shown++;
+        }
+        if (items.Count > shown) sb.Append($"…and {items.Count - shown} more");
+        return sb.ToString().TrimEnd();
+    }
+
+    private async Task<string> StatusTextAsync()
+    {
+        // Drive checks can block on a sleeping network drive, so keep them off the UI thread.
+        var drives = await Task.Run(DrivesText);
+        var sb = new StringBuilder(drives);
+        var watches = services.Watches.All();
+        sb.AppendLine($"Automations: {watches.Count(w => w.Enabled)} on" + (automation.IsPaused ? " (paused)" : ""));
+        var pendingRules = services.Suggestions.Pending().Count;
+        if (pendingRules > 0) sb.AppendLine($"{pendingRules} rule suggestions waiting");
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string DrivesText()
     {
         var sb = new StringBuilder();
         foreach (var d in DriveInfo.GetDrives())
@@ -288,11 +361,7 @@ public sealed class TelegramService(AppServices services, AutomationService auto
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
-        var watches = services.Watches.All();
-        sb.AppendLine($"Automations: {watches.Count(w => w.Enabled)} on" + (automation.IsPaused ? " (paused)" : ""));
-        var pendingRules = services.Suggestions.Pending().Count;
-        if (pendingRules > 0) sb.AppendLine($"{pendingRules} rule suggestions waiting");
-        return sb.ToString().TrimEnd();
+        return sb.ToString();
     }
 
     private static Pending? Load(string? json)
@@ -303,8 +372,22 @@ public sealed class TelegramService(AppServices services, AutomationService auto
 
     private static string? CommonFolder(IEnumerable<string> paths) => paths.Select(Path.GetDirectoryName).FirstOrDefault();
 
-    private static Task Answer(ITelegramApi api, TelegramUpdate u, string? text, CancellationToken ct) =>
-        u.CallbackId is { } id ? api.AnswerCallbackAsync(id, text, ct) : Task.CompletedTask;
+    /// <summary>
+    /// Best effort: Telegram refuses answers to taps older than a few seconds (Miu was asleep or busy), and that must never
+    /// stop the action itself.
+    /// </summary>
+    private static async Task Answer(ITelegramApi api, TelegramUpdate u, string? text, CancellationToken ct)
+    {
+        if (u.CallbackId is not { } id) return;
+        try { await api.AnswerCallbackAsync(id, text, ct); }
+        catch (Exception ex) when (ex is HttpRequestException or TelegramApiException || ex is TaskCanceledException && !ct.IsCancellationRequested) { }
+    }
+
+    private static async Task TrySendAsync(ITelegramApi api, long chat, string text, CancellationToken ct)
+    {
+        try { await api.SendMessageAsync(chat, text, null, ct); }
+        catch (Exception ex) when (ex is HttpRequestException or TelegramApiException || ex is TaskCanceledException && !ct.IsCancellationRequested) { }
+    }
 
     public static TimeSpan ParseDuration(string s)
     {

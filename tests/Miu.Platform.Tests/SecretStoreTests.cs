@@ -31,6 +31,24 @@ public sealed class SecretStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_loose_leftover_temp_file_is_replaced_not_reused()
+    {
+        if (OperatingSystem.IsWindows()) return;
+#pragma warning disable CA1416
+        Directory.CreateDirectory(_dir);
+        var tmp = Path.Combine(_dir, "secrets.json.tmp");
+        File.WriteAllText(tmp, "junk");
+        File.SetUnixFileMode(tmp, (UnixFileMode)0b110_110_110);
+        new FileSecretStore(_dir).Set("k", "v");
+        File.Exists(tmp).Should().BeFalse();
+        File.GetUnixFileMode(Path.Combine(_dir, "secrets.json")).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var fresh = Path.Combine(_dir, "sub");
+        new FileSecretStore(fresh).Set("k", "v");
+        (File.GetUnixFileMode(fresh) & (UnixFileMode.GroupRead | UnixFileMode.OtherRead)).Should().Be(UnixFileMode.None);
+#pragma warning restore CA1416
+    }
+
+    [Fact]
     public void Windows_credential_store_roundtrip()
     {
         if (!OperatingSystem.IsWindows()) return;

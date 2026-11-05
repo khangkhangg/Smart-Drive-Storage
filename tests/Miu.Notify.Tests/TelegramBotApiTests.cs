@@ -35,14 +35,16 @@ public class TelegramBotApiTests
         var h = new Handler((_, _) => (HttpStatusCode.OK, """
             {"ok":true,"result":[
               {"update_id":10,"message":{"message_id":5,"chat":{"id":42,"type":"private"},"text":"/status"}},
-              {"update_id":11,"callback_query":{"id":"cb1","data":"c:7","message":{"message_id":6,"chat":{"id":42}}}}
+              {"update_id":11,"callback_query":{"id":"cb1","data":"c:7","message":{"message_id":6,"chat":{"id":42,"type":"private"}}}},
+              {"update_id":12,"message":{"message_id":7,"chat":{"id":-100,"type":"group"},"text":"/pair 1"}}
             ]}
             """));
         var api = new TelegramBotApi(new HttpClient(h), "t");
         var updates = await api.GetUpdatesAsync(9, 30, CancellationToken.None);
-        updates.Should().HaveCount(2);
+        updates.Should().HaveCount(3);
         updates[0].Should().Be(new TelegramUpdate(10, 42, "/status", null, null, 5));
         updates[1].Should().Be(new TelegramUpdate(11, 42, null, "c:7", "cb1", 6));
+        updates[2].IsPrivate.Should().BeFalse(); // groups can't pair
         h.Requests.Single().Body.Should().Contain("\"offset\":9").And.Contain("\"timeout\":30");
     }
 

@@ -12,6 +12,14 @@ public sealed class RemoteActionsRepository(MiuDatabase db)
         return (long)cmd.ExecuteScalar()!;
     }
 
+    /// <summary>Expires every waiting action (used when Telegram is unpaired, so old buttons never come back to life).</summary>
+    public void ExpireAll()
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE pending_remote_actions SET status = 'expired' WHERE status = 'pending'";
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>The payload if the action is still pending and not expired (without using it up).</summary>
     public string? Peek(long id, DateTime nowUtc)
     {

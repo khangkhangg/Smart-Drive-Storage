@@ -44,13 +44,14 @@ public sealed class FileSecretStore(string dir) : ISecretStore
 
     private void Write(Dictionary<string, string> all)
     {
-        Directory.CreateDirectory(dir);
+        const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        if (OperatingSystem.IsWindows()) Directory.CreateDirectory(dir);
+        else if (!Directory.Exists(dir)) Directory.CreateDirectory(dir, ownerOnly | UnixFileMode.UserExecute);
         var tmp = _file + ".tmp";
-        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(tmp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            JsonSerializer.Serialize(fs, all);
-        }
+        File.Delete(tmp); // a leftover could have looser permissions, and truncating keeps them
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = ownerOnly; // owner-only from the first byte, no window
+        using (var fs = new FileStream(tmp, options)) JsonSerializer.Serialize(fs, all);
         File.Move(tmp, _file, overwrite: true);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(_file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
