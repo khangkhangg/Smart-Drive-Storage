@@ -40,7 +40,7 @@ public class MigrationTests
             using (var db = new MiuDatabase(file))
             {
                 db.Migrate();
-                db.SchemaVersion.Should().Be(6);
+                db.SchemaVersion.Should().Be(7);
                 TableNames(db).Should().Contain(Tables);
             }
         }
@@ -50,5 +50,29 @@ public class MigrationTests
             foreach (var f in Directory.GetFiles(Path.GetTempPath(), Path.GetFileName(file) + "*")) File.Delete(f);
             File.Delete(file);
         }
+    }
+
+    [Fact]
+    public void Activity_kinds_migration_keeps_every_row_and_allows_the_new_kinds()
+    {
+        using var db = new MiuDatabase(":memory:");
+        db.Migrate();
+        var actions = new ActionsRepository(db);
+        var id = actions.Add("recycle", [new ActionItem("/a", "/trash/a", 5)], "cart");
+        actions.MarkUndone(id);
+        // Run the rebuild again on a table that has data: rows, ids and the undone flag survive.
+        var asm = typeof(MiuDatabase).Assembly;
+        using (var s = asm.GetManifestResourceStream(asm.GetManifestResourceNames().Single(n => n.EndsWith("007_activity_kinds.sql")))!)
+        using (var cmd = db.Connection.CreateCommand())
+        {
+            cmd.CommandText = new StreamReader(s).ReadToEnd();
+            cmd.ExecuteNonQuery();
+        }
+        var row = actions.Get(id)!;
+        row.Kind.Should().Be("recycle");
+        row.Undone.Should().BeTrue();
+        row.Items.Single().TrashLocation.Should().Be("/trash/a");
+        foreach (var kind in new[] { "removed", "failed", "rule-added", "rule-changed" })
+            actions.Add(kind, [new ActionItem("/x", "why", 0)], "cart").Should().BeGreaterThan(id);
     }
 }

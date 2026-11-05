@@ -200,6 +200,17 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Puts a clean back and rescans so the screens show the restored items.</summary>
     public async Task UndoAsync(long actionId)
     {
+        if (Services.Actions.Get(actionId) is { Kind: "rule-added", Undone: false } added)
+        {
+            // Undoing a rule you added removes it again.
+            foreach (var i in added.Items) Services.RulesStore.Delete(i.TrashLocation);
+            Services.Actions.MarkUndone(actionId);
+            Rules.Load();
+            ApplyRuleChanges();
+            Notice = new NoticeViewModel(this, "Rule removed.", "", 0);
+            Activity.Load();
+            return;
+        }
         if (Services.Actions.Get(actionId) is { Kind: "sync" })
         {
             var (restored, skipped) = await Automation.Sync.UndoAsync(actionId);

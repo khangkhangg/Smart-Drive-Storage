@@ -71,7 +71,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     /// </summary>
     private static string FindRecycledCopy(string bin, string path, HashSet<string> before, DateTime started)
     {
-        for (var attempt = 0; attempt < 15; attempt++)
+        for (var attempt = 0; attempt < 40; attempt++) // up to 4 s: big folders can take a moment
         {
             foreach (var index in IndexFiles(bin))
             {

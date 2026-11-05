@@ -1,3 +1,4 @@
+using Miu.Data;
 using System.Security.Cryptography;
 using System.Text;
 using Miu.Core.Learning;
@@ -31,6 +32,7 @@ public sealed class LearningService(AppServices services)
         // Teaching the opposite replaces the earlier choice for the same item.
         services.RulesStore.Delete("user-" + Hash(IdKey(path) + "|" + (action == DecisionAction.Keep ? DecisionAction.Delete : DecisionAction.Keep)));
         services.RulesStore.Upsert(rule);
+        services.Actions.Add("rule-added", [new ActionItem((action == DecisionAction.Keep ? "Keep: " : "OK to delete: ") + path, rule.Id, 0)], "teach");
         Mine();
         session?.ReplaceRules(services.AllRules());
     }
@@ -96,6 +98,7 @@ public sealed class LearningService(AppServices services)
             return;
         }
         services.RulesStore.Upsert(pending.Suggestion.Rule with { Enabled = true });
+        services.Actions.Add("rule-added", [new ActionItem(pending.Suggestion.Rule.Reason, pending.Suggestion.Rule.Id, 0)], "suggestion");
         services.Suggestions.SetStatus(suggestionId, "accepted");
         session?.ReplaceRules(services.AllRules());
     }
@@ -146,6 +149,7 @@ public sealed class LearningService(AppServices services)
             });
             count++;
         }
+        if (count > 0) services.Actions.Add("rule-changed", [new ActionItem($"Imported {count} {(count == 1 ? "rule" : "rules")}", "", 0)], "import");
         return new ImportResult(count, null, skipped);
     }
 

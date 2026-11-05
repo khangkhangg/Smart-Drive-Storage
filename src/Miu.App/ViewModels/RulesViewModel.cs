@@ -108,14 +108,19 @@ public partial class RulesViewModel(MainWindowViewModel shell) : ObservableObjec
     public void SetEnabled(string id, bool enabled)
     {
         shell.Services.RulesStore.SetEnabled(id, enabled);
+        shell.Services.Actions.Add("rule-changed", [new Miu.Data.ActionItem((enabled ? "Turned on: " : "Turned off: ") + Describe(id), id, 0)], "rules");
         AfterRulesChanged(enabled ? "Rule turned on." : "Rule turned off.", reload: false);
     }
 
     public void Delete(string id)
     {
+        var what = Describe(id);
         shell.Services.RulesStore.Delete(id);
+        shell.Services.Actions.Add("rule-changed", [new Miu.Data.ActionItem("Deleted: " + what, id, 0)], "rules");
         AfterRulesChanged("Rule deleted.");
     }
+
+    private string Describe(string id) => shell.Services.RulesStore.All().FirstOrDefault(r => r.Id == id) is { } r ? r.Reason : id;
 
     public string ExportJson() => shell.Learning.ExportJson();
 

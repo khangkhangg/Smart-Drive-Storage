@@ -78,6 +78,15 @@ public sealed class CleanupService(AppServices services)
             new LearningService(services).RecordCleaned(items.Where(i => recycled.Contains(i.Path) && !i.FromDuplicates)
                 .Select(i => (i.Path, dirs.Contains(i.Path), i.Verdict, i.Reason)));
         }
+        // Everything that happened goes to Activity, not only what can be undone: things Windows removed without a
+        // Recycle Bin copy (often too big for the bin and confirmed in Windows' own prompt), and what couldn't be cleaned.
+        var bytesOf = items.GroupBy(i => i.Path).ToDictionary(g => g.Key, g => g.First().Bytes);
+        var removedNoCopy = recycleResult.Failed.Where(f => !File.Exists(f.Path) && !Directory.Exists(f.Path)).ToList();
+        var notCleaned = result.Failed.Except(removedNoCopy).ToList();
+        if (removedNoCopy.Count > 0)
+            services.Actions.Add("removed", removedNoCopy.Select(f => new ActionItem(f.Path, f.Reason, bytesOf.GetValueOrDefault(f.Path))).ToList(), origin);
+        if (notCleaned.Count > 0)
+            services.Actions.Add("failed", notCleaned.Select(f => new ActionItem(f.Path, f.Reason, bytesOf.GetValueOrDefault(f.Path))).ToList(), origin);
         // Items already gone from disk shouldn't linger in the cart or the scan either.
         var gone = result.Recycled.Select(r => r.OriginalPath)
             .Concat(recycleResult.Failed.Select(f => f.Path).Where(p => !File.Exists(p) && !Directory.Exists(p)))

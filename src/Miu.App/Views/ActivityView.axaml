@@ -6,9 +6,9 @@
   <DockPanel Margin="40,32,40,16">
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
       <TextBlock Classes="h1" Text="Activity" />
-      <TextBlock Classes="muted" Text="Everything Miu has cleaned. Items wait in the Recycle Bin, so you can put them back." />
+      <TextBlock Classes="muted" Text="Everything Miu has cleaned, couldn't clean, and every rule change. Cleaned items wait in the Recycle Bin, so you can put them back." />
     </StackPanel>
-    <TextBlock DockPanel.Dock="Top" Classes="muted" IsVisible="{Binding IsEmpty}" Text="Nothing cleaned yet." />
+    <TextBlock DockPanel.Dock="Top" Classes="muted" IsVisible="{Binding IsEmpty}" Text="Nothing here yet. Cleans, rule changes and anything Miu couldn't clean show up here." />
     <ScrollViewer>
       <ItemsControl ItemsSource="{Binding Rows}">
         <ItemsControl.ItemTemplate>

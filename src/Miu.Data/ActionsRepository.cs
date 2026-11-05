@@ -10,6 +10,9 @@ public sealed record ActionRecord(long Id, DateTime TsUtc, string Kind, IReadOnl
 /// <summary>The Activity log: every clean Miu performs, with what is needed to undo it.</summary>
 public sealed class ActionsRepository(MiuDatabase db)
 {
+    /// <summary>Raised after an entry is added (from any thread).</summary>
+    public event EventHandler? Added;
+
     public long Add(string kind, IReadOnlyList<ActionItem> items, string origin)
     {
         using var cmd = db.Connection.CreateCommand();
@@ -19,7 +22,9 @@ public sealed class ActionsRepository(MiuDatabase db)
         cmd.Parameters.AddWithValue("$items", JsonSerializer.Serialize(items));
         cmd.Parameters.AddWithValue("$b", items.Sum(i => i.Bytes));
         cmd.Parameters.AddWithValue("$o", origin);
-        return (long)cmd.ExecuteScalar()!;
+        var id = (long)cmd.ExecuteScalar()!;
+        Added?.Invoke(this, EventArgs.Empty);
+        return id;
     }
 
     public IReadOnlyList<ActionRecord> Recent(int count)
