@@ -36,7 +36,7 @@ public sealed class FreedesktopTrashTests : IDisposable
         Directory.Exists(Path.Combine(_trash, "files", "node_modules")).Should().BeTrue();
         var info = File.ReadAllText(Path.Combine(_trash, "info", "node_modules.trashinfo"));
         info.Should().StartWith("[Trash Info]");
-        info.Should().Contain("Path=" + new Uri(nm).AbsolutePath);
+        info.Should().Contain("Path=" + FreedesktopTrash.Encode(nm));
         info.Should().MatchRegex(@"DeletionDate=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}");
     }
 
@@ -130,6 +130,11 @@ public sealed class FreedesktopTrashTests : IDisposable
         r.Recycled.Select(i => i.OriginalPath).Should().Equal(a);
         Directory.Exists(b).Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("/home/u/a b.txt", "/home/u/a%20b.txt")]
+    [InlineData(@"C:\Temp\x", "C%3A%5CTemp%5Cx")]
+    public void Encode_is_platform_independent(string path, string expected) => FreedesktopTrash.Encode(path).Should().Be(expected);
 
     [Theory]
     [InlineData("/homework/big.iso", "/")]
