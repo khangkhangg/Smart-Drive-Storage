@@ -20,6 +20,7 @@ public sealed class RuleEngine
             .OrderBy(r => Tier(r.Source))
             .ThenByDescending(r => r.Priority)
             .ThenByDescending(Specificity)
+            .ThenBy(r => r.Verdict == Verdict.Keep ? 0 : 1) // on a tie, keeping wins
             .ToArray();
     }
 
@@ -43,6 +44,7 @@ public sealed class RuleEngine
         if (m.Path is not null && !Glob.IsMatch(m.Path, f.FullPath, _ci)) return false;
         if (m.Under is not null && !IsAtOrBelow(f.FullPath, m.Under, includeSelf: true)) return false;
         if (m.Inside is not null && !IsAtOrBelow(f.FullPath, m.Inside, includeSelf: false)) return false;
+        if (m.ChildOf is not null && !IsChildOf(f.FullPath, m.ChildOf)) return false;
         if (m.Names is { Length: > 0 } && !m.Names.Any(n => Glob.IsMatch(n, f.Name, _ci))) return false;
         if (m.Ext is { Length: > 0 } && !m.Ext.Any(e => f.Name.EndsWith("." + e.TrimStart('.'),
                 _ci ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))) return false;
@@ -57,6 +59,14 @@ public sealed class RuleEngine
         var d = folder.Replace('\\', '/').TrimEnd('/');
         if (p.Equals(d, cmp)) return includeSelf;
         return p.StartsWith(d + "/", cmp);
+    }
+
+    private bool IsChildOf(string path, string folder)
+    {
+        var cmp = _ci ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var p = path.Replace('\\', '/').TrimEnd('/');
+        var cut = p.LastIndexOf('/');
+        return cut >= 0 && p[..cut].Equals(folder.Replace('\\', '/').TrimEnd('/'), cmp);
     }
 
     private static bool Holds(RuleConditions c, ItemFacts f)
@@ -81,7 +91,7 @@ public sealed class RuleEngine
 
     private static int Specificity(Rule r)
     {
-        var literal = (r.Match.Path?.Count(ch => ch is not ('*' or '?')) ?? 0) + (r.Match.Under?.Length ?? 0) + (r.Match.Inside?.Length ?? 0);
+        var literal = (r.Match.Path?.Count(ch => ch is not ('*' or '?')) ?? 0) + (r.Match.Under?.Length ?? 0) + (r.Match.Inside?.Length ?? 0) + (r.Match.ChildOf?.Length ?? 0);
         var c = r.Conditions;
         var conds = new object?[] { c.OlderThanDays, c.MinSizeMB, c.ProjectIdleDays, c.RequiresSiblingMarker, c.RequiresChildMarker, c.RequiresGitIgnored }
             .Count(x => x is not null);

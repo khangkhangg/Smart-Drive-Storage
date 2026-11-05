@@ -8,15 +8,16 @@ public static class RuleDescriber
     public static string Describe(Rule r)
     {
         var m = r.Match;
-        var what = (m.Ext, m.Names, m.Under, m.Inside, m.Path) switch
+        string Exts(string[] e) => string.Join(", ", e.Select(x => "." + x));
+        string? place = m.ChildOf is { } childOf ? $"directly in {childOf}" : m.Inside is { } i ? $"inside {i}" : m.Under is { } u ? $"in {u}" : null;
+        var what = m switch
         {
-            ({ Length: > 0 } e, _, { } u, _, _) => $"{string.Join(", ", e.Select(x => "." + x))} files in {u}",
-            ({ Length: > 0 } e, _, _, { } i, _) => $"{string.Join(", ", e.Select(x => "." + x))} files in {i}",
-            ({ Length: > 0 } e, null, null, null, null) => $"{string.Join(", ", e.Select(x => "." + x))} files anywhere",
-            (_, { Length: > 0 } n, _, _, _) => $"{(m.IsDir == true ? "Folders" : "Items")} named {string.Join(", ", n)}" + (m.Path is null ? " anywhere" : $" in {m.Path}"),
-            (_, _, { } u, _, _) => u,
-            (_, _, _, { } i, _) => $"Everything inside {i}",
-            (_, _, _, _, { } p) => p,
+            { Ext.Length: > 0 } => $"{Exts(m.Ext!)} files " + (place ?? (m.Path is null ? "anywhere" : $"matching {m.Path}")),
+            { Names.Length: > 0 } => $"{(m.IsDir == true ? "Folders" : "Items")} named {string.Join(", ", m.Names!)} " + (place ?? (m.Path is null ? "anywhere" : $"matching {m.Path}")),
+            { ChildOf: { } ch } => $"Items directly in {ch}",
+            { Inside: { } ins } => $"Everything inside {ins}",
+            { Under: { } un } => un,
+            { Path: { } p } => p,
             _ => "Everything",
         };
         var c = r.Conditions;

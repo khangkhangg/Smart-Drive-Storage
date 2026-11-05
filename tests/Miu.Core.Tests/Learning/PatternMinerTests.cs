@@ -20,7 +20,7 @@ public class PatternMinerTests
         var only = s.Should().ContainSingle().Subject;
         only.Rule.Verdict.Should().Be(Verdict.Safe);
         only.Rule.Source.Should().Be(RuleSource.Learned);
-        only.Rule.Match.Under.Should().Be("/home/u/Downloads");
+        only.Rule.Match.ChildOf.Should().Be("/home/u/Downloads");
         only.Rule.Match.Ext.Should().Equal("msi");
         only.Evidence.Should().Contain("3 of 3").And.Contain("Never used");
         only.Rule.Reason.Should().Contain("Never used");
@@ -80,20 +80,21 @@ public class PatternMinerTests
     }
 
     [Fact]
-    public void Folder_name_anywhere()
+    public void Folder_name_keep_anywhere()
     {
         var s = PatternMiner.Mine([
-            D("/home/u/a/.cache-x", DecisionAction.Delete, "Rebuildable", isDir: true),
-            D("/home/u/b/.cache-x", DecisionAction.Delete, "Rebuildable", isDir: true),
-            D("/home/u/c/.cache-x", DecisionAction.Delete, "Rebuildable", isDir: true)], new HashSet<string>(), PathStyle.Unix);
+            D("/home/u/a/.cache-x", DecisionAction.Keep, "Work files", isDir: true),
+            D("/srv/b/.cache-x", DecisionAction.Keep, "Work files", isDir: true),
+            D("/opt/c/.cache-x", DecisionAction.Keep, "Work files", isDir: true)], new HashSet<string>(), PathStyle.Unix);
         var r = s.Single().Rule;
         r.Match.Names.Should().Equal(".cache-x");
         r.Match.IsDir.Should().BeTrue();
         r.Match.Under.Should().BeNull();
+        r.Verdict.Should().Be(Verdict.Keep);
     }
 
     [Fact]
-    public void Learned_folder_delete_rule_never_matches_the_folder_itself()
+    public void Learned_folder_delete_rule_never_matches_the_folder_itself_or_deeper()
     {
         var rule = PatternMiner.Mine([
             D("/home/u/old/a", DecisionAction.Delete, isDir: true),
@@ -103,6 +104,7 @@ public class PatternMinerTests
         Facts("/home/u/old").Should().NotBeNull();
         engine.Evaluate(Facts("/home/u/old")).RuleId.Should().BeNull();
         engine.Evaluate(Facts("/home/u/old/new-thing")).Verdict.Should().Be(Verdict.Safe);
+        engine.Evaluate(Facts("/home/u/old/new-thing/deeper")).RuleId.Should().BeNull();
     }
 
     private static ItemFacts Facts(string path) =>

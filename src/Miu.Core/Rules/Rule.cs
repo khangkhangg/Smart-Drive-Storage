@@ -7,8 +7,13 @@ public enum RuleSource { Protected, User, Learned, Builtin }
 /// <summary>What a rule applies to. All non-null parts must match.</summary>
 /// <param name="Under">An exact folder: matches that folder itself and everything inside it.</param>
 /// <param name="Inside">An exact folder: matches only what is inside it, never the folder itself.</param>
+/// <param name="ChildOf">An exact folder: matches only its direct children.</param>
 public sealed record RuleMatch(string? Path = null, string[]? Names = null, string[]? Ext = null, bool? IsDir = null,
-    string? Under = null, string? Inside = null);
+    string? Under = null, string? Inside = null, string? ChildOf = null)
+{
+    /// <summary>True when the match names no location, name, type or pattern at all (it would match everything).</summary>
+    public bool IsEmpty => Path is null && Names is not { Length: > 0 } && Ext is not { Length: > 0 } && Under is null && Inside is null && ChildOf is null;
+}
 
 /// <summary>Extra conditions. All non-null parts must hold.</summary>
 public sealed record RuleConditions(

@@ -122,7 +122,9 @@ public partial class RulesViewModel(MainWindowViewModel shell) : ObservableObjec
     public void Import(string json)
     {
         var r = shell.Learning.ImportJson(json);
-        AfterRulesChanged(r.Error ?? $"Imported {r.Imported} {(r.Imported == 1 ? "rule" : "rules")}.");
+        AfterRulesChanged(r.Error ?? $"Imported {r.Imported} {(r.Imported == 1 ? "rule" : "rules")}." +
+            (r.Skipped > 0 ? $" Skipped {r.Skipped} that were incomplete or protected." : "") +
+            " Imported Safe rules are off until you turn them on.");
     }
 
     private void AfterRulesChanged(string message, bool reload = true)

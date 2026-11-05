@@ -54,8 +54,13 @@ public static class DuplicateFinder
             return groups.OrderByDescending(g => g.WastedBytes).ToList();
         }, ct);
 
+    private static readonly string[] Throwaway =
+        ["/downloads/", "/temp/", "/tmp/", "/.cache/", "/cache/", "/caches/", "/trash/", "/$recycle.bin/", "/desktop/"];
+
+    /// <summary>Prefer a copy in a lasting place (not Downloads, temp, caches, Desktop), then the oldest, then the shortest path.</summary>
     private static int PickKeep(ScanTree tree, List<int> ids) =>
-        ids.OrderBy(tree.ModifiedUtc).ThenBy(id => tree.GetFullPath(id).Length).ThenBy(tree.GetFullPath, StringComparer.Ordinal).First();
+        ids.OrderBy(id => Throwaway.Any(tree.GetFullPath(id).Replace('\\', '/').ToLowerInvariant().Contains) ? 1 : 0)
+            .ThenBy(tree.ModifiedUtc).ThenBy(id => tree.GetFullPath(id).Length).ThenBy(tree.GetFullPath, StringComparer.Ordinal).First();
 
     private static IEnumerable<int> Files(ScanTree tree, int nodeId)
     {

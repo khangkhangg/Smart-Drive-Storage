@@ -2,7 +2,8 @@ using Miu.Core.Rules;
 
 namespace Miu.Core.Cleanup;
 
-public sealed record CartItem(string Path, string Name, long Bytes, Verdict Verdict, string Reason);
+/// <param name="FromDuplicates">Added as a duplicate copy: cleaning it says nothing about the kind of file, so Miu learns nothing from it.</param>
+public sealed record CartItem(string Path, string Name, long Bytes, Verdict Verdict, string Reason, bool FromDuplicates = false);
 
 /// <summary>
 /// Items the user has chosen to clean. Keeps only top-level items: adding something inside an item already in the

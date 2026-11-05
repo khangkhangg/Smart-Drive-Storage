@@ -13,7 +13,7 @@ public sealed record Crumb(string Name, int NodeId);
 
 public sealed record TypeRow(string Name, string SizeText, double Fraction, string FilesText, Avalonia.Media.IBrush Brush);
 
-public sealed record DuplicateFileRow(int NodeId, string Path, bool IsKeep, string ModifiedText);
+public sealed record DuplicateFileRow(int NodeId, string Path, bool IsKeep, string ModifiedText, long Size);
 
 public sealed record DuplicateGroupRow(string SizeText, string WastedText, IReadOnlyList<DuplicateFileRow> Files, long WastedBytes);
 
@@ -162,7 +162,7 @@ public partial class AnalyzeViewModel : ObservableObject
                 DuplicateGroups.Add(new DuplicateGroupRow(
                     $"{g.Nodes.Count} copies of {SizeFormatter.Format(g.Size)}", SizeFormatter.Format(g.WastedBytes) + " wasted",
                     g.Nodes.OrderByDescending(n => n == g.KeepNode).Select(n => new DuplicateFileRow(n, s.Tree.GetFullPath(n), n == g.KeepNode,
-                        "changed " + HumanTime.Ago(s.Tree.ModifiedUtc(n), s.NowUtc))).ToList(), g.WastedBytes));
+                        "changed " + HumanTime.Ago(s.Tree.ModifiedUtc(n), s.NowUtc), g.Size)).ToList(), g.WastedBytes));
             var wasted = groups.Sum(g => g.WastedBytes);
             DuplicatesTotalText = groups.Count == 0 ? "" : $"{groups.Count:N0} groups · {SizeFormatter.Format(wasted)} could be freed";
             DuplicatesStatus = groups.Count == 0 ? "No duplicates found (files of 1 MB or more)." : "Miu keeps the oldest copy of each. Copies go to the cart as Review.";
@@ -174,14 +174,29 @@ public partial class AnalyzeViewModel : ObservableObject
     [RelayCommand]
     private void CancelDuplicates() => _dupCts?.Cancel();
 
+    /// <summary>
+    /// Adds the copies of one group, but never all of them: nothing is added when the kept copy is gone, already in the
+    /// cart, or itself marked Safe (it could be cleaned too), and copies you keep are skipped.
+    /// </summary>
     [RelayCommand]
     private void AddGroupToCart(DuplicateGroupRow? group)
     {
-        if (group is null) return;
+        if (group is null || Session is not { } s) return;
         var keep = group.Files.First(f => f.IsKeep);
+        var keepNode = s.FindNode(keep.Path);
+        if (keepNode is null || !File.Exists(keep.Path) || _services.Cart.Contains(keep.Path)
+            || s.VerdictFor(keepNode.Value).Verdict == Miu.Core.Rules.Verdict.Safe)
+        {
+            DuplicatesStatus = $"Skipped {Path.GetFileName(keep.Path)}: the copy Miu would keep is gone, in the cart, or marked Safe itself.";
+            return;
+        }
         foreach (var f in group.Files.Where(f => !f.IsKeep))
-            _services.Cart.Add(new Miu.Core.Cleanup.CartItem(f.Path, Path.GetFileName(f.Path), Session!.Tree.Size(f.NodeId),
-                Miu.Core.Rules.Verdict.Review, $"Duplicate of {keep.Path}"));
+        {
+            if (s.FindNode(f.Path) is not { } node || !File.Exists(f.Path)) continue;
+            if (s.VerdictFor(node).Verdict is Miu.Core.Rules.Verdict.Keep or Miu.Core.Rules.Verdict.Protected) continue;
+            _services.Cart.Add(new Miu.Core.Cleanup.CartItem(f.Path, Path.GetFileName(f.Path), f.Size,
+                Miu.Core.Rules.Verdict.Review, $"Duplicate of {keep.Path}", FromDuplicates: true));
+        }
     }
 
     [RelayCommand]
@@ -242,6 +257,8 @@ public partial class AnalyzeViewModel : ObservableObject
             var session = await ScanSession.RunAsync(_services, path, progress, token);
             if (generation != _scanGeneration) return;
             Session = session;
+            DuplicateGroups.Clear();
+            DuplicatesTotalText = "";
             var t = Session.Tree;
             TotalText = $"{SizeFormatter.Format(t.Size(t.Root))} · {t.FileCount(t.Root):N0} files";
             ProgressText = $"Scanned in {clock.Elapsed.TotalSeconds:0.0} s";

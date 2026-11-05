@@ -35,13 +35,16 @@ public static class PatternMiner
     public const int MinDecisions = 3;
     public const int MinDecisionsAnywhere = 5;
 
+    /// <summary>Learned rules that delete by name or type must stay under a folder at least this deep (e.g. ~/code).</summary>
+    public const int MinScopeDepth = 3;
+
     public static IReadOnlyList<RuleSuggestion> Mine(IReadOnlyList<Decision> decisions, ISet<string> knownKeys, PathStyle style)
     {
         var cmp = style == PathStyle.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var used = new HashSet<Decision>(ReferenceEqualityComparer.Instance);
         var result = new List<RuleSuggestion>();
 
-        void Try(string kind, IEnumerable<IGrouping<string, Decision>> groups, int min, Func<IGrouping<string, Decision>, DecisionAction, RuleMatch> match)
+        void Try(string kind, IEnumerable<IGrouping<string, Decision>> groups, int min, Func<IGrouping<string, Decision>, DecisionAction, RuleMatch?> match)
         {
             foreach (var g in groups)
             {
@@ -53,20 +56,74 @@ public static class PatternMiner
                 var key = $"{kind}|{g.Key}|{action}";
                 foreach (var d in fresh) used.Add(d);
                 if (knownKeys.Contains(key)) continue;
-                result.Add(Build(key, match(g, action), action, fresh));
+                if (match(g, action) is not { } m) continue;
+                var suggestion = Build(key, m, action, fresh);
+                // Any opposite choice the rule would reach (even outside this group) means it would overrule you.
+                if (IsContradicted(suggestion.Rule, decisions, style)) continue;
+                result.Add(suggestion);
             }
         }
 
         var files = decisions.Where(d => !d.IsDir).ToList();
         Try("ext-in", files.Where(d => d.Ext is not null).GroupBy(d => d.ParentPath + "\u0001" + d.Ext, cmp), MinDecisions,
-            (g, _) => new RuleMatch(Under: g.First().ParentPath, Ext: [g.First().Ext!], IsDir: false));
+            (g, a) => a == DecisionAction.Keep
+                ? new RuleMatch(Under: g.First().ParentPath, Ext: [g.First().Ext!], IsDir: false)
+                : new RuleMatch(ChildOf: g.First().ParentPath, Ext: [g.First().Ext!], IsDir: false));
         Try("in", decisions.GroupBy(d => d.ParentPath, cmp), MinDecisions,
-            (g, a) => a == DecisionAction.Keep ? new RuleMatch(Under: g.Key) : new RuleMatch(Inside: g.Key));
+            (g, a) => a == DecisionAction.Keep ? new RuleMatch(Under: g.Key) : new RuleMatch(ChildOf: g.Key));
         Try("name", decisions.Where(d => d.IsDir).GroupBy(d => d.Name, cmp), MinDecisions,
-            (g, _) => new RuleMatch(Names: [g.First().Name], IsDir: true));
+            (g, a) => a == DecisionAction.Keep
+                ? new RuleMatch(Names: [g.First().Name], IsDir: true)
+                : Scoped(g, style) is { } scope ? new RuleMatch(Names: [g.First().Name], IsDir: true, Inside: scope) : null);
         Try("ext", files.Where(d => d.Ext is not null).GroupBy(d => d.Ext!, cmp), MinDecisionsAnywhere,
-            (g, _) => new RuleMatch(Ext: [g.Key], IsDir: false));
+            (g, a) => a == DecisionAction.Keep
+                ? new RuleMatch(Ext: [g.Key], IsDir: false)
+                : Scoped(g, style) is { } scope ? new RuleMatch(Ext: [g.Key], IsDir: false, Inside: scope) : null);
         return result;
+    }
+
+    /// <summary>True when the rule would decide the opposite of something you chose.</summary>
+    public static bool IsContradicted(Rule rule, IEnumerable<Decision> decisions, PathStyle style)
+    {
+        var opposite = rule.Verdict == Verdict.Keep ? DecisionAction.Delete : DecisionAction.Keep;
+        return decisions.Any(d => d.Action == opposite && Matches(rule.Match, d, style));
+    }
+
+    /// <summary>Whether a rule's match covers a decided item (location, name and type parts).</summary>
+    public static bool Matches(RuleMatch m, Decision d, PathStyle style)
+    {
+        var ci = style == PathStyle.Windows;
+        var cmp = ci ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        string N(string p) => p.Replace('\\', '/').TrimEnd('/');
+        var path = N(d.Path);
+        if (m.IsDir is { } dir && dir != d.IsDir) return false;
+        if (m.Under is { } u && !(path.Equals(N(u), cmp) || path.StartsWith(N(u) + "/", cmp))) return false;
+        if (m.Inside is { } i && !path.StartsWith(N(i) + "/", cmp)) return false;
+        if (m.ChildOf is { } c && !N(d.ParentPath).Equals(N(c), cmp)) return false;
+        if (m.Names is { Length: > 0 } names && !names.Any(n => Glob.IsMatch(n, d.Name, ci))) return false;
+        if (m.Ext is { Length: > 0 } ext && (d.Ext is null || !ext.Contains(d.Ext, StringComparer.OrdinalIgnoreCase))) return false;
+        if (m.Path is { } glob && !Glob.IsMatch(glob, d.Path, ci)) return false;
+        return true;
+    }
+
+    /// <summary>The deepest folder containing every item, or null when that is too shallow (/, a drive, the home folder).</summary>
+    private static string? Scoped(IEnumerable<Decision> group, PathStyle style)
+    {
+        var cmp = style == PathStyle.Windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var sep = PathNormalizer.Separator(style);
+        string[]? common = null;
+        foreach (var d in group)
+        {
+            var parts = d.ParentPath.Split(sep, StringSplitOptions.RemoveEmptyEntries);
+            if (common is null) { common = parts; continue; }
+            var n = 0;
+            while (n < common.Length && n < parts.Length && string.Equals(common[n], parts[n], cmp)) n++;
+            common = common[..n];
+        }
+        var depth = common?.Count(p => !(p.Length == 2 && p[1] == ':')) ?? 0;
+        if (common is null || depth < MinScopeDepth) return null;
+        var joined = string.Join(sep, common);
+        return style == PathStyle.Windows ? joined : sep + joined;
     }
 
     private static RuleSuggestion Build(string key, RuleMatch match, DecisionAction action, List<Decision> evidence)

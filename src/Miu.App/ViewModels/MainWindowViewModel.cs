@@ -74,6 +74,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (Analyze.Session is not { } session) return;
         session.ReplaceRules(Services.AllRules());
+        // Anything in the cart that you now keep (or that holds something you keep) leaves the cart.
+        Services.Cart.RemoveAll(Services.Cart.Items.Where(i => session.KeepConflict(i.Path) is not null).Select(i => i.Path).ToList());
         Analyze.RefreshCurrent();
         OnScanCompleted(session);
     }

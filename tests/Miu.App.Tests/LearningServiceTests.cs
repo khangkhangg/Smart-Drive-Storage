@@ -113,6 +113,7 @@ public sealed class LearningServiceTests : IDisposable
             """;
         var result = learning.ImportJson(json);
         result.Imported.Should().Be(2);
+        result.Skipped.Should().Be(1);
         result.Error.Should().BeNull();
         var all = s.RulesStore.All();
         all.Select(r => r.Id).Should().OnlyHaveUniqueItems().And.HaveCount(3);

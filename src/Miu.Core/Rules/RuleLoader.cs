@@ -17,12 +17,12 @@ public static class RuleLoader
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private sealed record Pack(List<Rule> Rules);
+    private sealed record Pack(List<Rule?>? Rules);
 
     public static IReadOnlyList<Rule> LoadJson(string json)
     {
         var pack = JsonSerializer.Deserialize<Pack>(json, JsonOptions) ?? throw new InvalidDataException("Empty rule pack.");
-        return pack.Rules.Select(r => r with
+        return (pack.Rules ?? []).OfType<Rule>().Select(r => r with
         {
             Match = r.Match ?? new RuleMatch(),
             Conditions = r.Conditions ?? new RuleConditions(),
@@ -34,5 +34,5 @@ public static class RuleLoader
             ? Directory.EnumerateFiles(dir, "*.json").Order(StringComparer.Ordinal).SelectMany(f => LoadJson(File.ReadAllText(f))).ToList()
             : [];
 
-    public static string ToJson(IEnumerable<Rule> rules) => JsonSerializer.Serialize(new Pack(rules.ToList()), JsonOptions);
+    public static string ToJson(IEnumerable<Rule> rules) => JsonSerializer.Serialize(new Pack(rules.Cast<Rule?>().ToList()), JsonOptions);
 }

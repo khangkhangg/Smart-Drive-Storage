@@ -66,6 +66,38 @@ public sealed class ScanSession
         return result;
     }
 
+    /// <summary>
+    /// Why an item must not be cleaned now that rules may have changed: it is kept itself, or something inside it is.
+    /// Null when it may go.
+    /// </summary>
+    public string? KeepConflict(string fullPath)
+    {
+        if (FindNode(fullPath) is not { } id) return null;
+        if (VerdictFor(id).Verdict is Verdict.Keep or Verdict.Protected) return "You chose Keep for this.";
+        return Tree.IsDir(id) && KeptInside(id) ? "You marked something inside it Keep." : null;
+    }
+
+    /// <summary>True when a Keep rule (yours or learned) covers something strictly inside the folder.</summary>
+    public bool KeptInside(int folder)
+    {
+        var keeps = _engine.Rules.Where(r => r.Verdict == Verdict.Keep && r.Source is RuleSource.User or RuleSource.Learned).ToList();
+        if (keeps.Count == 0) return false;
+        var path = Tree.GetFullPath(folder).Replace('\\', '/').TrimEnd('/') + "/";
+        var cmp = _ci ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        bool InsideFolder(string? p) => p is not null && p.Replace('\\', '/').TrimEnd('/').StartsWith(path, cmp);
+        if (keeps.Any(r => InsideFolder(r.Match.Under) || InsideFolder(r.Match.Inside) || InsideFolder(r.Match.ChildOf))) return true;
+        // Keep rules by name or type (no fixed place) need a look at what is inside.
+        if (!keeps.Any(r => r.Match.Under is null && r.Match.Inside is null && r.Match.ChildOf is null)) return false;
+        var stack = new Stack<int>(Tree.Children(folder));
+        while (stack.Count > 0)
+        {
+            var id = stack.Pop();
+            if (VerdictFor(id).Verdict == Verdict.Keep) return true;
+            if (Tree.IsDir(id)) foreach (var c in Tree.Children(id)) stack.Push(c);
+        }
+        return false;
+    }
+
     /// <summary>Bytes inside this folder that are safe to remove (0 for files and for the safe item itself).</summary>
     public long SafeBytesUnder(int id) => _safeUnder.GetValueOrDefault(id);
 
@@ -160,7 +192,8 @@ public sealed class ScanSession
             ct.ThrowIfCancellationRequested();
             var id = stack.Pop();
             var v = VerdictFor(id);
-            if (v.Verdict == Verdict.Safe && Tree.Size(id) > 0)
+            // A Safe folder that holds something you chose to keep is never offered whole: look inside instead.
+            if (v.Verdict == Verdict.Safe && Tree.Size(id) > 0 && !(Tree.IsDir(id) && KeptInside(id)))
             {
                 safe.Add((id, v));
                 total += Tree.Size(id);

@@ -119,4 +119,12 @@ public class RuleEngineTests
         var guard = new ProtectedPathGuard([], [], PathStyle.Windows);
         new RuleEngine([rule], guard, true).Evaluate(Facts(@"c:\users\K\clients\a")).RuleId.Should().Be("u");
     }
+
+    [Fact]
+    public void Keep_wins_a_tie_with_safe()
+    {
+        var keep = new Rule("k", new RuleMatch(Under: "/home/u/p"), new RuleConditions(), Verdict.Keep, "k", RuleSource.User, 900);
+        var safe = new Rule("s", new RuleMatch(Under: "/home/u/p"), new RuleConditions(), Verdict.Safe, "s", RuleSource.User, 900);
+        new RuleEngine([safe, keep], Guard, false).Evaluate(Facts("/home/u/p/x")).RuleId.Should().Be("k");
+    }
 }
