@@ -5,8 +5,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build, e.g. 0.8.0 (no release is published for manual runs)"
+        description: "Version to build, e.g. 0.9.0 or 0.9.0-beta.2 (a dash makes it a pre-release)"
         required: true
+      publish:
+        description: "Publish a GitHub Release (creates the tag v<version> on the commit this runs on)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,13 +65,24 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
+  # Publishes on a pushed v* tag, or on a manual run with "publish" ticked (then the tag is created on this commit).
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
     needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then T="v$INPUT_VERSION"; else T="$GITHUB_REF_NAME"; fi
+          if ! [[ "$T" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then echo "Not a release tag: $T"; exit 1; fi
+          echo "tag=$T" >> "$GITHUB_OUTPUT"
+          if [[ "$T" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -76,6 +91,8 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.tag.outputs.prerelease }}
