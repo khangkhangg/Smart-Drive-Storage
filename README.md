@@ -188,5 +188,12 @@ How to register each one:
   - Add the redirect `http://localhost:53682/`.
   - Turn on the scopes `files.content.read`, `files.content.write` and `files.metadata.read`.
 
+## Support Miu
+
+Miu is free. If it saved you some space, a small donation says thanks and helps keep it updated with new rules, fixes and features:
+
+- ☕ [Buy me a coffee](https://buymeacoffee.com/dkhang)
+- 💙 [Donate with PayPal](https://www.paypal.com/donate/?hosted_button_id=FWYNCN2KN3C3L)
+
 ## License
 Free. A license file will be added before the first public release.

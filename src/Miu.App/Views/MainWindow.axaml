@@ -31,16 +31,32 @@
           <TextBlock Text="Smart Storage" Classes="caption" />
         </StackPanel>
       </StackPanel>
-      <ListBox Classes="nav" ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}" Background="Transparent">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:NavItem">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <Path Data="{Binding Icon}" Stroke="{DynamicResource MiuText}" StrokeThickness="1.7" Width="18" Height="18" Stretch="Uniform" StrokeLineCap="Round" StrokeJoin="Round" />
-              <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="16">
+          <ListBox Classes="nav" ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:NavItem">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Path Data="{Binding Icon}" Stroke="{DynamicResource MiuText}" StrokeThickness="1.7" Width="18" Height="18" Stretch="Uniform" StrokeLineCap="Round" StrokeJoin="Round" />
+                  <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <!-- Support the project -->
+          <Border Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="4,0">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Enjoying Miu? ♥" FontWeight="SemiBold" FontSize="13" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Miu is free. A small donation says thanks and helps keep it updated with new rules, fixes and features." />
+              <Button Classes="secondary" Content="☕ Buy me a coffee" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Command="{Binding OpenDonationCommand}" CommandParameter="coffee" ToolTip.Tip="buymeacoffee.com/dkhang" />
+              <Button Classes="secondary" Content="Donate with PayPal" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Command="{Binding OpenDonationCommand}" CommandParameter="paypal" ToolTip.Tip="paypal.com" />
             </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
     </DockPanel>
     <Border Grid.Column="1" Background="{DynamicResource MiuContentBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0" ClipToBounds="True">
       <DockPanel>

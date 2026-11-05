@@ -32,6 +32,10 @@ public partial class MainWindowViewModel : ObservableObject
         Learning = new LearningService(services);
         Cart = new CartViewModel(this, services.Cart);
         Activity = new ActivityViewModel(this);
+        // Free space changes all the time (downloads, other apps): keep the Home drive cards current.
+        _driveTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _driveTimer.Tick += (_, _) => { if (CurrentPage == Home) Home.RefreshDrives(); };
+        _driveTimer.Start();
         Home = new HomeViewModel(this);
         Analyze = new AnalyzeViewModel(services, this);
         DevProjects = new DevProjectsViewModel(this);
@@ -61,6 +65,7 @@ public partial class MainWindowViewModel : ObservableObject
     public CleanupService Cleanup { get; }
     public CartViewModel Cart { get; }
     public ActivityViewModel Activity { get; }
+    private readonly Avalonia.Threading.DispatcherTimer _driveTimer;
     public HomeViewModel Home { get; }
     public AnalyzeViewModel Analyze { get; }
     public DevProjectsViewModel DevProjects { get; }
@@ -148,6 +153,7 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedNavChanged(NavItem value)
     {
         CurrentPage = value.Page;
+        if (value.Page == Home) Home.RefreshDrives();
         if (value.Page == Activity) Activity.Load();
         if (value.Page == Rules) Rules.Load();
         if (value.Page == Automations) Automations.Load();
@@ -186,6 +192,7 @@ public partial class MainWindowViewModel : ObservableObject
             Analyze.RefreshCurrent();
             OnScanCompleted(session);
         }
+        else Home.RefreshDrives();
         var message = (outcome.Count == 0
             ? "Nothing was cleaned."
             : $"Moved {outcome.Count} {(outcome.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(outcome.FreedBytes)}) to the {Services.RecycleBinName}.")
@@ -228,6 +235,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public void Navigate(object page) => SelectedNav = NavItems.First(n => n.Page == page);
+
+    public const string BuyMeACoffeeUrl = "https://buymeacoffee.com/dkhang";
+    public const string PayPalUrl = "https://www.paypal.com/donate/?hosted_button_id=FWYNCN2KN3C3L";
+
+    /// <summary>Opens a donation page in the browser (only these two fixed links).</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void OpenDonation(string? which) => ShellIntegration.Open(which == "paypal" ? PayPalUrl : BuyMeACoffeeUrl);
 
     /// <summary>Ctrl+1 … Ctrl+9 go to the pages in sidebar order.</summary>
     [CommunityToolkit.Mvvm.Input.RelayCommand]

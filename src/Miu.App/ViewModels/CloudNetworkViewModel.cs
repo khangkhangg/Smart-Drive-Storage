@@ -24,7 +24,9 @@ public partial class SyncJobRow(CloudNetworkViewModel owner, SyncJob job) : Obse
     public SyncJob Job { get; private set; } = job;
     public string Name => Job.Name;
     public string Route => $"{Job.Source}  →  {Job.Target}";
-    public string Details => $"{Job.ModeText} · {Job.ScheduleText}" + (Job.CompareByHash ? " · compares content" : "");
+    public string Details => $"{Job.KindText}" + (Job.Kind == SyncKind.DriveBackup ? (Job.Mode == SyncMode.CopyOnly ? " (keeps files you delete)" : " (mirror)") : "")
+        + $" · {Job.ScheduleText}" + (Job.CompareByHash ? " · compares content" : "")
+        + (Job.Excludes is { Length: > 0 } x ? $" · skips {x.Length} {(x.Length == 1 ? "pattern" : "patterns")}" : "");
     public string LastText => Job.LastResult is { } r ? $"Last run {HumanTime.Ago(Job.LastRunUtc ?? DateTime.UtcNow, DateTime.UtcNow)}: {r}" : "Not run yet.";
 
     [ObservableProperty] private bool enabled = job.Enabled;
@@ -197,6 +199,48 @@ public partial class CloudNetworkViewModel : ObservableObject
     [ObservableProperty] private DayOfWeek day = DayOfWeek.Sunday;
     [ObservableProperty] private int hour = 2;
     [ObservableProperty] private bool compareByHash;
+
+    // ---------- What kind of job: folders, or a whole drive ----------
+
+    public IReadOnlyList<string> JobKinds { get; } = ["Sync or mirror folders", "Back up a whole drive"];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDriveBackup), nameof(IsFolderJob), nameof(EditorTitle), nameof(TargetCaption), nameof(TargetWatermark))]
+    private string jobKind = "Sync or mirror folders";
+
+    public bool IsDriveBackup => JobKind == "Back up a whole drive";
+    public bool IsFolderJob => !IsDriveBackup;
+    public string EditorTitle => IsDriveBackup ? "New drive backup" : "New sync job";
+    public string TargetCaption => IsDriveBackup ? "Back up to (a folder on another drive)" : "To (target) · one per line to mirror to several places";
+    public string TargetWatermark => IsDriveBackup
+        ? (OperatingSystem.IsWindows() ? @"E:\Miu Backups" : "/Volumes/Backup/Miu Backups")
+        : (OperatingSystem.IsWindows() ? @"\\nas\photos\backup" : "/mnt/nas/photos");
+
+    /// <summary>Drives you can back up (connected, readable).</summary>
+    public IReadOnlyList<string> SourceDrives => DriveInfo.GetDrives()
+        .Where(d => { try { return d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Removable; } catch (IOException) { return false; } })
+        .Select(d => d.RootDirectory.FullName).ToList();
+
+    [ObservableProperty] private bool keepDeletedFiles = true;
+    [ObservableProperty] private bool skipRebuildable = true;
+    [ObservableProperty] private bool runOnChange;
+    [ObservableProperty] private string jobExcludes = "";
+
+    partial void OnJobKindChanged(string value)
+    {
+        if (IsDriveBackup)
+        {
+            JobSource = SourceDrives.FirstOrDefault() ?? "";
+            JobExcludes = string.Join("\n", SyncFilter.DriveBackupDefaults(OperatingSystem.IsWindows(), OperatingSystem.IsMacOS()));
+            RunOnChange = false;
+            if (Frequency == "Only when I press Run") Frequency = "Every day";
+        }
+        else JobExcludes = "";
+    }
+
+    /// <summary>The skip list as saved: what you typed, plus rebuildable folders when that box is ticked.</summary>
+    private string[] ParsedExcludes =>
+        SyncFilter.Parse(JobExcludes).Concat(SkipRebuildable ? SyncFilter.Rebuildable : []).Distinct().ToArray();
     [ObservableProperty] private string syncMessage = "";
     [ObservableProperty] private bool syncMessageIsError;
 
@@ -240,22 +284,40 @@ public partial class CloudNetworkViewModel : ObservableObject
     private async Task SaveJob()
     {
         var repo = Services.SyncJobs;
-        if (_shell.Automation.Sync.Validate(JobSource, JobTarget) is { } problem)
-        {
-            SyncMessageIsError = true;
-            SyncMessage = problem;
-            return;
-        }
-        var name = string.IsNullOrWhiteSpace(JobName) ? $"{Path.GetFileName(JobSource.TrimEnd('\\', '/'))} → {Path.GetFileName(JobTarget.TrimEnd('\\', '/'))}" : JobName.Trim();
+        var kind = IsDriveBackup ? SyncKind.DriveBackup : SyncKind.Folder;
+        // Several targets (one per line): one job each, so each can be previewed, paused and undone on its own.
+        var targets = (JobTarget ?? "").Split('\n').Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList();
+        if (targets.Count == 0) targets.Add("");
+        if (kind == SyncKind.DriveBackup && targets.Count > 1) targets = [targets[0]];
+        foreach (var t in targets)
+            if (_shell.Automation.Sync.Validate(JobSource, t, kind) is { } problem)
+            {
+                SyncMessageIsError = true;
+                SyncMessage = targets.Count > 1 ? $"{t}: {problem}" : problem;
+                return;
+            }
         var schedule = ParsedSchedule;
-        var id = repo.Add(new SyncJob(0, name, JobSource.Trim(), JobTarget.Trim(), ParsedMode, schedule, CompareByHash,
-            NextRunLocal: schedule is null ? null : Scheduler.NextRun(schedule, DateTime.Now)));
+        var mode = kind == SyncKind.DriveBackup ? (KeepDeletedFiles ? SyncMode.CopyOnly : SyncMode.Mirror) : ParsedMode;
+        var excludes = ParsedExcludes;
+        var source = JobSource.Trim();
+        var ids = new List<long>();
+        foreach (var target in targets)
+        {
+            var name = !string.IsNullOrWhiteSpace(JobName) ? JobName.Trim() + (targets.Count > 1 ? $" → {Leaf(target)}" : "")
+                : kind == SyncKind.DriveBackup ? $"Back up {source.TrimEnd('\\', '/')} → {Leaf(target)}"
+                : $"{Leaf(source)} → {Leaf(target)}";
+            ids.Add(repo.Add(new SyncJob(0, name, source, target, mode, schedule, CompareByHash,
+                NextRunLocal: schedule is null ? null : Scheduler.NextRun(schedule, DateTime.Now),
+                Excludes: excludes.Length == 0 ? null : excludes, RunOnChange: RunOnChange && kind == SyncKind.Folder, Kind: kind)));
+        }
         SyncMessageIsError = false;
-        SyncMessage = $"Saved “{name}”. Here's what the first run would do:";
+        SyncMessage = ids.Count == 1 ? "Saved. Here's what the first run would do:" : $"Saved {ids.Count} jobs, one per target. Here's what the first one would do:";
         JobName = JobSource = JobTarget = "";
         LoadJobs();
-        if (Jobs.FirstOrDefault(r => r.Job.Id == id) is { } row) await PreviewAsync(row);
+        if (Jobs.FirstOrDefault(r => r.Job.Id == ids[0]) is { } row) await PreviewAsync(row);
     }
+
+    private static string Leaf(string path) => Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } n ? n : path;
 
     public async Task PreviewAsync(SyncJobRow row)
     {

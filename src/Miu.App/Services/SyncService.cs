@@ -27,7 +27,9 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
     private StringComparison Cmp => services.CaseInsensitivePaths ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>Why these two folders can't be synced, or null when they can. Links, junctions and mapped drives are resolved first.</summary>
-    public string? Validate(string source, string target)
+    /// <param name="kind">A drive backup only reads its source, so the source may be a whole drive (C:\, /) that Miu
+    /// otherwise protects; the target must still be an ordinary folder, on another drive.</param>
+    public string? Validate(string source, string target, SyncKind kind = SyncKind.Folder)
     {
         if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(target)) return "Choose both folders.";
         string s, t;
@@ -39,10 +41,15 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return "That isn't a valid folder path."; }
         var (rs, rt) = (Real(s), Real(t));
         if (string.Equals(s, t, Cmp) || string.Equals(rs, rt, Cmp)) return "The source and the target are the same folder.";
+        if (kind == SyncKind.DriveBackup && string.Equals(Path.GetPathRoot(rs), Path.GetPathRoot(rt), Cmp))
+            return "Back up to a different drive: a backup on the same drive is lost with it.";
         if (IsInside(s, t) || IsInside(t, s) || IsInside(rs, rt) || IsInside(rt, rs)) return "One folder is inside the other. Pick two separate folders.";
         foreach (var (label, p, real) in new[] { ("source", s, rs), ("target", t, rt) })
+        {
+            if (label == "source" && kind == SyncKind.DriveBackup) continue; // read only
             if (services.Guard.Explain(p, checkLink: true) is not null || services.Guard.Explain(real, checkLink: false) is not null)
                 return $"The {label} is a system or protected folder, so Miu won't sync it.";
+        }
         return null;
     }
 
@@ -73,11 +80,12 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
     private async Task<SyncPreview> PreviewCoreAsync(SyncJob job, bool hash, CancellationToken ct)
     {
         var empty = new SyncListing(null, []);
-        if (Validate(job.Source, job.Target) is { } problem) return new SyncPreview(job, new SyncPlan([], null), empty, empty, problem);
+        if (Validate(job.Source, job.Target, job.Kind) is { } problem) return new SyncPreview(job, new SyncPlan([], null), empty, empty, problem);
         var (source, target, ci, canCreate) = await Task.Run(async () =>
         {
-            var st = SyncLister.ListAsync(job.Source, ct);
-            var tt = SyncLister.ListAsync(job.Target, ct);
+            Func<string, bool>? skip = job.Excludes is { Length: > 0 } x ? rel => SyncFilter.IsExcluded(rel, x, services.CaseInsensitivePaths) : null;
+            var st = SyncLister.ListAsync(job.Source, ct, skip);
+            var tt = SyncLister.ListAsync(job.Target, ct, skip);
             var s = await st;
             var t = await tt;
             var create = t.Entries is null && CanCreate(job.Target);
@@ -96,12 +104,42 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
         // Unknown paths are left out on BOTH sides: unreadable folders, links, and names that clash by case.
         var twins = ci ? CaseTwins(source.Entries).Concat(CaseTwins(target.Entries!)).ToList() : [];
         var unknown = source.UnknownPaths.Concat(target.UnknownPaths).Concat(twins).ToList();
-        var s = Known(source.Entries, unknown);
-        var t = Known(target.Entries!, unknown);
+        // Skipped paths are left alone on both sides: never copied, never set aside.
+        var s = Skip(Known(source.Entries, unknown), job.Excludes, ci);
+        var t = Skip(Known(target.Entries!, unknown), job.Excludes, ci);
         var baseline = job.Mode == SyncMode.TwoWay && job.Id > 0 ? services.SyncBaseline.Get(job.Id) is { } b ? Known(b, unknown) : null : null;
         HashSet<string>? same = hash ? await Task.Run(() => SameContentAsync(job, s, t, ci, ct), ct) : null;
         var plan = SyncDiff.Plan(s, t, baseline, job.Mode, ci, DateOnly.FromDateTime(nowLocal()), same);
-        return new SyncPreview(job, plan, source with { Entries = s }, target with { Entries = t }, null, NoteFor(source, target, twins.Count), ci, same);
+        var space = SpaceProblem(job, plan);
+        return new SyncPreview(job, plan, source with { Entries = s }, target with { Entries = t }, space, NoteFor(source, target, twins.Count), ci, same);
+    }
+
+    private static IReadOnlyList<SyncEntry> Skip(IReadOnlyList<SyncEntry> entries, string[]? excludes, bool ci) =>
+        excludes is { Length: > 0 } ? entries.Where(e => !SyncFilter.IsExcluded(e.RelPath, excludes, ci)).ToList() : entries;
+
+    /// <summary>Whether the target's drive has room for what this run copies there (with 1% or 200 MB to spare).</summary>
+    public static string? SpaceProblem(SyncJob job, SyncPlan plan, Func<string, long?>? freeSpace = null)
+    {
+        var toTarget = plan.Ops.Where(o => o.Kind != SyncOpKind.Archive && o.From == Side.Source).Sum(o => o.Bytes);
+        if (toTarget <= 0) return null;
+        var free = (freeSpace ?? FreeSpace)(job.Target);
+        if (free is not { } f) return null;
+        var spare = Math.Max(200L * 1024 * 1024, f / 100);
+        return toTarget + spare > f
+            ? $"Not enough space on the target drive: this run copies {Miu.Core.Formatting.SizeFormatter.Format(toTarget)}, and it has {Miu.Core.Formatting.SizeFormatter.Format(f)} free. Free up space there, or skip more folders."
+            : null;
+    }
+
+    private static long? FreeSpace(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            // The nearest folder that exists (the target may not be created yet).
+            while (!Directory.Exists(full) && Path.GetDirectoryName(full) is { } up) full = up;
+            return new DriveInfo(full).AvailableFreeSpace;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { return null; }
     }
 
     private static string? NoteFor(SyncListing s, SyncListing t, int twins)

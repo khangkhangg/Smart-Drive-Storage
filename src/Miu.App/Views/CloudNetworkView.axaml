@@ -160,19 +160,28 @@
             <!-- Editor -->
             <Border Classes="card" Padding="20">
               <StackPanel Spacing="12">
-                <TextBlock Classes="h2" Text="New sync job" />
+                <TextBlock Classes="h2" Text="{Binding EditorTitle}" />
+                <ListBox Classes="segmented" ItemsSource="{Binding JobKinds}" SelectedItem="{Binding JobKind}" HorizontalAlignment="Left">
+                  <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+                </ListBox>
+                <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding IsDriveBackup}"
+                           Text="Copies your files from a whole drive to a folder on another drive, then only what changed. Windows, programs, swap files and caches are skipped (reinstall programs instead). Older versions of changed files are kept in the backup's .miu-sync-trash." />
                 <WrapPanel ItemSpacing="10" LineSpacing="10">
-                  <StackPanel Spacing="4">
+                  <StackPanel Spacing="4" IsVisible="{Binding IsFolderJob}">
                     <TextBlock Classes="caption" Text="From (source)" />
                     <TextBox Text="{Binding JobSource}" Watermark="C:\Users\you\Pictures" Width="320" />
                   </StackPanel>
+                  <StackPanel Spacing="4" IsVisible="{Binding IsDriveBackup}">
+                    <TextBlock Classes="caption" Text="Drive to back up" />
+                    <ComboBox ItemsSource="{Binding SourceDrives}" SelectedItem="{Binding JobSource}" Width="320" />
+                  </StackPanel>
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="caption" Text="To (target)" />
-                    <TextBox Text="{Binding JobTarget}" Watermark="\\nas\photos\backup" Width="320" />
+                    <TextBlock Classes="caption" Text="{Binding TargetCaption}" />
+                    <TextBox Text="{Binding JobTarget}" Watermark="{Binding TargetWatermark}" Width="320" AcceptsReturn="{Binding IsFolderJob}" TextWrapping="NoWrap" MinHeight="32" />
                   </StackPanel>
                 </WrapPanel>
                 <WrapPanel ItemSpacing="8" LineSpacing="10">
-                  <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" />
+                  <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" IsVisible="{Binding IsFolderJob}" />
                   <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
                   <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
                   <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
@@ -180,7 +189,19 @@
                   <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
                   <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
                 </WrapPanel>
-                <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" IsVisible="{Binding IsFolderJob}" />
+                <CheckBox IsChecked="{Binding KeepDeletedFiles}" IsVisible="{Binding IsDriveBackup}"
+                          Content="Keep files I delete from the drive in the backup (recommended)" />
+                <CheckBox IsChecked="{Binding RunOnChange}" IsVisible="{Binding IsFolderJob}"
+                          Content="Live mirror: also run about 30 seconds after files in the source change" />
+                <CheckBox IsChecked="{Binding SkipRebuildable}" Content="Skip rebuildable folders (node_modules, .venv, __pycache__, build caches)" />
+                <Expander Header="Skip these (one pattern per line)" IsExpanded="{Binding IsDriveBackup, Mode=OneWay}">
+                  <StackPanel Spacing="6">
+                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                               Text="A name (node_modules, *.tmp) is skipped anywhere. A path (Users/*/AppData/Local/Temp) is from the top of the source. Skipped files are never copied or set aside." />
+                    <TextBox Text="{Binding JobExcludes}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="90" MaxHeight="220" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="12" />
+                  </StackPanel>
+                </Expander>
                 <CheckBox IsChecked="{Binding CompareByHash}" Content="Compare file contents when dates differ (slower, avoids needless copies)" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
@@ -191,7 +212,7 @@
             </Border>
 
             <StackPanel Spacing="10">
-              <TextBlock Classes="h2" Text="Your sync jobs" />
+              <TextBlock Classes="h2" Text="Your sync jobs and drive backups" />
               <TextBlock Classes="muted" Text="None yet." IsVisible="{Binding !HasJobs}" />
               <ItemsControl ItemsSource="{Binding Jobs}">
                 <ItemsControl.ItemTemplate>

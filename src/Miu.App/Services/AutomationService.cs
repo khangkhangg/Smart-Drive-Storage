@@ -24,6 +24,9 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
     private readonly SemaphoreSlim _gate = new(1, 1); // one run at a time: ticks, Run now and sign-in runs
 
     public SyncService Sync { get; } = new(services, nowLocal);
+
+    /// <summary>Live mirroring ("run when files change").</summary>
+    public ChangeWatcher Changes { get; } = new();
     public CloudAccountsService Accounts { get; } = new(services);
     private BackupService? _backup;
     public BackupService Backup => _backup ??= new BackupService(services, Accounts, nowLocal);
@@ -93,6 +96,14 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
     /// <summary>Scheduled sync jobs. A refused run (it looked like a disconnected drive) is never forced from a schedule.</summary>
     private async Task TickSyncJobsAsync(DateTime now, bool guarded, CancellationToken ct)
     {
+        // Live mirroring: jobs whose source changed and has been quiet for a moment.
+        var jobs = services.SyncJobs.All();
+        Changes.Refresh(jobs);
+        foreach (var id in Changes.TakeDue())
+        {
+            if (guarded) { Changes.Mark(id); continue; } // paused, quiet hours or battery: run later
+            if (services.SyncJobs.Get(id) is { Enabled: true, RunOnChange: true } live) await RunSyncUnlockedAsync(live, ct);
+        }
         foreach (var listed in services.SyncJobs.All())
         {
             ct.ThrowIfCancellationRequested();

@@ -33,7 +33,7 @@ public partial class HomeViewModel : ObservableObject
     public HomeViewModel(MainWindowViewModel shell)
     {
         _shell = shell;
-        foreach (var d in DiscoverDrives()) Drives.Add(d);
+        RefreshDrives();
         BuiltInRuleCount = shell.Services.Rules.Count;
         RefreshRuleCounts();
         RefreshForecasts();
@@ -51,6 +51,23 @@ public partial class HomeViewModel : ObservableObject
         Grew.Clear();
         foreach (var (p, d) in grew) Grew.Add(new GrowRow(p, System.IO.Path.GetFileName(p), "+" + SizeFormatter.Format(d)));
         HasGrew = Grew.Count > 0;
+    }
+
+    /// <summary>
+    /// Reads used and free space again (after a clean, a scan, when you open Home, and every minute while Miu runs).
+    /// Cards are replaced only when something changed, so the page doesn't flicker.
+    /// </summary>
+    public void RefreshDrives()
+    {
+        var fresh = DiscoverDrives().ToList();
+        var same = fresh.Count == Drives.Count && fresh.Zip(Drives).All(p => p.First.Root == p.Second.Root
+            && p.First.UsedText == p.Second.UsedText && p.First.FreeText == p.Second.FreeText && p.First.Status == p.Second.Status);
+        if (same) return;
+        Drives.Clear();
+        foreach (var d in fresh) Drives.Add(d);
+        OnPropertyChanged(nameof(LocationsText));
+        OnPropertyChanged(nameof(LastScanText));
+        RefreshForecasts();
     }
 
     /// <summary>Adds "Full in ~N weeks" to drive cards that have enough history.</summary>
@@ -164,6 +181,7 @@ public partial class HomeViewModel : ObservableObject
     public void Update(ScanSession s)
     {
         var t = s.Tree;
+        RefreshDrives();
         _scannedAtUtc = DateTime.UtcNow;
         HasScan = true;
         ScannedPath = t.RootPath;

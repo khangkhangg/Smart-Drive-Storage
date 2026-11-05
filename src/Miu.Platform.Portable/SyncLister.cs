@@ -49,9 +49,10 @@ public static class SyncLister
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    public static Task<SyncListing> ListAsync(string root, CancellationToken ct) => Task.Run(() => List(root, ct), ct);
+    public static Task<SyncListing> ListAsync(string root, CancellationToken ct, Func<string, bool>? skip = null) => Task.Run(() => List(root, ct, skip), ct);
 
-    public static SyncListing List(string root, CancellationToken ct)
+    /// <param name="skip">Relative paths ('/'-separated) to leave out; a skipped folder isn't even opened.</param>
+    public static SyncListing List(string root, CancellationToken ct, Func<string, bool>? skip = null)
     {
         try
         {
@@ -80,6 +81,7 @@ public static class SyncLister
             foreach (var c in children)
             {
                 var childRel = rel.Length == 0 ? c.Name : rel + "/" + c.Name;
+                if (skip?.Invoke(childRel) == true) continue;
                 bool isLink;
                 try { isLink = (c.Attributes & FileAttributes.ReparsePoint) != 0 || c.LinkTarget is not null; }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { isLink = true; }
