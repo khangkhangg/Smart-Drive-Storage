@@ -3,7 +3,7 @@ namespace Miu.Core.Scanning;
 /// <summary>
 /// In-memory result of a scan. Nodes are stored in flat arrays with first-child / next-sibling links
 /// so millions of entries stay compact. <see cref="Add"/> is thread-safe; call
-/// <see cref="ComputeAggregates"/> once the scan is complete.
+/// <see cref="ComputeAggregates"/> once the scan is complete. Readers are meant to run after that.
 /// </summary>
 public sealed class ScanTree
 {
@@ -14,6 +14,7 @@ public sealed class ScanTree
         public int NextSibling;
         public string Name;
         public bool IsDir;
+        public bool IsLink;
         public long Size;
         public int FileCount;
         public long ModifiedTicks;
@@ -36,7 +37,7 @@ public sealed class ScanTree
     public string RootPath { get; }
     public int Count { get { lock (_gate) return _count; } }
 
-    public int Add(int parentId, string name, bool isDir, long size, DateTime modifiedUtc)
+    public int Add(int parentId, string name, bool isDir, long size, DateTime modifiedUtc, bool isLink = false)
     {
         lock (_gate)
         {
@@ -50,6 +51,7 @@ public sealed class ScanTree
                 NextSibling = _nodes[parentId].FirstChild,
                 Name = name,
                 IsDir = isDir,
+                IsLink = isLink,
                 Size = isDir ? 0 : size,
                 FileCount = isDir ? 0 : 1,
                 ModifiedTicks = modifiedUtc.Ticks,
@@ -101,6 +103,8 @@ public sealed class ScanTree
 
     public string Name(int id) => _nodes[id].Name;
     public bool IsDir(int id) => _nodes[id].IsDir;
+    /// <summary>True for symlinks and junctions (recorded, never followed).</summary>
+    public bool IsLink(int id) => _nodes[id].IsLink;
     public long Size(int id) => _nodes[id].Size;
     public int FileCount(int id) => _nodes[id].FileCount;
     public DateTime ModifiedUtc(int id) => new(_nodes[id].ModifiedTicks, DateTimeKind.Utc);

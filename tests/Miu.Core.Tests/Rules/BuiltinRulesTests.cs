@@ -37,7 +37,7 @@ public class BuiltinRulesTests
     [Fact]
     public void Bin_folder_in_dotnet_project_is_safe_when_idle()
     {
-        var r = Engine.Evaluate(Facts("/home/u/code/api/bin", idle: 40, siblings: ["Api.csproj"]));
+        var r = Engine.Evaluate(Facts("/home/u/code/api/bin", idle: 40, siblings: ["Api.csproj"], gitIgnored: true));
         r.Verdict.Should().Be(Verdict.Safe);
         r.RebuildHint.Should().Be("dotnet build");
     }
@@ -45,7 +45,7 @@ public class BuiltinRulesTests
     [Fact]
     public void Venv_needs_pyvenv_cfg()
     {
-        Engine.Evaluate(Facts("/home/u/code/py/.venv", idle: 40, children: ["pyvenv.cfg"])).Verdict.Should().Be(Verdict.Safe);
+        Engine.Evaluate(Facts("/home/u/code/py/.venv", idle: 40, children: ["pyvenv.cfg"], siblings: ["requirements.txt"])).Verdict.Should().Be(Verdict.Safe);
         Engine.Evaluate(Facts("/home/u/code/py/env", idle: 40, children: ["notes.txt"])).Verdict.Should().Be(Verdict.Review);
     }
 
@@ -59,5 +59,50 @@ public class BuiltinRulesTests
 
     [Fact]
     public void Rust_target_is_safe_when_idle() =>
-        Engine.Evaluate(Facts("/home/u/code/rs/target", idle: 100, siblings: ["Cargo.toml"])).RebuildHint.Should().Be("cargo build");
+        Engine.Evaluate(Facts("/home/u/code/rs/target", idle: 100, siblings: ["Cargo.toml"], gitIgnored: true)).Verdict.Should().Be(Verdict.Safe);
+
+    // ---- Review fixes: generic folder names need evidence that they are build output
+
+    [Theory]
+    [InlineData("build")]
+    [InlineData("out")]
+    [InlineData("dist")]
+    [InlineData("coverage")]
+    public void Generic_js_output_folder_is_review_unless_gitignored(string name)
+    {
+        Engine.Evaluate(Facts($"/home/u/Archive2019/{name}", idle: 400, siblings: ["package.json"])).Verdict.Should().Be(Verdict.Review);
+        Engine.Evaluate(Facts($"/home/u/code/app/{name}", idle: 400, siblings: ["package.json"], gitIgnored: true)).Verdict.Should().Be(Verdict.Safe);
+    }
+
+    [Fact]
+    public void Unambiguous_js_folders_do_not_need_gitignore() =>
+        Engine.Evaluate(Facts("/home/u/code/app/.next", idle: 40, siblings: ["package.json"])).Verdict.Should().Be(Verdict.Safe);
+
+    [Theory]
+    [InlineData("/home/u/code/rs/target", "Cargo.toml")]
+    [InlineData("/home/u/code/api/bin", "Api.csproj")]
+    [InlineData("/home/u/code/go/vendor", "go.mod")]
+    [InlineData("/home/u/code/game/Library", "ProjectSettings")]
+    public void Generic_output_folders_need_gitignore(string path, string marker) =>
+        Engine.Evaluate(Facts(path, idle: 400, siblings: [marker])).Verdict.Should().Be(Verdict.Review);
+
+    [Fact]
+    public void Repo_named_go_build_is_not_safe()
+    {
+        Engine.Evaluate(Facts("/home/u/code/go-build", idle: 400)).Verdict.Should().Be(Verdict.Review);
+        Engine.Evaluate(Facts("/home/u/.cache/go-build")).Verdict.Should().Be(Verdict.Safe);
+        Engine.Evaluate(Facts(@"/c/Users/u/AppData/Local/go-build")).Verdict.Should().Be(Verdict.Safe);
+    }
+
+    [Fact]
+    public void Old_log_files_are_review() =>
+        Engine.Evaluate(Facts("/home/u/Documents/irc/2023-chat.log", isDir: false, ageDays: 400)).Verdict.Should().Be(Verdict.Review);
+
+    [Fact]
+    public void Notebook_checkpoints_are_review() =>
+        Engine.Evaluate(Facts("/home/u/Documents/nb/.ipynb_checkpoints")).Verdict.Should().Be(Verdict.Review);
+
+    [Fact]
+    public void Venv_without_dependency_file_is_review() =>
+        Engine.Evaluate(Facts("/home/u/code/py/.venv", idle: 40, children: ["pyvenv.cfg"])).Verdict.Should().Be(Verdict.Review);
 }

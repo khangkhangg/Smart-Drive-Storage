@@ -16,6 +16,9 @@ public class GlobTests
     [InlineData("*.csproj", "App.csproj", false, true)]
     [InlineData("**/AppData/Local/Temp/**", "/x/AppData/Local/Temp/f", false, true)]
     [InlineData("**/node_modules", "/a/Node_Modules", false, false)]
+    [InlineData("[Ll]ibrary", "Library", false, true)]
+    [InlineData("[Ll]ibrary", "library", false, true)]
+    [InlineData("[Ll]ibrary", "Xibrary", false, false)]
     public void Matches(string pattern, string text, bool ci, bool expected) =>
         Glob.IsMatch(pattern, text, ci).Should().Be(expected);
 }

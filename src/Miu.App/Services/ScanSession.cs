@@ -58,7 +58,9 @@ public sealed class ScanSession
             t.IsDir(id) ? t.NewestModifiedUtc(id) : t.ModifiedUtc(id), NowUtc,
             ProjectIdleDaysFor(id),
             marker => parent >= 0 && t.Children(parent).Any(c => c != id && Glob.IsMatch(marker, t.Name(c), _ci)),
-            marker => t.IsDir(id) && t.Children(id).Any(c => Glob.IsMatch(marker, t.Name(c), _ci)));
+            marker => t.IsDir(id) && t.Children(id).Any(c => Glob.IsMatch(marker, t.Name(c), _ci)),
+            () => IsGitIgnored(id),
+            t.IsLink(id));
         var result = _engine.Evaluate(facts);
         lock (_gate) _verdicts[id] = result;
         return result;
@@ -69,12 +71,44 @@ public sealed class ScanSession
 
     public DetectedProject? ProjectAt(int id) => _projectsByNode.GetValueOrDefault(id);
 
-    /// <summary>Idle days of the nearest project that contains the item (its own folder excluded).</summary>
-    private int? ProjectIdleDaysFor(int id)
+    /// <summary>
+    /// Idle days of the project the item sits directly in. Only direct children count: build output lives at the
+    /// project root, and anything deeper (installed packages, nested tools) must not borrow a project's idle time.
+    /// </summary>
+    private int? ProjectIdleDaysFor(int id) =>
+        Tree.Parent(id) is var p && p >= 0 && _projectsByNode.TryGetValue(p, out var project) ? project.IdleDays : null;
+
+    private readonly Dictionary<int, string[]?> _gitignoreCache = new();
+
+    /// <summary>
+    /// True when a .gitignore lists the item: the one in its folder (any pattern), or one in an ancestor folder up to
+    /// the repository root (non-anchored patterns only).
+    /// </summary>
+    private bool IsGitIgnored(int id)
     {
-        for (var p = Tree.Parent(id); p >= 0; p = Tree.Parent(p))
-            if (_projectsByNode.TryGetValue(p, out var project)) return project.IdleDays;
-        return null;
+        var name = Tree.Name(id);
+        var first = true;
+        for (var dir = Tree.Parent(id); dir >= 0; dir = Tree.Parent(dir), first = false)
+        {
+            if (ReadGitIgnore(dir) is { } lines && GitIgnore.IsIgnored(lines, name, _ci, allowAnchored: first)) return true;
+            if (Tree.FindChild(dir, ".git") is not null) break;
+        }
+        return false;
+    }
+
+    private string[]? ReadGitIgnore(int dir)
+    {
+        lock (_gate)
+            if (_gitignoreCache.TryGetValue(dir, out var cached)) return cached;
+        string[]? lines = null;
+        if (Tree.FindChild(dir, ".gitignore") is { } f && !Tree.IsDir(f))
+        {
+            try { lines = File.ReadAllLines(Tree.GetFullPath(f)); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        lock (_gate) _gitignoreCache[dir] = lines;
+        return lines;
     }
 
     private void CollectSafeItems(CancellationToken ct)

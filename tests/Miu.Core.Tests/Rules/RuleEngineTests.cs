@@ -8,10 +8,11 @@ public class RuleEngineTests
     internal static readonly ProtectedPathGuard Guard = ProtectedPathGuard.ForUnix("/home/u");
 
     internal static ItemFacts Facts(string path, bool isDir = true, int? idle = null, string[]? siblings = null,
-        string[]? children = null, int ageDays = 0, long size = 0) =>
+        string[]? children = null, int ageDays = 0, long size = 0, bool gitIgnored = false) =>
         new(path, Path.GetFileName(path), isDir, size, Now.AddDays(-ageDays), Now, idle,
             m => (siblings ?? []).Any(s => Glob.IsMatch(m, s, false)),
-            m => (children ?? []).Any(s => Glob.IsMatch(m, s, false)));
+            m => (children ?? []).Any(s => Glob.IsMatch(m, s, false)),
+            () => gitIgnored);
 
     private static Rule R(string id, Verdict v, RuleSource src = RuleSource.Builtin, int prio = 500, string? path = null,
         string[]? names = null, RuleConditions? cond = null) =>
@@ -85,5 +86,13 @@ public class RuleEngineTests
     {
         var e = new RuleEngine([R("off", Verdict.Safe, names: ["dist"]) with { Enabled = false }], Guard, false);
         e.Evaluate(Facts("/home/u/p/dist")).RuleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void RequiresGitIgnored_condition()
+    {
+        var e = new RuleEngine([R("gi", Verdict.Safe, names: ["build"], cond: new RuleConditions(RequiresGitIgnored: true))], Guard, false);
+        e.Evaluate(Facts("/home/u/p/build", gitIgnored: true)).RuleId.Should().Be("gi");
+        e.Evaluate(Facts("/home/u/p/build", gitIgnored: false)).RuleId.Should().BeNull();
     }
 }

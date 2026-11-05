@@ -16,6 +16,7 @@ public partial class AnalyzeViewModel : ObservableObject
     private readonly AppServices _services;
     private readonly MainWindowViewModel _shell;
     private CancellationTokenSource? _cts;
+    private int _scanGeneration;
     private int _current = -1;
 
     public AnalyzeViewModel(AppServices services, MainWindowViewModel shell)
@@ -47,16 +48,24 @@ public partial class AnalyzeViewModel : ObservableObject
         if (string.IsNullOrEmpty(path)) return;
         if (!Directory.Exists(path)) { ProgressText = $"Folder not found: {path}"; return; }
 
+        // A newer scan replaces an older one; only the newest may update the screen.
+        var generation = ++_scanGeneration;
         _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        var token = _cts.Token;
         IsScanning = true;
         ProgressText = "Scanning…";
         var clock = Stopwatch.StartNew();
         var progress = new Progress<ScanProgress>(p =>
-            ProgressText = $"Scanning… {p.Files:N0} files · {SizeFormatter.Format(p.Bytes)}");
+        {
+            if (generation == _scanGeneration) ProgressText = $"Scanning… {p.Files:N0} files · {SizeFormatter.Format(p.Bytes)}";
+        });
         try
         {
-            Session = await ScanSession.RunAsync(_services, path, progress, _cts.Token);
+            var session = await ScanSession.RunAsync(_services, path, progress, token);
+            if (generation != _scanGeneration) return;
+            Session = session;
             var t = Session.Tree;
             TotalText = $"{SizeFormatter.Format(t.Size(t.Root))} · {t.FileCount(t.Root):N0} files";
             ProgressText = $"Scanned in {clock.Elapsed.TotalSeconds:0.0} s";
@@ -65,8 +74,18 @@ public partial class AnalyzeViewModel : ObservableObject
             ShowNode(t.Root);
             _shell.OnScanCompleted(Session);
         }
-        catch (OperationCanceledException) { ProgressText = "Scan cancelled."; }
-        finally { IsScanning = false; }
+        catch (OperationCanceledException)
+        {
+            if (generation == _scanGeneration) ProgressText = "Scan cancelled.";
+        }
+        catch (Exception ex)
+        {
+            if (generation == _scanGeneration) ProgressText = $"Scan failed: {ex.Message}";
+        }
+        finally
+        {
+            if (generation == _scanGeneration) IsScanning = false;
+        }
     }
 
     [RelayCommand]

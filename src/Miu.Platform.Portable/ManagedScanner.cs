@@ -23,7 +23,7 @@ public sealed class ManagedScanner(int maxParallelism = 0) : IScanner
     public Task<ScanTree> ScanAsync(string rootPath, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var full = Path.GetFullPath(rootPath);
+        var full = RealPath(Path.GetFullPath(rootPath));
         return Task.Run(() =>
         {
             var state = new State(new ScanTree(full), progress, ct, _parallelism);
@@ -49,14 +49,15 @@ public sealed class ManagedScanner(int maxParallelism = 0) : IScanner
                 {
                     long len = 0;
                     try { len = f.Length; } catch (IOException) { } catch (UnauthorizedAccessException) { }
-                    s.Tree.Add(id, f.Name, false, len, modified);
+                    s.Tree.Add(id, f.Name, false, len, modified, (f.Attributes & FileAttributes.ReparsePoint) != 0);
                     Interlocked.Increment(ref s.Files);
                     Interlocked.Add(ref s.Bytes, len);
                 }
                 else if (entry is DirectoryInfo d)
                 {
-                    var childId = s.Tree.Add(id, d.Name, true, 0, modified);
-                    if ((d.Attributes & FileAttributes.ReparsePoint) == 0) subdirs.Add((childId, d));
+                    var isLink = (d.Attributes & FileAttributes.ReparsePoint) != 0;
+                    var childId = s.Tree.Add(id, d.Name, true, 0, modified, isLink);
+                    if (!isLink) subdirs.Add((childId, d));
                 }
             }
         }
@@ -70,6 +71,28 @@ public sealed class ManagedScanner(int maxParallelism = 0) : IScanner
         if (subdirs.Count == 1) { Walk(s, subdirs[0].Id, subdirs[0].Dir); return; }
         Parallel.ForEach(subdirs, new ParallelOptions { CancellationToken = s.Ct, MaxDegreeOfParallelism = s.Parallelism },
             sd => Walk(s, sd.Id, sd.Dir));
+    }
+
+    /// <summary>
+    /// Resolves links in the root and its ancestors, so a link like "~/sys" → "/usr" is scanned (and judged) as "/usr".
+    /// </summary>
+    public static string RealPath(string fullPath)
+    {
+        var root = Path.GetPathRoot(fullPath) ?? "";
+        var current = root;
+        foreach (var part in fullPath[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, part);
+            try
+            {
+                var info = new DirectoryInfo(current);
+                if (info.Exists && info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target)
+                    current = target.FullName;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return current.Length > root.Length ? current.TrimEnd(Path.DirectorySeparatorChar) : current;
     }
 
     private static DateTime SafeTime(FileSystemInfo e)

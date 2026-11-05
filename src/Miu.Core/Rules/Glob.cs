@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace Miu.Core.Rules;
 
 /// <summary>
-/// Minimal glob matcher: <c>*</c> (within a segment), <c>?</c>, <c>**</c> (any depth) and <c>{a,b}</c>.
+/// Minimal glob matcher: <c>*</c> (within a segment), <c>?</c>, <c>**</c> (any depth), <c>[abc]</c> and <c>{a,b}</c>.
 /// Both '/' and '\' are treated as separators. The whole text must match.
 /// </summary>
 public static class Glob
@@ -32,6 +32,13 @@ public static class Glob
                     break;
                 case '*': sb.Append("[^/]*"); break;
                 case '?': sb.Append("[^/]"); break;
+                case '[' when p.IndexOf(']', i + 1) is var close && close > i + 1:
+                    var body = p[(i + 1)..close];
+                    var negate = body.StartsWith('!');
+                    if (negate) body = body[1..];
+                    sb.Append('[').Append(negate ? "^" : "").Append(Regex.Escape(body).Replace("\\-", "-")).Append(']');
+                    i = close;
+                    break;
                 case '{': inBraces = true; sb.Append("(?:"); break;
                 case '}' when inBraces: inBraces = false; sb.Append(')'); break;
                 case ',' when inBraces: sb.Append('|'); break;

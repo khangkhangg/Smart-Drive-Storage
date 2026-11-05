@@ -69,14 +69,18 @@ internal static class DemoData
         Node(root, "Code/portfolio-2023", 420, 1_100 * MB, 80 * MB);
         Node(root, "Code/landing-page", 2, 900 * MB, 0);
         F(root, "Code/ai-chatbot/pyproject.toml", 2_000, 5);
+        F(root, "Code/ai-chatbot/uv.lock", 2_000, 5);
         F(root, "Code/ai-chatbot/app/main.py", 40_000, 5);
         F(root, "Code/ai-chatbot/.venv/pyvenv.cfg", 200, 30);
         F(root, "Code/ai-chatbot/.venv/lib/torch.so", 2_300 * MB, 30);
         F(root, "Code/ai-chatbot/app/__pycache__/main.pyc", 30 * MB, 5);
         F(root, "Code/rust-cli/Cargo.toml", 800, 60);
+        F(root, "Code/rust-cli/Cargo.lock", 800, 60);
+        T(root, "Code/rust-cli/.gitignore", "/target", 60);
         F(root, "Code/rust-cli/src/main.rs", 20_000, 60);
         F(root, "Code/rust-cli/target/debug/rust-cli", 3_100 * MB, 60);
         F(root, "Code/api-server/Api.csproj", 1_500, 200);
+        T(root, "Code/api-server/.gitignore", "bin/\nobj/", 200);
         F(root, "Code/api-server/Program.cs", 9_000, 200);
         F(root, "Code/api-server/bin/Debug/Api.dll", 400 * MB, 200);
         F(root, "Code/api-server/obj/project.assets.json", 200 * MB, 200);
@@ -96,9 +100,19 @@ internal static class DemoData
     private static void Node(string root, string project, int ageDays, long nodeModules, long build)
     {
         F(root, project + "/package.json", 1_200, ageDays);
+        F(root, project + "/package-lock.json", 40_000, ageDays);
+        T(root, project + "/.gitignore", "node_modules\n.next\ndist", ageDays);
         F(root, project + "/src/index.tsx", 30_000, ageDays);
         F(root, project + "/node_modules/.pnpm/react/index.js", nodeModules, Math.Max(ageDays, 1));
         if (build > 0) F(root, project + "/.next/cache/webpack.pack", build, ageDays);
+    }
+
+    private static void T(string root, string rel, string text, int ageDays)
+    {
+        var path = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-ageDays));
     }
 
     private static void F(string root, string rel, long size, int ageDays)

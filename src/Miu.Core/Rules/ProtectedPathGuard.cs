@@ -32,6 +32,8 @@ public sealed class ProtectedPathGuard
     /// <summary>Why a path is protected (by its normalized form, without following links).</summary>
     public ProtectionKind Classify(string path)
     {
+        if (PathNormalizer.IsAmbiguous(path, _style)) return ProtectionKind.InsideProtectedTree; // fail closed
+        if (_style == PathStyle.Windows && PathNormalizer.TryExpandShortName(path) is { } longPath) path = longPath;
         var n = PathNormalizer.Normalize(path, _style);
         foreach (var t in _trees)
             if (n.Equals(t, _cmp) || n.StartsWith(WithSep(t), _cmp)) return ProtectionKind.InsideProtectedTree;
@@ -44,20 +46,22 @@ public sealed class ProtectedPathGuard
     }
 
     /// <summary>A plain-language reason the path is protected, or null when it is not.</summary>
-    public string? Explain(string path)
+    /// <param name="checkLink">Also resolve the item if it is a symlink/junction. Costs file-system calls; pass false
+    /// when the caller already knows the item is not a link.</param>
+    public string? Explain(string path, bool checkLink = true)
     {
-        var reason = ExplainNormalized(PathNormalizer.Normalize(path, _style));
+        var reason = ExplainNormalized(path);
         if (reason is not null) return reason;
 
         // Follow links (only meaningful for paths on this machine's own path style).
-        if (_style != PathNormalizer.Current) return null;
+        if (!checkLink || _style != PathNormalizer.Current) return null;
         try
         {
             FileSystemInfo info = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path);
             if (info.Exists && info.LinkTarget is not null)
             {
                 var target = info.ResolveLinkTarget(returnFinalTarget: true);
-                if (target is not null && ExplainNormalized(PathNormalizer.Normalize(target.FullName, _style)) is not null)
+                if (target is not null && ExplainNormalized(target.FullName) is not null)
                     return "This is a link into a protected system location.";
             }
         }
@@ -66,7 +70,7 @@ public sealed class ProtectedPathGuard
         return null;
     }
 
-    private string? ExplainNormalized(string n) => Classify(n) switch
+    private string? ExplainNormalized(string path) => Classify(path) switch
     {
         ProtectionKind.InsideProtectedTree => "Part of the operating system or installed programs. Remove apps through Settings instead.",
         ProtectionKind.ProtectedExact => "A drive, users folder or your profile folder itself can't be deleted.",
@@ -77,25 +81,31 @@ public sealed class ProtectedPathGuard
     private string WithSep(string p) => p.EndsWith(_sep) ? p : p + _sep;
 
     public static ProtectedPathGuard ForWindows(string systemDrive, string windir, string programFiles, string programFilesX86,
-        string programData, string usersRoot, string userProfile, IEnumerable<string>? extraDriveRoots = null)
+        string programData, string usersRoot, string userProfile, IEnumerable<string>? extraDriveRoots = null, string? localAppData = null)
     {
-        string J(string a, string b) => a.TrimEnd('\\', '/') + @"\" + b;
-        var trees = new[]
+        static string J(string a, string b) => a.TrimEnd('\\', '/') + @"\" + b;
+        var trees = new List<string>
         {
-            windir, programFiles, programFilesX86, J(programData, "Microsoft"),
-            J(systemDrive, "System Volume Information"), J(systemDrive, "$Recycle.Bin"), J(systemDrive, "Recovery"),
+            windir, programFiles, programFilesX86, programData,
+            J(systemDrive, "Windows.old"), J(systemDrive, "$WINDOWS.~BT"), J(systemDrive, "$WINDOWS.~WS"), J(systemDrive, "$WinREAgent"),
+            J(systemDrive, "Recovery"), J(systemDrive, "Boot"), J(systemDrive, "bootmgr"),
             J(systemDrive, "pagefile.sys"), J(systemDrive, "hiberfil.sys"), J(systemDrive, "swapfile.sys"),
-            J(systemDrive, "Boot"), J(systemDrive, "bootmgr"),
         };
         var exact = new List<string> { systemDrive, usersRoot, userProfile };
-        if (extraDriveRoots is not null) exact.AddRange(extraDriveRoots);
+        if (localAppData is not null) trees.Add(J(localAppData, "Programs"));
+        foreach (var drive in new[] { systemDrive }.Concat(extraDriveRoots ?? []))
+        {
+            exact.Add(drive);
+            trees.AddRange([J(drive, "Program Files"), J(drive, "Program Files (x86)"), J(drive, "WindowsApps"),
+                J(drive, "System Volume Information"), J(drive, "$Recycle.Bin")]);
+        }
         return new ProtectedPathGuard(trees, exact, PathStyle.Windows);
     }
 
     public static ProtectedPathGuard ForUnix(string home, bool caseInsensitive = false) => new(
-        ["/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/sbin", "/sys", "/usr", "/var/lib",
-         "/run", "/snap", "/System", "/Library", "/Applications", "/private/var/db"],
-        ["/", "/home", "/Users", "/root", "/var", "/opt", "/mnt", "/media", "/Volumes", home],
+        ["/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/sbin", "/sys", "/usr", "/var",
+         "/run", "/snap", "/System", "/Library", "/Applications", "/private", "/nix", "/srv", "/opt", "/cores"],
+        ["/", "/home", "/Users", "/root", "/mnt", "/media", "/Volumes", home],
         PathStyle.Unix, caseInsensitive);
 
     public static ProtectedPathGuard ForCurrentOs()
@@ -110,7 +120,8 @@ public sealed class ProtectedPathGuard
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 Path.GetDirectoryName(profile) ?? @"C:\Users", profile,
-                DriveInfo.GetDrives().Select(d => d.RootDirectory.FullName));
+                DriveInfo.GetDrives().Select(d => d.RootDirectory.FullName),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         }
         return ForUnix(profile, caseInsensitive: OperatingSystem.IsMacOS());
     }

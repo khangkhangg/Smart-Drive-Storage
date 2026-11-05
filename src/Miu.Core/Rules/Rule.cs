@@ -13,7 +13,8 @@ public sealed record RuleConditions(
     long? MinSizeMB = null,
     int? ProjectIdleDays = null,
     string[]? RequiresSiblingMarker = null,
-    string[]? RequiresChildMarker = null);
+    string[]? RequiresChildMarker = null,
+    bool? RequiresGitIgnored = null);
 
 public sealed record Rule(
     string Id,
@@ -30,6 +31,8 @@ public sealed record Rule(
 /// <param name="ModifiedUtc">For folders, pass the newest modification time inside it.</param>
 /// <param name="SiblingExists">Glob test against names next to the item (in its parent folder).</param>
 /// <param name="ChildExists">Glob test against names directly inside the item (folders only).</param>
+/// <param name="IsGitIgnored">Whether the project's .gitignore lists the item (evidence it is generated output).</param>
+/// <param name="IsLink">True when the item is a symlink/junction; only then does the guard resolve its target.</param>
 public sealed record ItemFacts(
     string FullPath,
     string Name,
@@ -39,6 +42,8 @@ public sealed record ItemFacts(
     DateTime NowUtc,
     int? ProjectIdleDays,
     Func<string, bool> SiblingExists,
-    Func<string, bool>? ChildExists = null);
+    Func<string, bool>? ChildExists = null,
+    Func<bool>? IsGitIgnored = null,
+    bool IsLink = false);
 
 public sealed record VerdictResult(Verdict Verdict, string? RuleId, string Reason, double Confidence, string? RebuildHint);

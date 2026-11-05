@@ -113,8 +113,8 @@
       "conditions": {
         "olderThanDays": 30
       },
-      "verdict": "Safe",
-      "reason": "Old log file.",
+      "verdict": "Review",
+      "reason": "Old log file. Often safe, but some apps (chat, servers) keep history in logs.",
       "priority": 450
     }
   ]

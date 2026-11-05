@@ -26,28 +26,73 @@ public static class ProjectDetector
         _ => IdleBucket.Abandoned,
     };
 
+    /// <summary>Lockfiles prove a project was installed/built by a developer (installed apps rarely ship them).</summary>
+    private static readonly HashSet<string> Lockfiles = new(StringComparer.Ordinal)
+    {
+        "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock", "Cargo.lock", "poetry.lock",
+        "uv.lock", "Pipfile.lock", "go.sum", "composer.lock", "Gemfile.lock", "pubspec.lock", "packages.lock.json", "gradle.lockfile",
+    };
+
+    /// <summary>Folders that are never walked: installed packages and virtual environments.</summary>
+    private static readonly HashSet<string> AlwaysSkip = new(StringComparer.Ordinal)
+        { ".git", "node_modules", ".venv", "venv", "site-packages", "dist-packages", "__pycache__" };
+
+    /// <summary>Where installed apps, extensions and packages live. Nothing below these is a user project.</summary>
+    private static readonly string[] InstallRootFragments =
+    [
+        "/appdata/local/programs/", "/.vscode/extensions/", "/.vscode-insiders/extensions/", "/.cursor/extensions/",
+        "/.windsurf/extensions/", "/site-packages/", "/dist-packages/", "/application support/", "/program files/",
+        "/program files (x86)/", "/windowsapps/",
+    ];
+
+    private static readonly string[] InstallRootPrefixes = ["/opt/", "/usr/", "/snap/"];
+
+    public static bool IsInstallRoot(string fullPath)
+    {
+        var p = fullPath.Replace('\\', '/').ToLowerInvariant().TrimEnd('/') + "/";
+        return InstallRootFragments.Any(p.Contains) || InstallRootPrefixes.Any(p.StartsWith);
+    }
+
     public static IReadOnlyList<DetectedProject> Detect(ScanTree tree, DateTime nowUtc)
     {
         var found = new List<DetectedProject>();
-        var stack = new Stack<int>();
-        stack.Push(tree.Root);
+        if (IsInstallRoot(tree.RootPath)) return found;
+        var stack = new Stack<(int Dir, bool InsideRepo)>();
+        stack.Push((tree.Root, false));
         while (stack.Count > 0)
         {
-            var dir = stack.Pop();
+            var (dir, insideRepo) = stack.Pop();
             var children = tree.Children(dir);
             var stacks = StacksOf(tree, children);
-            if (stacks.Count > 0) found.Add(Describe(tree, dir, children, stacks, nowUtc));
+            var isProject = stacks.Count > 0 && (insideRepo || HasSourceSignal(tree, children, stacks));
+            if (isProject) found.Add(Describe(tree, dir, children, stacks, nowUtc));
 
             foreach (var c in children)
             {
                 if (!tree.IsDir(c)) continue;
                 var name = tree.Name(c);
-                if (name == ".git" || DevJunkCatalog.AllJunkNames.Contains(name)) continue;
-                stack.Push(c);
+                if (AlwaysSkip.Contains(name) || IsVirtualEnv(tree, c)) continue;
+                if (isProject && DevJunkCatalog.IsJunkFolder(name, stacks)) continue;
+                if (IsInstallRoot(tree.GetFullPath(c))) continue;
+                stack.Push((c, insideRepo || isProject));
             }
         }
         return found.OrderByDescending(p => p.RebuildableBytes).ThenBy(p => p.Path, StringComparer.Ordinal).ToList();
     }
+
+    private static bool HasSourceSignal(ScanTree tree, IReadOnlyList<int> children, List<string> stacks)
+    {
+        foreach (var c in children)
+        {
+            var name = tree.Name(c);
+            if (tree.IsDir(c) ? name == ".git" : Lockfiles.Contains(name)) return true;
+        }
+        // .NET restores leave obj/project.assets.json behind.
+        return stacks.Contains(".NET") && children.Any(c => tree.IsDir(c) && tree.Name(c) == "obj"
+            && tree.FindChild(c, "project.assets.json") is not null);
+    }
+
+    private static bool IsVirtualEnv(ScanTree tree, int dir) => tree.FindChild(dir, "pyvenv.cfg") is { } f && !tree.IsDir(f);
 
     private static List<string> StacksOf(ScanTree tree, IReadOnlyList<int> children)
     {
@@ -76,7 +121,7 @@ public static class ProjectDetector
         {
             var name = tree.Name(c);
             if (tree.IsDir(c) && DevJunkCatalog.IsJunkFolder(name, stacks)) { rebuildable += tree.Size(c); continue; }
-            if (tree.IsDir(c) && (name == ".git" || DevJunkCatalog.AllJunkNames.Contains(name))) continue;
+            if (tree.IsDir(c) && (AlwaysSkip.Contains(name) || IsVirtualEnv(tree, c))) continue;
             latest = Math.Max(latest, tree.NewestModifiedUtc(c).Ticks);
         }
 

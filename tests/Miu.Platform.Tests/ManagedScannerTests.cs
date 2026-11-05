@@ -59,6 +59,29 @@ public sealed class ManagedScannerTests : IDisposable
     }
 
     [Fact]
+    public async Task Scanning_through_a_symlinked_root_reports_the_real_path()
+    {
+        var link = _root + "-link";
+        Directory.CreateSymbolicLink(link, _root);
+        try
+        {
+            var tree = await new ManagedScanner().ScanAsync(link, null, CancellationToken.None);
+            tree.RootPath.Should().Be(new DirectoryInfo(_root).FullName);
+            tree.Size(tree.Root).Should().Be(1520);
+        }
+        finally { Directory.Delete(link); }
+    }
+
+    [Fact]
+    public async Task Marks_links()
+    {
+        Directory.CreateSymbolicLink(Path.Combine(_root, "lnk"), Path.Combine(_root, "a"));
+        var tree = await new ManagedScanner().ScanAsync(_root, null, CancellationToken.None);
+        tree.IsLink(tree.FindChild(tree.Root, "lnk")!.Value).Should().BeTrue();
+        tree.IsLink(tree.FindChild(tree.Root, "a")!.Value).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Honors_cancellation()
     {
         using var cts = new CancellationTokenSource();

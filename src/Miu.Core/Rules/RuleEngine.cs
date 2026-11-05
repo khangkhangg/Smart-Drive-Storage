@@ -27,7 +27,7 @@ public sealed class RuleEngine
 
     public VerdictResult Evaluate(ItemFacts f)
     {
-        var why = _guard.Explain(f.FullPath);
+        var why = _guard.Explain(f.FullPath, checkLink: f.IsLink);
         if (why is not null) return new VerdictResult(Verdict.Protected, "protected", why, 1, null);
 
         foreach (var r in _rules)
@@ -54,6 +54,7 @@ public sealed class RuleEngine
         if (c.ProjectIdleDays is { } idle && (f.ProjectIdleDays is null || f.ProjectIdleDays < idle)) return false;
         if (c.RequiresSiblingMarker is { Length: > 0 } sm && !sm.Any(f.SiblingExists)) return false;
         if (c.RequiresChildMarker is { Length: > 0 } cm && (f.ChildExists is null || !cm.Any(f.ChildExists))) return false;
+        if (c.RequiresGitIgnored == true && f.IsGitIgnored?.Invoke() != true) return false;
         return true;
     }
 
@@ -70,7 +71,7 @@ public sealed class RuleEngine
     {
         var literal = r.Match.Path?.Count(ch => ch is not ('*' or '?')) ?? 0;
         var c = r.Conditions;
-        var conds = new object?[] { c.OlderThanDays, c.MinSizeMB, c.ProjectIdleDays, c.RequiresSiblingMarker, c.RequiresChildMarker }
+        var conds = new object?[] { c.OlderThanDays, c.MinSizeMB, c.ProjectIdleDays, c.RequiresSiblingMarker, c.RequiresChildMarker, c.RequiresGitIgnored }
             .Count(x => x is not null);
         return literal + conds * 10;
     }
