@@ -48,4 +48,48 @@ public class DiskImageTests
     [Fact]
     public void Restored_copies_get_their_own_name() =>
         ConflictNames.For("docs/report.docx", new DateOnly(2026, 11, 5), _ => false, "restored").Should().Be("docs/report (restored 2026-11-05).docx");
+
+    [Theory]
+    [InlineData(@"D:\", "exFAT", true)]
+    [InlineData(@"D:\", "FAT32", true)]
+    [InlineData(@"E:\", "NTFS", false)]
+    [InlineData(@"E:\", "ReFS", false)]
+    [InlineData(@"\\nas\backups", null, false)]
+    public void Windows_needs_ntfs_refs_or_a_network_folder(string target, string? format, bool refused) =>
+        (DiskImage.WindowsTargetProblem(target, format) is not null).Should().Be(refused);
+
+    private static DiskImageSchedule S(string target = @"E:\", ImageFrequency f = ImageFrequency.Weekly) =>
+        new("ab12cd34", @"C:\", target, f, DayOfWeek.Saturday, 15, 2, System: true, Device: "/dev/sdb1", Label: "data");
+
+    [Fact]
+    public void Windows_schedules_run_wbadmin_as_system_weekly_or_monthly()
+    {
+        var weekly = DiskImage.WindowsScheduleCreate(S());
+        weekly.Arguments.Should().Equal("/Create", "/F", "/TN", @"Miu\Disk image ab12cd34", "/SC", "WEEKLY", "/D", "SAT", "/ST", "02:00",
+            "/RU", "SYSTEM", "/RL", "HIGHEST", "/TR", "wbadmin start backup -backupTarget:E: -include:C: -allCritical -quiet");
+        DiskImage.WindowsScheduleCreate(S(f: ImageFrequency.Monthly)).Arguments.Should().ContainInOrder("/SC", "MONTHLY", "/D", "15");
+        // A network folder with a space is quoted inside /TR.
+        DiskImage.WindowsScheduleCreate(S(@"\\nas\my backups")).Arguments[^1]
+            .Should().Be("wbadmin start backup \\\"-backupTarget:\\\\nas\\my backups\\\" -include:C: -allCritical -quiet");
+    }
+
+    [Fact]
+    public void Linux_schedules_are_systemd_timers_with_escaped_dates()
+    {
+        var script = DiskImage.LinuxScheduleCreate(S("/media/k/usb", ImageFrequency.Monthly)).Arguments[2];
+        script.Should().Contain("OnCalendar=*-*-15 02:00:00").And.Contain("Persistent=true")
+            .And.Contain("$$(date +%%Y-%%m-%%d-%%H%%M)").And.Contain("dd if='/dev/sdb1'").And.Contain("systemctl enable --now miu-disk-image-ab12cd34.timer");
+        DiskImage.LinuxScheduleCreate(S("/media/k/usb")).Arguments[2].Should().Contain("OnCalendar=Sat *-*-* 02:00:00");
+        DiskImage.LinuxScheduleDelete("ab12cd34").Arguments[2].Should().Contain("disable --now miu-disk-image-ab12cd34.timer");
+    }
+
+    [Fact]
+    public void Odd_paths_and_times_cant_be_scheduled()
+    {
+        DiskImage.ScheduleProblem(S()).Should().BeNull();
+        DiskImage.ScheduleProblem(S("/media/k/it's")).Should().NotBeNull();
+        DiskImage.ScheduleProblem(S("/media/k/50%")).Should().NotBeNull();
+        DiskImage.ScheduleProblem(S() with { Id = "../x" }).Should().NotBeNull();
+        DiskImage.ScheduleProblem(S() with { DayOfMonth = 31 }).Should().NotBeNull();
+    }
 }

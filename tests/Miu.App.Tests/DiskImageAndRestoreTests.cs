@@ -35,13 +35,85 @@ public sealed class DiskImageAndRestoreTests : IDisposable
         File.SetLastWriteTimeUtc(path, mtimeUtc ?? new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
     }
 
-    private static (long, long, string, string)? Drive(string p) => p switch
+    private static (long, long, string, string, string)? Drive(string p) => p switch
     {
-        "/data" => (40L << 30, 10L << 30, "data", "/data"),
-        "/media/k/usb" => (1L << 30, 100L << 30, "usb", "/media/k/usb"),
-        "/media/k/small" => (1L << 30, 5L << 30, "small", "/media/k/small"),
+        "/data" => (40L << 30, 10L << 30, "data", "/data", "ext4"),
+        "/media/k/usb" => (1L << 30, 100L << 30, "usb", "/media/k/usb", "ext4"),
+        "/media/k/small" => (1L << 30, 5L << 30, "small", "/media/k/small", "ext4"),
+        @"C:\" => (300L << 30, 30L << 30, "Windows", @"C:\", "NTFS"),
+        @"D:\" => (38L << 30, 1800L << 30, "2tb", @"D:\", "exFAT"),
+        @"E:\" => (1L << 30, 900L << 30, "Backup", @"E:\", "NTFS"),
         _ => null,
     };
+
+    [Fact]
+    public async Task Windows_refuses_an_exfat_target_up_front_and_accepts_ntfs_or_a_network_folder()
+    {
+        var svc = new DiskImageService(_s, (_, _, _) => Task.FromResult((0, "")), () => Now);
+        var exfat = await svc.PreviewAsync(@"C:\", @"D:\", null, p => Drive(p), ImageOs.Windows);
+        exfat.Problem.Should().Contain("exFAT").And.Contain("NTFS").And.Contain(@"\\nas\backups");
+        exfat.Command.Should().BeNull();
+        var ntfs = await svc.PreviewAsync(@"C:\", @"E:\", null, p => Drive(p), ImageOs.Windows);
+        ntfs.Problem.Should().BeNull();
+        ntfs.Command!.Arguments.Should().Contain("-backupTarget:E:");
+        var net = await svc.PreviewAsync(@"C:\", @"\\nas\backups", null, p => Drive(p), ImageOs.Windows);
+        net.Problem.Should().BeNull();
+        net.Command!.Arguments.Should().Contain(@"-backupTarget:\\nas\backups");
+    }
+
+    [Fact]
+    public void A_wrapped_wbadmin_error_is_shown_whole()
+    {
+        const string output = """
+            wbadmin 1.0 - Backup command-line tool
+            (C) Copyright Microsoft Corporation. All rights reserved.
+
+            Retrieving volume information...
+            ERROR - The location for backup is a FAT32/exFAT volume. Specify a location on
+            another NTFS/ReFS volume.
+            """;
+        DiskImageService.Explain(output).Should().Be("ERROR - The location for backup is a FAT32/exFAT volume. Specify a location on another NTFS/ReFS volume.");
+        DiskImageService.Explain("").Should().Be("no details.");
+    }
+
+    [Fact]
+    public async Task A_schedule_goes_to_the_system_scheduler_and_its_runs_reach_activity()
+    {
+        var ran = new List<DiskImageCommand>();
+        var svc = new DiskImageService(_s, (cmd, _, _) => { ran.Add(cmd); return Task.FromResult((0, "SUCCESS")); }, () => Now);
+        var plan = await svc.PreviewAsync(@"C:\", @"E:\", null, p => Drive(p), ImageOs.Windows);
+        var (ok, message) = await svc.AddScheduleAsync(plan, ImageFrequency.Weekly, DayOfWeek.Sunday, 1, 3, ImageOs.Windows);
+        ok.Should().BeTrue();
+        message.Should().Contain("Every Sunday at 03:00");
+        var s = svc.Schedules().Single();
+        ran.Single().Program.Should().Be("schtasks");
+        ran.Single().Arguments.Should().ContainInOrder("/Create", "/F", "/TN", $@"Miu\Disk image {s.Id}", "/SC", "WEEKLY", "/D", "SUN", "/ST", "03:00", "/RU", "SYSTEM");
+
+        var json = """{"LastRunTime":"/Date(1793851200000)/","LastTaskResult":0,"NextRunTime":"/Date(1794456000000)/"}""";
+        svc.Query = (program, args) => Task.FromResult((0, json));
+        var status = await svc.StatusAsync(ImageOs.Windows);
+        status[s.Id].LastOk.Should().BeTrue();
+        status[s.Id].Text.Should().Contain("Next:").And.Contain("done");
+        _s.Actions.Recent(10).Count(a => a.Kind == "backup").Should().Be(1);
+        await svc.StatusAsync(ImageOs.Windows);
+        _s.Actions.Recent(10).Count(a => a.Kind == "backup").Should().Be(1); // the same run is logged once
+
+        (await svc.RemoveScheduleAsync(s.Id, ImageOs.Windows)).Ok.Should().BeTrue();
+        ran.Last().Arguments.Should().Equal("/Delete", "/F", "/TN", $@"Miu\Disk image {s.Id}");
+        svc.Schedules().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_cancelled_admin_prompt_saves_no_schedule_and_macs_use_time_machine()
+    {
+        var svc = new DiskImageService(_s, (_, _, _) => throw new System.ComponentModel.Win32Exception(1223), () => Now);
+        var plan = await svc.PreviewAsync(@"C:\", @"E:\", null, p => Drive(p), ImageOs.Windows);
+        var (ok, message) = await svc.AddScheduleAsync(plan, ImageFrequency.Monthly, DayOfWeek.Sunday, 1, 3, ImageOs.Windows);
+        ok.Should().BeFalse();
+        message.Should().Contain("admin permission");
+        svc.Schedules().Should().BeEmpty();
+        (await svc.AddScheduleAsync(plan, ImageFrequency.Weekly, DayOfWeek.Sunday, 1, 3, ImageOs.MacOS)).Message.Should().Contain("Time Machine");
+    }
 
     [Fact]
     public async Task Disk_image_shows_the_command_runs_it_and_logs_it()

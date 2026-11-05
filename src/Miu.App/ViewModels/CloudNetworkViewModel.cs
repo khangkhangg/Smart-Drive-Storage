@@ -39,6 +39,24 @@ public partial class SyncJobRow(CloudNetworkViewModel owner, SyncJob job) : Obse
     [RelayCommand] private void Browse() => owner.OpenRestore(this);
 }
 
+public sealed partial class ImageScheduleRow(CloudNetworkViewModel owner, Miu.Core.Imaging.DiskImageSchedule schedule) : ObservableObject
+{
+    public ImageScheduleRow(CloudNetworkViewModel owner, Miu.Core.Imaging.DiskImageSchedule schedule, string status) : this(owner, schedule) => Status = status;
+    public string Title => $"{schedule.Source}  →  {schedule.Target}";
+    public string When => schedule.Describe();
+    [ObservableProperty] private string status = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(RemoveText))] private bool confirming;
+    public string RemoveText => Confirming ? "Really remove?" : "Remove schedule";
+
+    [RelayCommand]
+    private async Task Remove()
+    {
+        if (!Confirming) { Confirming = true; return; }
+        Confirming = false;
+        await owner.RemoveImageScheduleAsync(schedule.Id);
+    }
+}
+
 public sealed partial class BackupRow(CloudNetworkViewModel owner, BackupTreeEntry entry)
 {
     public BackupTreeEntry Entry => entry;
@@ -285,6 +303,7 @@ public partial class CloudNetworkViewModel : ObservableObject
             foreach (var d in DiskImageService.Drives()) ImageDrives.Add(d);
             ImageSource ??= ImageDrives.FirstOrDefault();
             ImageTarget ??= ImageDrives.FirstOrDefault(d => d != ImageSource);
+            _ = RefreshImageSchedulesAsync();
             return;
         }
         if (IsDriveBackup)
@@ -351,11 +370,79 @@ public partial class CloudNetworkViewModel : ObservableObject
 
     partial void OnImageSourceChanged(string? value) => ImagePlan = null;
     partial void OnImageTargetChanged(string? value) => ImagePlan = null;
+    partial void OnImageNetworkTargetChanged(string value) => ImagePlan = null;
+
+    /// <summary>Windows: a network folder (\\nas\backups) instead of a drive.</summary>
+    [ObservableProperty] private string imageNetworkTarget = "";
+    public bool CanUseNetworkTarget => OperatingSystem.IsWindows();
+    private string EffectiveImageTarget => !string.IsNullOrWhiteSpace(ImageNetworkTarget) ? ImageNetworkTarget.Trim() : ImageTarget ?? "";
+
+    // Repeat: once, or on a schedule kept by the system's own scheduler.
+    public IReadOnlyList<string> ImageRepeats { get; } = ["Only now", "Every week", "Every month"];
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsImageWeekly), nameof(IsImageMonthly), nameof(IsImageScheduled), nameof(IsImageOnce))] private string imageRepeat = "Only now";
+    [ObservableProperty] private DayOfWeek imageDay = DayOfWeek.Sunday;
+    [ObservableProperty] private int imageDayOfMonth = 1;
+    [ObservableProperty] private int imageHour = 3;
+    public IReadOnlyList<int> DaysOfMonth { get; } = Enumerable.Range(1, 28).ToList();
+    public bool IsImageWeekly => ImageRepeat == "Every week";
+    public bool IsImageMonthly => ImageRepeat == "Every month";
+    public bool IsImageScheduled => ImageRepeat != "Only now";
+    public bool IsImageOnce => !IsImageScheduled;
+
+    public ObservableCollection<ImageScheduleRow> ImageSchedules { get; } = [];
+    [ObservableProperty] private bool hasImageSchedules;
+
+    /// <summary>Lists saved schedules with what the system scheduler says about them (and logs new runs in Activity).</summary>
+    public async Task RefreshImageSchedulesAsync()
+    {
+        var list = Images.Schedules();
+        IReadOnlyDictionary<string, DiskImageService.ScheduleStatus> status;
+        try { status = list.Count == 0 ? new Dictionary<string, DiskImageService.ScheduleStatus>() : await Images.StatusAsync(); }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException) { status = new Dictionary<string, DiskImageService.ScheduleStatus>(); }
+        ImageSchedules.Clear();
+        foreach (var sch in list)
+            ImageSchedules.Add(new ImageScheduleRow(this, sch, status.TryGetValue(sch.Id, out var st) ? st.Text : "Checking…"));
+        HasImageSchedules = ImageSchedules.Count > 0;
+    }
+
+    [RelayCommand]
+    private async Task SaveImageSchedule()
+    {
+        if (ImagePlan is not { Command: not null } plan) { await CheckImage(); plan = ImagePlan!; if (plan.Command is null) return; }
+        IsImaging = true;
+        ImageProgress = "Saving the schedule… (approve the admin prompt)";
+        try
+        {
+            var (ok, message) = await Images.AddScheduleAsync(plan, IsImageMonthly ? Miu.Core.Imaging.ImageFrequency.Monthly : Miu.Core.Imaging.ImageFrequency.Weekly,
+                ImageDay, ImageDayOfMonth, ImageHour);
+            ImageMessageIsError = !ok;
+            ImageMessage = message;
+            await RefreshImageSchedulesAsync();
+        }
+        finally
+        {
+            IsImaging = false;
+            ImageProgress = "";
+        }
+    }
+
+    internal async Task RemoveImageScheduleAsync(string id)
+    {
+        IsImaging = true;
+        try
+        {
+            var (ok, message) = await Images.RemoveScheduleAsync(id);
+            ImageMessageIsError = !ok;
+            ImageMessage = message;
+            await RefreshImageSchedulesAsync();
+        }
+        finally { IsImaging = false; }
+    }
 
     [RelayCommand]
     private async Task CheckImage()
     {
-        var plan = await Images.PreviewAsync(ImageSource ?? "", ImageTarget ?? "");
+        var plan = await Images.PreviewAsync(ImageSource ?? "", EffectiveImageTarget);
         ImagePlan = plan;
         ImageMessageIsError = plan.Problem is not null;
         ImageMessage = plan.Problem ?? $"Ready. The image needs about {Miu.Core.Formatting.SizeFormatter.Format(plan.NeededBytes)}. Your system asks for admin permission when it starts, and it can take a while; you can keep using your computer.";
