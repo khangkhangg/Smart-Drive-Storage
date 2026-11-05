@@ -695,31 +695,31 @@ Each prompt assumes this spec is in the repo. Start every session with:
 ## 14. Progress checklist
 
 ### Phase 0 — Foundation
-- [ ] F0.1 Solution & projects
-- [ ] F0.2 CI workflow
-- [ ] F0.3 Avalonia shell
-- [ ] F0.4 DI, hosting, logging
-- [ ] F0.5 SQLite + migrations
+- [x] F0.1 Solution & projects
+- [x] F0.2 CI workflow
+- [ ] F0.3 Avalonia shell — partial in M1 (shell; Rules/Settings are placeholders)
+- [ ] F0.4 DI, hosting, logging — partial in M1 (manual composition root, no DI container yet)
+- [x] F0.5 SQLite + migrations
 - [ ] F0.6 Credential store
 
 ### Phase 1 — Scan & Analyze
-- [ ] F1.1 ScanTree model
-- [ ] F1.2 Fallback scanner
+- [x] F1.1 ScanTree model
+- [ ] F1.2 Fallback scanner — partial in M1 (portable scanner; Windows FindFirstFileEx version pending)
 - [ ] F1.3 Elevated MFT scanner
-- [ ] F1.4 Categorizer
-- [ ] F1.5 Home drive cards
-- [ ] F1.6 Analyze tree
-- [ ] F1.7 Treemap control
+- [x] F1.4 Categorizer
+- [ ] F1.5 Home drive cards — partial in M1 (basic)
+- [ ] F1.6 Analyze tree — partial in M1 (drill-down list)
+- [x] F1.7 Treemap control
 - [ ] F1.8 Types & Largest views
 - [ ] F1.9 Search query language
-- [ ] F1.10 Details pane
+- [x] F1.10 Details pane
 - [ ] F1.11 Snapshots & What grew
 
 ### Phase 2 — Safety & Clean
-- [ ] F2.1 Protected-paths guard
-- [ ] F2.2 Rule engine
-- [ ] F2.3 Built-in rule pack
-- [ ] F2.4 Verdict badges
+- [x] F2.1 Protected-paths guard
+- [x] F2.2 Rule engine
+- [ ] F2.3 Built-in rule pack — partial in M1 (dev + system packs)
+- [ ] F2.4 Verdict badges — partial in M1 (list, treemap, details)
 - [ ] F2.5 Cleanup cart
 - [ ] F2.6 Review & Clean sheet
 - [ ] F2.7 Recycle Bin delete
@@ -730,10 +730,10 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F2.12 Permanent delete option
 
 ### Phase 2D — Developer junk
-- [ ] F2D.1 Project detector
-- [ ] F2D.2 Dev junk catalog
+- [x] F2D.1 Project detector
+- [ ] F2D.2 Dev junk catalog — partial in M1 (rules; project-aware conditions)
 - [ ] F2D.3 Git status guard
-- [ ] F2D.4 Dev Projects view
+- [ ] F2D.4 Dev Projects view — partial in M1 (read-only, no clean actions yet)
 - [ ] F2D.5 Global dev caches
 - [ ] F2D.6 Docker integration
 - [ ] F2D.7 VHDX compaction
