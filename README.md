@@ -154,6 +154,16 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 
 **Latest test build: [v0.9.0-beta.1](https://github.com/khangkhangg/Smart-Drive-Storage/releases/tag/v0.9.0-beta.1)** (pre-release). The newest version is always on the [Releases page](https://github.com/khangkhangg/Smart-Drive-Storage/releases).
 
+**What's in 0.9.0-beta.1:**
+- Scanning, Safe/Review verdicts, Review & Clean with progress, and Undo from Activity.
+- "What is this?" cards for dev folders, databases and system files, plus multi-select, right-click and Quick preview.
+- Dev Projects, and a **Docker** page to start, stop, pause, read logs and delete containers, images and volumes.
+- Network drives (automatic discovery), sync and live mirror, drive backup, disk images, and browse & restore.
+- Cloud backup to Google Drive, OneDrive, Dropbox (with **your own app keys**, see below) and S3-compatible storage.
+- Telegram alerts and actions, automations, and in-app updates that download for you.
+
+Already have Miu? To get test builds like this one, turn on **Settings › Updates › Include test builds**. Miu then offers it, downloads it (checked against `SHA256SUMS.txt`) and installs when you press **Install now**.
+
 | System | Download | Notes |
 |---|---|---|
 | **Windows 10/11** (64-bit) | [⬇ Installer (.exe)](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-windows-x64-setup.exe) · [⬇ Portable (.zip)](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-windows-x64-portable.zip) | Installs for your user only, without admin rights. If SmartScreen appears, click **More info › Run anyway**. |
