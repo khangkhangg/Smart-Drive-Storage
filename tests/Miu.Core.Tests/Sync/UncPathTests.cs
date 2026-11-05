@@ -38,4 +38,21 @@ public class UncPathTests
         p!.ToSmbUrl().Should().Be("smb://nas/photos/2024");
         p.ShareRoot.Should().Be(@"\\nas\photos");
     }
+
+    [Theory]
+    [InlineData(@"\\pi", "pi")]
+    [InlineData(@"\\pi\", "pi")]
+    [InlineData("//nas", "nas")]
+    [InlineData("smb://192.168.1.50", "192.168.1.50")]
+    public void A_machine_without_a_share_is_recognised(string input, string server)
+    {
+        UncPath.TryParseServer(input, out var s).Should().BeTrue();
+        s.Should().Be(server);
+    }
+
+    [Theory]
+    [InlineData(@"\\pi\photos")]
+    [InlineData(@"C:\x")]
+    [InlineData(@"\\")]
+    public void Not_just_a_machine(string input) => UncPath.TryParseServer(input, out _).Should().BeFalse();
 }

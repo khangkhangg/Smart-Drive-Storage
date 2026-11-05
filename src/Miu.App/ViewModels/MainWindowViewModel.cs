@@ -154,6 +154,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         CurrentPage = value.Page;
         if (value.Page == Home) Home.RefreshDrives();
+        if (value.Page == CloudNetwork) CloudNetwork.OnShown();
         if (value.Page == Activity) Activity.Load();
         if (value.Page == Rules) Rules.Load();
         if (value.Page == Automations) Automations.Load();

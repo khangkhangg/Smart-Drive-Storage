@@ -99,7 +99,7 @@ public partial class CloudNetworkViewModel : ObservableObject
     private async Task FindDevices()
     {
         IsSearching = true;
-        DevicesText = "Looking for devices…";
+        DevicesText = "Looking for computers and NAS boxes on your network (a few seconds)…";
         try
         {
             await Task.Yield();
@@ -107,35 +107,59 @@ public partial class CloudNetworkViewModel : ObservableObject
             Devices.Clear();
             foreach (var d in found) Devices.Add(d);
             DevicesText = found.Count == 0
-                ? @"Nothing answered. Some devices don't announce themselves: type \\name\folder below."
-                : $"Found {found.Count} {(found.Count == 1 ? "device" : "devices")}. Pick one to see its shared folders.";
+                ? @"No computers with shared folders answered. Check that file sharing is on, or type \\name below (for example \\pi)."
+                : $"Found {found.Count} {(found.Count == 1 ? "computer or NAS" : "computers and NAS boxes")} sharing files. Pick one to see its shared folders.";
         }
         catch (Exception ex) when (ex is not OperationCanceledException) { DevicesText = "Couldn't search the network: " + ex.Message; }
         finally { IsSearching = false; }
     }
 
     [RelayCommand]
-    private async Task PickDevice(DiscoveredDevice? d)
+    private Task PickDevice(DiscoveredDevice? d) => d is null ? Task.CompletedTask : ShowSharesAsync(d.Address, d.Name);
+
+    /// <summary>Lists a machine's shared folders as buttons (picking one fills in both "Map" and "Scan").</summary>
+    private async Task ShowSharesAsync(string server, string label)
     {
-        if (d is null) return;
-        UncText = $@"\\{d.Address}\";
+        _sharesServer = server;
+        UncText = $@"\\{server}\";
         Shares.Clear();
-        try { foreach (var s in await Network.Drives.ListSharesAsync(d.Address, default)) Shares.Add(s); }
+        try { foreach (var s in await Network.Drives.ListSharesAsync(server, default)) Shares.Add(s); }
         catch (Exception ex) when (ex is not OperationCanceledException) { System.Diagnostics.Trace.WriteLine("Listing shares failed: " + ex.Message); }
+        HasShares = Shares.Count > 0;
         NetworkMessageIsError = false;
-        NetworkMessage = Shares.Count > 0 ? $"{d.Name} shares {Shares.Count} {(Shares.Count == 1 ? "folder" : "folders")}. Pick one." : $"Type the shared folder name after \\\\{d.Address}\\.";
+        NetworkMessage = Shares.Count > 0
+            ? $"{label} shares {Shares.Count} {(Shares.Count == 1 ? "folder" : "folders")}: pick one to map or scan it."
+            : $@"{label} didn't list its shared folders. Type the folder name after \\{server}\ (for example \\{server}\public).";
     }
+
+    private string _sharesServer = "";
+    [ObservableProperty] private bool hasShares;
 
     [RelayCommand]
     private void PickShare(string? share)
     {
-        if (share is null || !UncPath.TryParse(UncText.TrimEnd('\\') + "\\" + share, out var p)) return;
+        if (share is null || !UncPath.TryParse($@"\\{_sharesServer}\{share}", out var p)) return;
         UncText = p!.ToString();
+        ScanPathText = p.ToString();
     }
+
+    /// <summary>Runs once, the first time you open Cloud &amp; Network, so nearby machines are already listed.</summary>
+    public void OnShown()
+    {
+        if (!AutoFindDevices || _autoSearched || IsSearching) return;
+        _autoSearched = true;
+        _ = FindDevicesCommand.ExecuteAsync(null);
+    }
+
+    private bool _autoSearched;
+
+    /// <summary>Tests turn this off so opening the page doesn't search the real network.</summary>
+    public static bool AutoFindDevices { get; set; } = true;
 
     [RelayCommand]
     private async Task Map()
     {
+        if (UncPath.TryParseServer(UncText, out var server)) { await ShowSharesAsync(server, server); return; }
         var letter = SelectedLetter == NoLetter ? null : SelectedLetter;
         NetResult r;
         try { r = await Network.MapAsync(UncText, letter, UserName, Password, Reconnect); }
@@ -169,6 +193,8 @@ public partial class CloudNetworkViewModel : ObservableObject
     [RelayCommand]
     private async Task ScanPath()
     {
+        // Just a machine (\\pi): show its shared folders first.
+        if (UncPath.TryParseServer(ScanPathText, out var server)) { await ShowSharesAsync(server, server); return; }
         var path = UncPath.TryParse(ScanPathText, out var unc) && OperatingSystem.IsWindows() ? unc!.ToString() : ScanPathText.Trim();
         if (path.Length == 0 || !await Task.Run(() => Directory.Exists(path)))
         {

@@ -68,4 +68,24 @@ public class ShareDiscoveryTests
         foreach (var l in name.Split('.')) { b.Add((byte)l.Length); b.AddRange(Encoding.ASCII.GetBytes(l)); }
         b.Add(0);
     }
+
+    [Fact]
+    public void Sweep_covers_the_local_network_but_never_more_than_256_addresses()
+    {
+        var hosts = ShareDiscovery.Hosts(IPAddress.Parse("192.168.1.20"), 24).ToList();
+        hosts.Should().HaveCount(253); // .1 to .254, without this computer
+        hosts.Should().NotContain(IPAddress.Parse("192.168.1.20")).And.Contain(IPAddress.Parse("192.168.1.1"));
+        ShareDiscovery.Hosts(IPAddress.Parse("10.0.5.9"), 8).Should().HaveCount(253); // a /8 is narrowed to the /24 around us
+        ShareDiscovery.IsPrivate(IPAddress.Parse("8.8.8.8")).Should().BeFalse();
+        ShareDiscovery.IsPrivate(IPAddress.Parse("172.20.1.1")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Sweep_lists_machines_with_file_sharing_by_name()
+    {
+        var found = await ShareDiscovery.SweepAsync([(IPAddress.Parse("192.168.1.20"), 24)], TimeSpan.FromMilliseconds(10), CancellationToken.None,
+            probe: (a, _, _) => Task.FromResult(a.ToString() is "192.168.1.50" or "192.168.1.7"),
+            name: a => Task.FromResult<string?>(a.ToString() == "192.168.1.50" ? "pi" : null));
+        found.Select(d => (d.Name, d.Address)).Should().Equal(("192.168.1.7", "192.168.1.7"), ("pi", "192.168.1.50"));
+    }
 }

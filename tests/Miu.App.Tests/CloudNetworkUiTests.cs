@@ -114,4 +114,24 @@ public sealed class CloudNetworkUiTests : IDisposable
         Directory.GetFiles(dst).Should().ContainSingle();
         Directory.GetFiles(Path.Combine(dst, ".miu-sync-trash"), "*", SearchOption.AllDirectories).Should().HaveCount(29); // keep0 already matched
     }
+
+    [AvaloniaFact]
+    public async Task Typing_just_a_machine_lists_its_shared_folders()
+    {
+        var vm = Shell();
+        var cn = vm.CloudNetwork;
+        cn.ScanPathText = @"\\pi";
+        await cn.ScanPathCommand.ExecuteAsync(null);
+        cn.NetworkMessageIsError.Should().BeFalse();
+        cn.NetworkMessage.Should().Contain("pi shares 1 folder");
+        cn.Shares.Should().Equal("photos");
+        cn.PickShareCommand.Execute("photos");
+        cn.UncText.Should().Be(@"\\pi\photos");
+        cn.ScanPathText.Should().Be(@"\\pi\photos");
+
+        cn.UncText = "smb://nas";
+        await cn.MapCommand.ExecuteAsync(null);
+        _drives.Calls.Should().BeEmpty(); // nothing mapped: it listed the shares instead
+        cn.UncText.Should().Be(@"\\nas\");
+    }
 }

@@ -16,6 +16,21 @@ public sealed partial record UncPath(string Server, string Share, IReadOnlyList<
 
     public string ToSmbUrl() => $"smb://{Server}/{Share}" + string.Concat(Sub.Select(s => "/" + s));
 
+    /// <summary>Just a machine, no shared folder yet: \\pi, //pi or smb://pi.</summary>
+    public static bool TryParseServer(string? input, out string server)
+    {
+        server = "";
+        var s = input?.Trim() ?? "";
+        string rest;
+        if (s.StartsWith("smb://", StringComparison.OrdinalIgnoreCase)) rest = s[6..];
+        else if (s.StartsWith(@"\\", StringComparison.Ordinal) || s.StartsWith("//", StringComparison.Ordinal)) rest = s[2..];
+        else return false;
+        rest = rest.Replace('/', '\\').TrimEnd('\\');
+        if (rest.Length == 0 || rest.Contains('\\') || !ServerPattern().IsMatch(rest)) return false;
+        server = rest;
+        return true;
+    }
+
     public static bool TryParse(string? input, out UncPath? path)
     {
         path = null;
