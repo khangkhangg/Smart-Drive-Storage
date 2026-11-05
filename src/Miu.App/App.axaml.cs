@@ -102,6 +102,7 @@ public partial class App : Application
         _ = Task.Run(() => { try { services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { } });
         _main = new MainWindow { DataContext = _vm };
         _vm.ShowWindow = ShowMain;
+        _vm.ExitApp = () => Avalonia.Threading.Dispatcher.UIThread.Post(() => Quit(desktop));
         _main.Closing += (_, e) =>
         {
             var systemShutdown = e.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown;

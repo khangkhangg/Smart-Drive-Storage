@@ -64,9 +64,15 @@
         <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdate}" Background="{DynamicResource MiuCardBg}" Padding="20,10"
                 BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
           <Grid ColumnDefinitions="*,Auto,Auto">
-            <TextBlock Text="{Binding UpdateText}" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="primary" Content="Download" Command="{Binding DownloadUpdateCommand}" Margin="12,0,0,0" />
-            <Button Grid.Column="2" Classes="secondary" Content="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="8,0,0,0" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="{Binding UpdateText}" FontWeight="SemiBold" />
+              <TextBlock Classes="caption" Text="{Binding UpdateProgress}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <Panel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              <Button Classes="primary" Content="Download" Command="{Binding DownloadUpdateCommand}" IsVisible="{Binding CanDownloadUpdate}" />
+              <Button Classes="primary" Content="Install now" Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateReady}" />
+            </Panel>
+            <Button Grid.Column="2" Classes="secondary" Content="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="8,0,0,0" VerticalAlignment="Center" />
           </Grid>
         </Border>
 

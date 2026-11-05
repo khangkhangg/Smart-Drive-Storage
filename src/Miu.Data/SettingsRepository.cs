@@ -14,6 +14,8 @@ public static class SettingKeys
     public const string AutoUpdateCheck = "updates.autoCheck";
     public const string LastUpdateCheck = "updates.lastCheck";
     public const string SkippedVersion = "updates.skipped";
+    public const string AutoDownloadUpdates = "updates.autoDownload";
+    public const string IncludePrereleases = "updates.prereleases";
     public const string OnboardingDone = "ui.onboardingDone";
     public const string ExplorerMenu = "ui.explorerMenu";
 }

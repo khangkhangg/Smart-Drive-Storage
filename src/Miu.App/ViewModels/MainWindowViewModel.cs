@@ -106,7 +106,24 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ---------- Updates ----------
     public UpdateService Updates { get; }
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasUpdate), nameof(UpdateText))] private UpdateInfo? availableUpdate;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasUpdate), nameof(UpdateText), nameof(CanDownloadUpdate))] private UpdateInfo? availableUpdate;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsUpdateReady), nameof(CanDownloadUpdate))] private string? downloadedUpdate;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanDownloadUpdate))] private bool isDownloadingUpdate;
+    [ObservableProperty] private string updateProgress = "";
+    public bool IsUpdateReady => DownloadedUpdate is not null;
+    public bool CanDownloadUpdate => HasUpdate && !IsDownloadingUpdate && !IsUpdateReady;
+
+    /// <summary>Set by the app: quits Miu (so an installer can replace it).</summary>
+    public Action? ExitApp { get; set; }
+
+    /// <summary>Where updates are downloaded (tests use a temp folder).</summary>
+    public string UpdateFolder { get; set; } = UpdateService.DownloadFolder();
+
+    partial void OnAvailableUpdateChanged(UpdateInfo? value)
+    {
+        // A different version than the file we already have: that file is stale.
+        if (value is null || DownloadedUpdate is { } f && !Path.GetFileName(f).Contains(value.Version, StringComparison.OrdinalIgnoreCase)) DownloadedUpdate = null;
+    }
     public bool HasUpdate => AvailableUpdate is not null;
     public string UpdateText => AvailableUpdate is { } u ? $"Miu {u.Version} is available (you have {AppInfo.Version})." : "";
 
@@ -128,10 +145,15 @@ public partial class MainWindowViewModel : ObservableObject
         s.Set(Miu.Data.SettingKeys.LastUpdateCheck, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         try
         {
-            var u = await Updates.CheckAsync(AppInfo.Version, ct);
+            var u = await Updates.CheckAsync(AppInfo.Version, ct, s.GetBool(Miu.Data.SettingKeys.IncludePrereleases, false));
             if (u is null) { AvailableUpdate = null; return $"You have the newest version ({AppInfo.Version})."; }
             if (!force && s.Get(Miu.Data.SettingKeys.SkippedVersion) == u.Version) return "";
             AvailableUpdate = u;
+            if (s.GetBool(Miu.Data.SettingKeys.AutoDownloadUpdates, false) && u.DownloadUrl is not null)
+            {
+                await DownloadUpdateAsync(ct);
+                return IsUpdateReady ? $"Miu {u.Version} is downloaded and ready to install." : $"Miu {u.Version} is available. {UpdateProgress}";
+            }
             return $"Miu {u.Version} is available.";
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
@@ -140,10 +162,61 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>Downloads the update inside Miu (checked against the release's checksums), then offers Install now.</summary>
     [CommunityToolkit.Mvvm.Input.RelayCommand]
-    private void DownloadUpdate()
+    private Task DownloadUpdate() => DownloadUpdateAsync(default);
+
+    public async Task DownloadUpdateAsync(CancellationToken ct)
     {
-        if (AvailableUpdate is { } u) ShellIntegration.Open(u.DownloadUrl ?? u.PageUrl);
+        if (AvailableUpdate is not { } u || IsDownloadingUpdate || IsUpdateReady) return;
+        if (u.DownloadUrl is null) { ShellIntegration.Open(u.PageUrl); return; } // no file for this system: the release page
+        IsDownloadingUpdate = true;
+        UpdateProgress = "Downloading…";
+        try
+        {
+            DownloadedUpdate = await Updates.DownloadAsync(u, UpdateFolder,
+                new Progress<double>(f => UpdateProgress = $"Downloading… {f:P0}"), ct);
+            UpdateProgress = $"Downloaded to {DownloadedUpdate}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            UpdateProgress = "Couldn't download it: " + ex.Message;
+        }
+        finally { IsDownloadingUpdate = false; }
+    }
+
+    /// <summary>
+    /// Starts the downloaded update: on Windows the installer runs and Miu closes so it can be replaced; on macOS the
+    /// .dmg opens; on Linux the file is shown (an AppImage is made runnable first).
+    /// </summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void InstallUpdate()
+    {
+        if (DownloadedUpdate is not { } file || !File.Exists(file)) { DownloadedUpdate = null; return; }
+        if (OperatingSystem.IsWindows() && file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true });
+                ExitApp?.Invoke();
+            }
+            catch (System.ComponentModel.Win32Exception ex) { UpdateProgress = "The installer didn't start: " + ex.Message; }
+            return;
+        }
+        if (!OperatingSystem.IsWindows() && file.EndsWith(".AppImage", StringComparison.Ordinal))
+        {
+            try { File.SetUnixFileMode(file, File.GetUnixFileMode(file) | UnixFileMode.UserExecute); } catch (IOException) { }
+            ShellIntegration.Reveal(file);
+            UpdateProgress = "The new AppImage is ready: quit Miu, then start the new file (you can delete the old one).";
+            return;
+        }
+        if (file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+        {
+            ShellIntegration.Reveal(file);
+            UpdateProgress = "Quit Miu, unpack the new version over the old one, and start it again.";
+            return;
+        }
+        ShellIntegration.Open(file); // .dmg, .deb: the system's installer takes it from here
     }
 
     [CommunityToolkit.Mvvm.Input.RelayCommand]
