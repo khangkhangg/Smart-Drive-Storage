@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 9 (macOS & Linux)**. Builds and runs on **Windows, macOS and Linux**. Miu scans, explains every item, and cleans what you choose. Everything goes to the **Recycle Bin (Windows) or Trash (macOS, Linux)** and can be undone from the Activity page.
+> **[⬇ Download for Windows, macOS or Linux](#download)** · Status: **Milestone 9 (macOS & Linux)**. Builds and runs on **Windows, macOS and Linux**. Miu scans, explains every item, and cleans what you choose. Everything goes to the **Recycle Bin (Windows) or Trash (macOS, Linux)** and can be undone from the Activity page.
 
 | Home | Analyze |
 |---|---|
@@ -151,16 +151,21 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 9. ~~**macOS and Linux**~~ ✅ · Trash, Keychain / Secret Service, start at login, OS-specific junk rules.
 
 ## Download
-Get the file for your system from the [latest release](https://github.com/khangkhangg/Smart-Drive-Storage/releases/latest):
-- **Windows:** the installer (`…-setup.exe`, no admin rights needed) or the portable `.zip`.
-- **macOS:** the `.dmg` for Apple silicon or Intel.
-- **Linux:** an AppImage, a `.deb` or a `.tar.gz`.
 
-See the [user guide](docs/USER-GUIDE.md) for details.
+**Latest test build: [v0.9.0-beta.1](https://github.com/khangkhangg/Smart-Drive-Storage/releases/tag/v0.9.0-beta.1)** (pre-release). The newest version is always on the [Releases page](https://github.com/khangkhangg/Smart-Drive-Storage/releases).
+
+| System | Download | Notes |
+|---|---|---|
+| **Windows 10/11** (64-bit) | [⬇ Installer (.exe)](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-windows-x64-setup.exe) · [⬇ Portable (.zip)](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-windows-x64-portable.zip) | Installs for your user only, without admin rights. If SmartScreen appears, click **More info › Run anyway**. |
+| **macOS 12+** (Apple silicon) | [⬇ .dmg](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-macos-arm64.dmg) · [⬇ .zip](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-macos-arm64.zip) | Drag Miu to Applications. The first time, use **System Settings › Privacy & Security › Open Anyway**. |
+| **macOS 12+** (Intel) | [⬇ .dmg](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-macos-x64.dmg) · [⬇ .zip](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-macos-x64.zip) | Same as above. |
+| **Linux** (x64) | [⬇ AppImage](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/Miu-Smart-Storage-0.9.0-beta.1-x86_64.AppImage) · [⬇ .deb](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/miu-smart-storage_0.9.0-beta.1_amd64.deb) · [⬇ .tar.gz](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/miu-smart-storage-0.9.0-beta.1-linux-x64.tar.gz) | **AppImage:** `chmod +x` it, then run it. **Debian/Ubuntu:** `sudo apt install ./miu-smart-storage_*.deb`. |
+
+Checksums: [SHA256SUMS.txt](https://github.com/khangkhangg/Smart-Drive-Storage/releases/download/v0.9.0-beta.1/SHA256SUMS.txt). See the [user guide](docs/USER-GUIDE.md) for details.
 
 **Making a release:**
 ```
-git tag v0.8.0 && git push origin v0.8.0
+git tag v1.0.0 && git push origin v1.0.0
 ```
 The **Release** workflow tests and packages on all three systems and publishes the files with `SHA256SUMS.txt`. To build locally, run one of these:
 - `build/package-linux.sh <version>`

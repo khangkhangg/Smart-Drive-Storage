@@ -57,7 +57,7 @@ Description: See what fills your drive and clean it up safely
  and moves only what you choose to the Trash, with undo. It also finds
  developer junk (node_modules, build output, Docker) and backs up to the cloud.
 CTRL
-dpkg-deb --build --root-owner-group "$DEB" "$OUT/${NAME}_${DEB_VERSION}_amd64.deb"
+dpkg-deb --build --root-owner-group "$DEB" "$OUT/${NAME}_${VERSION}_amd64.deb" # file name without "~": GitHub renames such files
 
 echo "== AppImage"
 APPDIR="$WORK/AppDir"
