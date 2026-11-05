@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" />
+    <ProjectReference Include="../Miu.Platform.Abstractions/Miu.Platform.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

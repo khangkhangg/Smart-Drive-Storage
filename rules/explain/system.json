@@ -1,0 +1,407 @@
+{
+  "entries": [
+    {
+      "id": "pagefile",
+      "match": {
+        "names": [
+          "pagefile.sys"
+        ],
+        "isDir": false
+      },
+      "title": "Windows page file (pagefile.sys)",
+      "what": "Windows' overflow memory: when RAM is full, it moves things here.",
+      "safety": "Never",
+      "safetyText": "Windows is using it right now. You can change its size, but don't delete it.",
+      "whyBig": "Windows sizes it to your RAM, often 8-32 GB.",
+      "howTo": [
+        "Settings › System › About › Advanced system settings › Performance Settings › Advanced › Virtual memory › Change."
+      ],
+      "priority": 950
+    },
+    {
+      "id": "hiberfil",
+      "match": {
+        "names": [
+          "hiberfil.sys"
+        ],
+        "isDir": false
+      },
+      "title": "Windows hibernation file (hiberfil.sys)",
+      "what": "Where Windows saves memory when it hibernates or uses Fast Startup.",
+      "safety": "UseTool",
+      "safetyText": "Don't delete it; turn hibernation off instead and Windows removes it (Fast Startup stops working).",
+      "whyBig": "It's sized to a large part of your RAM.",
+      "howTo": [
+        "Open a Command Prompt as administrator.",
+        "Turn hibernation off."
+      ],
+      "commands": [
+        {
+          "label": "Turn hibernation off",
+          "text": "powercfg /hibernate off"
+        },
+        {
+          "label": "Make it smaller (Fast Startup only)",
+          "text": "powercfg /h /type reduced"
+        }
+      ],
+      "priority": 950
+    },
+    {
+      "id": "swapfile",
+      "match": {
+        "names": [
+          "swapfile.sys"
+        ],
+        "isDir": false
+      },
+      "title": "Windows swap file (swapfile.sys)",
+      "what": "Used by Windows for Store apps' memory.",
+      "safety": "Never",
+      "safetyText": "Managed by Windows together with the page file.",
+      "priority": 950
+    },
+    {
+      "id": "memory-dmp",
+      "match": {
+        "names": [
+          "MEMORY.DMP",
+          "*.dmp"
+        ],
+        "isDir": false
+      },
+      "title": "Windows memory dump (MEMORY.DMP)",
+      "what": "Saved when Windows crashed with a blue screen, for diagnosis.",
+      "safety": "Safe",
+      "safetyText": "Safe once you don't need to investigate that crash (Disk Cleanup removes it too).",
+      "priority": 800
+    },
+    {
+      "id": "windows-old",
+      "match": {
+        "names": [
+          "Windows.old"
+        ],
+        "isDir": true
+      },
+      "title": "Previous Windows installation (Windows.old)",
+      "what": "Your old Windows, kept after an upgrade so you can go back for about 10 days.",
+      "safety": "UseTool",
+      "safetyText": "Remove it with Windows' own cleanup (it has protected files that resist normal deletion).",
+      "whyBig": "It's a whole copy of the previous Windows: 10-30 GB.",
+      "howTo": [
+        "Settings › System › Storage › Temporary files › Previous Windows installation(s)."
+      ],
+      "commands": [
+        {
+          "label": "Disk Cleanup",
+          "text": "cleanmgr /sageset:1"
+        }
+      ],
+      "priority": 950
+    },
+    {
+      "id": "winsxs",
+      "match": {
+        "names": [
+          "WinSxS"
+        ],
+        "isDir": true
+      },
+      "title": "Windows component store (WinSxS)",
+      "what": "Every version of Windows' system components, for updates and repairs. Many files are shared, so its real size is smaller than Explorer shows.",
+      "safety": "UseTool",
+      "safetyText": "Never delete from it; let Windows clean superseded updates.",
+      "commands": [
+        {
+          "label": "Clean up (admin)",
+          "text": "DISM /Online /Cleanup-Image /StartComponentCleanup"
+        },
+        {
+          "label": "See its real size",
+          "text": "DISM /Online /Cleanup-Image /AnalyzeComponentStore"
+        }
+      ],
+      "priority": 950
+    },
+    {
+      "id": "windows-installer",
+      "match": {
+        "path": "**/Windows/Installer",
+        "isDir": true
+      },
+      "title": "Windows Installer cache (C:\\Windows\\Installer)",
+      "what": "Copies of installers Windows needs to repair, update or uninstall programs.",
+      "safety": "Never",
+      "safetyText": "Deleting these breaks updating and uninstalling programs.",
+      "priority": 950
+    },
+    {
+      "id": "delivery-opt",
+      "match": {
+        "path": "**/DeliveryOptimization/Cache",
+        "isDir": true
+      },
+      "title": "Delivery Optimization cache",
+      "what": "Windows Update pieces shared with other PCs.",
+      "safety": "UseTool",
+      "safetyText": "Clear it with Disk Cleanup (Delivery Optimization Files).",
+      "howTo": [
+        "Settings › System › Storage › Temporary files › Delivery Optimization Files."
+      ],
+      "priority": 900
+    },
+    {
+      "id": "recycle-bin",
+      "match": {
+        "names": [
+          "$Recycle.Bin"
+        ],
+        "isDir": true
+      },
+      "title": "Recycle Bin",
+      "what": "Things you (or Miu) deleted, kept so they can be restored.",
+      "safety": "UseTool",
+      "safetyText": "Empty it when you're sure; that's when the space really comes back.",
+      "howTo": [
+        "Right-click the Recycle Bin › Empty Recycle Bin."
+      ],
+      "priority": 950
+    },
+    {
+      "id": "system-volume",
+      "match": {
+        "names": [
+          "System Volume Information"
+        ],
+        "isDir": true
+      },
+      "title": "System Volume Information",
+      "what": "Restore points and file history snapshots.",
+      "safety": "UseTool",
+      "safetyText": "Manage restore points from System Protection, not by deleting files.",
+      "howTo": [
+        "Search ‘Create a restore point’ › Configure › Delete, or lower Max Usage."
+      ],
+      "priority": 950
+    },
+    {
+      "id": "ds-store",
+      "match": {
+        "names": [
+          ".DS_Store"
+        ],
+        "isDir": false
+      },
+      "title": ".DS_Store",
+      "what": "Finder's per-folder view settings (icon positions, sort order).",
+      "safety": "Safe",
+      "safetyText": "Finder recreates it when you open the folder.",
+      "priority": 800
+    },
+    {
+      "id": "thumbs-db",
+      "match": {
+        "names": [
+          "Thumbs.db",
+          "desktop.ini"
+        ],
+        "isDir": false
+      },
+      "title": "Thumbs.db / desktop.ini",
+      "what": "Windows' picture thumbnails and folder settings.",
+      "safety": "Safe",
+      "safetyText": "Windows recreates them as needed.",
+      "priority": 700
+    },
+    {
+      "id": "mac-timemachine-local",
+      "match": {
+        "path": "**/.MobileBackups*"
+      },
+      "title": "Time Machine local snapshots",
+      "what": "Snapshots macOS keeps on your disk until your backup drive is connected again.",
+      "safety": "UseTool",
+      "safetyText": "macOS deletes them automatically when space runs low; you can also remove them.",
+      "commands": [
+        {
+          "label": "List",
+          "text": "tmutil listlocalsnapshots /"
+        },
+        {
+          "label": "Thin by 20 GB",
+          "text": "tmutil thinlocalsnapshots / 20000000000 4"
+        }
+      ],
+      "priority": 700
+    },
+    {
+      "id": "ios-backups",
+      "match": {
+        "path": "**/{MobileSync/Backup,Apple Computer/MobileSync/Backup,Apple/MobileSync/Backup}",
+        "isDir": true
+      },
+      "title": "iPhone / iPad backups",
+      "what": "Device backups made by Finder or iTunes.",
+      "safety": "Careful",
+      "safetyText": "These may be your only backup of a phone. Delete old ones from Finder or iTunes, not by hand.",
+      "whyBig": "Each backup holds a whole device's data.",
+      "howTo": [
+        "Finder › your iPhone › Manage Backups (or iTunes › Preferences › Devices)."
+      ],
+      "priority": 900
+    },
+    {
+      "id": "homebrew-cache",
+      "match": {
+        "path": "**/Library/Caches/Homebrew",
+        "isDir": true
+      },
+      "title": "Homebrew cache",
+      "what": "Downloaded bottles and source for brew installs.",
+      "safety": "UseTool",
+      "safetyText": "Let brew remove what it doesn't need.",
+      "commands": [
+        {
+          "label": "Clean up",
+          "text": "brew cleanup --prune=all"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "linux-journal",
+      "match": {
+        "path": "/var/log/journal",
+        "isDir": true
+      },
+      "title": "systemd journal",
+      "what": "System logs on Linux.",
+      "safety": "UseTool",
+      "safetyText": "Shrink it with journalctl rather than deleting files.",
+      "commands": [
+        {
+          "label": "Keep 500 MB",
+          "text": "sudo journalctl --vacuum-size=500M"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "flatpak",
+      "match": {
+        "path": "**/flatpak/runtime",
+        "isDir": true
+      },
+      "title": "Flatpak runtimes",
+      "what": "Shared runtimes for Flatpak apps.",
+      "safety": "UseTool",
+      "safetyText": "Remove the ones no app uses.",
+      "commands": [
+        {
+          "label": "Remove unused",
+          "text": "flatpak uninstall --unused"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "snap-old",
+      "match": {
+        "path": "/var/lib/snapd/snaps",
+        "isDir": true
+      },
+      "title": "Old Snap revisions",
+      "what": "Snap keeps older revisions of each app so it can roll back.",
+      "safety": "UseTool",
+      "safetyText": "Remove disabled revisions with snap.",
+      "commands": [
+        {
+          "label": "Keep 2 revisions",
+          "text": "sudo snap set system refresh.retain=2"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "log-files",
+      "match": {
+        "ext": [
+          "log"
+        ],
+        "isDir": false
+      },
+      "title": "Log file",
+      "what": "Text a program writes about what it's doing, for troubleshooting.",
+      "safety": "Safe",
+      "safetyText": "Old logs are safe to remove; programs start a new one. A log that keeps growing usually means debug logging was left on.",
+      "priority": 300
+    },
+    {
+      "id": "installers",
+      "match": {
+        "path": "**/Downloads/**",
+        "ext": [
+          "exe",
+          "msi",
+          "dmg",
+          "pkg",
+          "deb",
+          "rpm",
+          "AppImage"
+        ],
+        "isDir": false
+      },
+      "title": "Installer",
+      "what": "A setup file you downloaded (.exe, .msi, .dmg, .pkg, .deb, .rpm).",
+      "safety": "Safe",
+      "safetyText": "Once the program is installed you usually don't need it; you can download it again.",
+      "priority": 400
+    },
+    {
+      "id": "iso",
+      "match": {
+        "ext": [
+          "iso",
+          "img"
+        ],
+        "isDir": false
+      },
+      "title": "Disk image (.iso / .img)",
+      "what": "A copy of a whole CD/DVD/USB disk, often an operating system installer.",
+      "safety": "Careful",
+      "safetyText": "Safe if you can download it again or no longer need it. Check that it isn't a virtual machine's disk.",
+      "priority": 400
+    },
+    {
+      "id": "vm-disk",
+      "match": {
+        "ext": [
+          "vdi",
+          "vmdk",
+          "vhd",
+          "vhdx",
+          "qcow2",
+          "hdd"
+        ],
+        "isDir": false
+      },
+      "title": "Virtual machine disk",
+      "what": "The hard disk of a virtual machine (VirtualBox, VMware, Hyper-V, UTM, Parallels).",
+      "safety": "Never",
+      "safetyText": "Deleting it deletes that whole virtual computer. Remove the VM from its app if you don't need it.",
+      "priority": 600
+    },
+    {
+      "id": "crash-dumps",
+      "match": {
+        "path": "**/{CrashDumps,CrashReports,Crashpad/completed,DiagnosticReports}/**"
+      },
+      "title": "Crash reports",
+      "what": "Reports apps saved when they crashed.",
+      "safety": "Safe",
+      "safetyText": "Only useful to investigate those crashes.",
+      "priority": 600
+    }
+  ]
+}

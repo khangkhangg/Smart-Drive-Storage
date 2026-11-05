@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             x:Class="Miu.App.Views.DevProjectsView"
+             x:DataType="vm:DevProjectsViewModel">
+  <DockPanel Margin="40,32,40,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="{Binding IdleCleanText}" Command="{Binding CleanIdleCommand}"
+                IsVisible="{Binding HasIdle}" Background="{StaticResource MiuSafeSolid}" VerticalAlignment="Center" />
+        <TextBlock Classes="h1" Text="Dev projects" />
+      </DockPanel>
+      <TextBlock Classes="muted" Text="{Binding SummaryText}" TextWrapping="Wrap" />
+      <TextBlock Classes="caption" Margin="0,4,0,0" TextWrapping="Wrap"
+                 Text="Rebuildable = node_modules, build output, virtual envs and caches that your tools recreate. Your source code is never counted." />
+    </StackPanel>
+    <!-- Docker -->
+    <Border DockPanel.Dock="Bottom" Classes="card" Margin="0,16,0,0" DataContext="{Binding Docker}" x:DataType="vm:DockerViewModel">
+      <StackPanel Spacing="10">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Refresh" Command="{Binding RefreshCommand}" Background="Transparent" Foreground="{StaticResource MiuAccent}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="h2" Text="Docker" />
+            <TextBlock Classes="muted" Text="{Binding ReclaimableText, StringFormat='{}{0} can be freed'}" IsVisible="{Binding IsAvailable}" VerticalAlignment="Center" />
+          </StackPanel>
+        </DockPanel>
+        <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsAvailable}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DockerRow">
+              <Grid ColumnDefinitions="2*,2*,*,*" Margin="0,2">
+                <TextBlock Text="{Binding Type}" FontWeight="SemiBold" FontSize="13" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="{Binding CountText}" />
+                <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontSize="13" />
+                <TextBlock Grid.Column="3" Text="{Binding ReclaimableText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding IsAvailable}">
+          <Button Classes="secondary" Content="Clear build cache" Command="{Binding PruneBuildCacheCommand}" />
+          <Button Classes="secondary" Content="Remove unused image layers" Command="{Binding PruneImagesCommand}" />
+          <Button Classes="secondary" Content="Remove stopped containers" Command="{Binding PruneContainersCommand}" />
+        </WrapPanel>
+        <Border Background="#FDF0E1" CornerRadius="8" Padding="12,10" IsVisible="{Binding HasPending}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding PendingText}" Foreground="#8A4600" TextWrapping="Wrap" FontSize="13" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="secondary" Content="Cancel" Command="{Binding CancelPendingCommand}" />
+              <Button Classes="primary" Content="Yes, remove" Command="{Binding ConfirmPendingCommand}" Background="#B4461A" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="2.2*,1.4*,110,90,140,90" Margin="12,0,12,6" IsVisible="{Binding HasProjects}">
+      <TextBlock Classes="caption" Text="PROJECT" />
+      <TextBlock Grid.Column="1" Classes="caption" Text="LAST ACTIVITY" />
+      <TextBlock Grid.Column="2" Classes="caption" Text="STATUS" />
+      <TextBlock Grid.Column="3" Classes="caption" Text="TOTAL" TextAlignment="Right" />
+      <TextBlock Grid.Column="4" Classes="caption" Text="REBUILDABLE" TextAlignment="Right" />
+      <TextBlock Grid.Column="5" Classes="caption" Text="" />
+    </Grid>
+    <ListBox Classes="rows" ItemsSource="{Binding Projects}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:ProjectRow">
+          <Grid ColumnDefinitions="2.2*,1.4*,110,90,140,90" DoubleTapped="OnRowDoubleTapped">
+            <StackPanel>
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding StacksText}" />
+              <TextBlock Classes="caption" Text="{Binding GitText}" Foreground="{DynamicResource MiuWarnFg}" FontWeight="SemiBold" IsVisible="{Binding GitWarning}" />
+              <TextBlock Classes="caption" Text="{Binding GitText}" IsVisible="{Binding !GitWarning}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding LastActivityText}" VerticalAlignment="Center" />
+            <Border Grid.Column="2" Background="{Binding BucketBg}" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Text="{Binding BucketText}" Foreground="{Binding BucketFg}" FontSize="12" FontWeight="SemiBold" />
+            </Border>
+            <TextBlock Grid.Column="3" Text="{Binding TotalText}" TextAlignment="Right" VerticalAlignment="Center" FontSize="13" />
+            <StackPanel Grid.Column="4" VerticalAlignment="Center" Spacing="4">
+              <TextBlock Text="{Binding RebuildableText}" TextAlignment="Right" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" FontSize="13" />
+              <ProgressBar Classes="size" Value="{Binding RebuildableFraction}" Foreground="{StaticResource MiuSafeSolid}" Height="4" MinHeight="4" Margin="24,0,0,0" />
+            </StackPanel>
+            <Button Grid.Column="5" Classes="secondary" Content="Clean" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Command="{Binding $parent[ListBox].((vm:DevProjectsViewModel)DataContext).CleanProjectCommand}" CommandParameter="{Binding}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</UserControl>

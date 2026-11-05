@@ -1,0 +1,131 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="MiuShellBg" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="MiuContentBg" Color="#FAFAFA" />
+          <SolidColorBrush x:Key="MiuCardBg" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="MiuBorder" Color="#E5E5E5" />
+          <SolidColorBrush x:Key="MiuSubtle" Color="#EDEDED" />
+          <SolidColorBrush x:Key="MiuNavSelected" Color="#E6E6E6" />
+          <SolidColorBrush x:Key="MiuText" Color="#1B1B1B" />
+          <SolidColorBrush x:Key="MiuTextSecondary" Color="#5D5D5D" />
+          <SolidColorBrush x:Key="MiuTrack" Color="#E8E8E8" />
+          <SolidColorBrush x:Key="MiuSafeBg" Color="#E6F2E6" />
+          <SolidColorBrush x:Key="MiuSafeFg" Color="#0E700E" />
+          <SolidColorBrush x:Key="MiuDangerFg" Color="#B3261E" />
+          <SolidColorBrush x:Key="MiuWarnFg" Color="#8A4600" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="MiuShellBg" Color="#1C1C1C" />
+          <SolidColorBrush x:Key="MiuContentBg" Color="#252525" />
+          <SolidColorBrush x:Key="MiuCardBg" Color="#2C2C2C" />
+          <SolidColorBrush x:Key="MiuBorder" Color="#3A3A3A" />
+          <SolidColorBrush x:Key="MiuSubtle" Color="#333333" />
+          <SolidColorBrush x:Key="MiuNavSelected" Color="#333333" />
+          <SolidColorBrush x:Key="MiuText" Color="#F2F2F2" />
+          <SolidColorBrush x:Key="MiuTextSecondary" Color="#B4B4B4" />
+          <SolidColorBrush x:Key="MiuTrack" Color="#3A3A3A" />
+          <SolidColorBrush x:Key="MiuSafeBg" Color="#1E3A1E" />
+          <SolidColorBrush x:Key="MiuSafeFg" Color="#7FD37F" />
+          <SolidColorBrush x:Key="MiuDangerFg" Color="#FF8A80" />
+          <SolidColorBrush x:Key="MiuWarnFg" Color="#FFB74D" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <SolidColorBrush x:Key="MiuAccent" Color="#005FB8" />
+      <SolidColorBrush x:Key="MiuSafeSolid" Color="#0E700E" />
+      <CornerRadius x:Key="MiuCardRadius">10</CornerRadius>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, fonts:Inter#Inter" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource MiuCardBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MiuBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource MiuCardRadius}" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource MiuTextSecondary}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="Foreground" Value="{DynamicResource MiuTextSecondary}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource MiuAccent}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#004A90" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.secondary">
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="ProgressBar.size">
+    <Setter Property="Height" Value="6" />
+    <Setter Property="MinHeight" Value="6" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Background" Value="{DynamicResource MiuTrack}" />
+    <Setter Property="Foreground" Value="{StaticResource MiuAccent}" />
+    <Setter Property="Minimum" Value="0" />
+    <Setter Property="Maximum" Value="1" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem">
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MiuNavSelected}" />
+  </Style>
+  <Style Selector="ListBox.segmented">
+    <Setter Property="Background" Value="{DynamicResource MiuSubtle}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem">
+    <Setter Property="Padding" Value="14,5" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MiuCardBg}" />
+  </Style>
+  <Style Selector="ListBox.chips">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MiuBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="#EEF4FB" />
+    <Setter Property="BorderBrush" Value="{StaticResource MiuAccent}" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem">
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+</Styles>

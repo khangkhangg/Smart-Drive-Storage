@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build Miu.sln -c Release
+      - run: dotnet test Miu.sln -c Release --no-build --logger trx --results-directory TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults
+
+  # Proves every push still packages on all three systems (artifacts kept 7 days).
+  package:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows }
+          - { os: macos-latest, name: macos }
+          - { os: ubuntu-latest, name: linux }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          ./build/package-windows.ps1 -Version "0.0.0-ci.${{ github.run_number }}" -Out artifacts
+      - name: Package (macOS)
+        if: matrix.name == 'macos'
+        run: build/package-macos.sh "0.0.0-ci.${{ github.run_number }}" artifacts
+      - name: Package (Linux)
+        if: matrix.name == 'linux'
+        run: build/package-linux.sh "0.0.0-ci.${{ github.run_number }}" artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miu-${{ matrix.name }}-ci
+          path: artifacts/*
+          retention-days: 7
+          if-no-files-found: error

@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             xmlns:a="using:Miu.Core.Automation"
+             x:Class="Miu.App.Views.AutomationsView"
+             x:DataType="vm:AutomationsViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="40,32" Spacing="24">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="Automations" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
+                   Text="Let Miu look after folders on a schedule. It suggests what to clean, or cleans Safe items for you if you allow it in Settings. Everything goes to the Recycle Bin and can be undone." />
+        <TextBlock Text="{Binding Message}" Foreground="{DynamicResource MiuSafeFg}" FontWeight="SemiBold" Margin="0,6,0,0"
+                   IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="Start from a template" />
+        <ItemsControl ItemsSource="{Binding Templates}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="12" LineSpacing="12" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="a:Watch">
+              <Button Width="250" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                      Command="{Binding $parent[ItemsControl].((vm:AutomationsViewModel)DataContext).UseTemplateCommand}" CommandParameter="{Binding}">
+                <Border Classes="card" Padding="16">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="caption" Text="{Binding Path}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="muted" Text="{Binding Schedule, Converter={x:Static vm:WatchConverters.Schedule}}" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Sentence editor -->
+      <Border Classes="card" Padding="20" DataContext="{Binding Editor}" x:DataType="vm:WatchEditorViewModel">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="h2" Text="Make your own" />
+          <WrapPanel ItemSpacing="8" LineSpacing="10">
+            <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
+            <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
+            <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
+            <TextBlock Text="on day" VerticalAlignment="Center" IsVisible="{Binding ShowsDayOfMonth}" />
+            <NumericUpDown Value="{Binding DayOfMonth}" Minimum="1" Maximum="31" Increment="1" FormatString="0" Width="110" IsVisible="{Binding ShowsDayOfMonth}" />
+            <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+            <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
+            <TextBlock Text=":00, below" VerticalAlignment="Center" IsVisible="{Binding ShowsLowSpace}" />
+            <NumericUpDown Value="{Binding LowSpacePercent}" Minimum="1" Maximum="90" FormatString="0" Width="110" IsVisible="{Binding ShowsLowSpace}" />
+            <TextBlock Text="% free," VerticalAlignment="Center" IsVisible="{Binding ShowsLowSpace}" />
+            <TextBlock Text="in" VerticalAlignment="Center" />
+            <TextBox Text="{Binding Path}" MinWidth="320" />
+            <ComboBox ItemsSource="{Binding Actions}" SelectedItem="{Binding Action}" />
+            <TextBlock Text="older than" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding OlderThanDays}" Minimum="0" Maximum="3650" FormatString="0" Width="110" />
+            <TextBlock Text="days" VerticalAlignment="Center" />
+          </WrapPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
+            <TextBox Text="{Binding Name}" Width="260" />
+          </StackPanel>
+          <TextBlock Text="{Binding Preview}" FontStyle="Italic" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding AutoCleanNote}" Foreground="{DynamicResource MiuWarnFg}" TextWrapping="Wrap"
+                     IsVisible="{Binding AutoCleanNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Button Classes="primary" Content="Save automation" Command="{Binding SaveCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h2" Text="Your automations" />
+        <TextBlock Classes="muted" Text="None yet. Pick a template above to start." IsVisible="{Binding IsEmpty}" />
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:WatchRow">
+              <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="" OffContent="" VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="muted" Text="{Binding Sentence}" TextWrapping="Wrap" />
+                    <TextBlock Classes="caption">
+                      <Run Text="{Binding NextRunText}" />
+                      <Run Text=" · " />
+                      <Run Text="{Binding LastResultText}" />
+                    </TextBlock>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="secondary" Content="Run now" Command="{Binding RunNowCommand}" />
+                    <Button Classes="secondary" Content="Edit" Command="{Binding EditCommand}" />
+                    <Button Content="Delete" Command="{Binding DeleteCommand}" Background="Transparent" Foreground="{DynamicResource MiuDangerFg}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

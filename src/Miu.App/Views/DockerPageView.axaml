@@ -1,0 +1,131 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             x:Class="Miu.App.Views.DockerPageView"
+             x:DataType="vm:DockerPageViewModel">
+  <DockPanel Margin="40,32,40,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="h1" Text="Docker" />
+        <Button Grid.Column="1" Classes="secondary" Content="Refresh" Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}" />
+      </Grid>
+      <TextBlock Classes="muted" TextWrapping="Wrap"
+                 Text="Every container, image and volume on this computer. Start, stop, pause and restart containers, read their logs, and delete what you don't need. Deleting in Docker can't be undone, so Miu asks twice and never deletes volumes that are in use." />
+      <TextBlock Classes="muted" Text="{Binding Summary}" IsVisible="{Binding IsAvailable}" />
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,0,0,12">
+      <ListBox Classes="segmented" ItemsSource="{Binding Views}" SelectedItem="{Binding View}" HorizontalAlignment="Left" IsVisible="{Binding IsAvailable}">
+        <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+      </ListBox>
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}" IsVisible="{Binding MessageIsError}" />
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" IsVisible="{Binding !MessageIsError}" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" MinHeight="3" />
+    </StackPanel>
+
+    <!-- Logs -->
+    <Border DockPanel.Dock="Bottom" Classes="card" Padding="16" Margin="0,12,0,0" IsVisible="{Binding HasLogs}" MaxHeight="320">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+          <TextBlock Text="{Binding LogsTitle}" FontWeight="SemiBold" />
+          <Button Grid.Column="1" Classes="secondary" Content="Close" Command="{Binding CloseLogsCommand}" />
+        </Grid>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto">
+          <SelectableTextBlock Text="{Binding LogsText}" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="11" />
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <Panel>
+      <!-- Containers -->
+      <ScrollViewer IsVisible="{Binding IsContainers}">
+        <ItemsControl ItemsSource="{Binding Containers}" IsVisible="{Binding IsAvailable}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ContainerRow">
+              <Border Classes="card" Padding="16,12" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                      <Border Background="{Binding StateBg}" CornerRadius="9" Padding="8,1">
+                        <TextBlock Text="{Binding StateText}" Foreground="{Binding StateFg}" FontSize="11" FontWeight="SemiBold" />
+                      </Border>
+                      <TextBlock Classes="caption" Text="{Binding Project}" IsVisible="{Binding HasProject}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Classes="caption" Text="{Binding Image}" />
+                    <TextBlock Classes="caption">
+                      <Run Text="{Binding Status}" />
+                      <Run Text="  " />
+                      <Run Text="{Binding PortsText}" />
+                    </TextBlock>
+                  </StackPanel>
+                  <WrapPanel Grid.Column="1" ItemSpacing="6" LineSpacing="6" VerticalAlignment="Center" HorizontalAlignment="Right" MaxWidth="520">
+                    <Button Classes="secondary" Content="Start" Command="{Binding StartCommand}" IsVisible="{Binding CanStart}" />
+                    <Button Classes="secondary" Content="Resume" Command="{Binding ResumeCommand}" IsVisible="{Binding CanResume}" />
+                    <Button Classes="secondary" Content="Pause" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" />
+                    <Button Classes="secondary" Content="Restart" Command="{Binding RestartCommand}" IsVisible="{Binding CanStop}" />
+                    <Button Classes="secondary" Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding CanStop}" />
+                    <Button Classes="secondary" Content="Open in browser" Command="{Binding OpenPortCommand}" IsVisible="{Binding HasPort}" />
+                    <Button Classes="secondary" Content="Logs" Command="{Binding LogsCommand}" />
+                    <Button Classes="secondary" Content="{Binding DeleteText}" Command="{Binding DeleteCommand}" Foreground="{DynamicResource MiuDangerFg}" />
+                    <Button Classes="secondary" Content="Cancel" Command="{Binding CancelDeleteCommand}" IsVisible="{Binding ConfirmingDelete}" />
+                  </WrapPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- Images -->
+      <ScrollViewer IsVisible="{Binding IsImages}">
+        <ItemsControl ItemsSource="{Binding Images}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ImageRow">
+              <Border Classes="card" Padding="16,12" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Classes="caption" Text="{Binding Details}" />
+                    <TextBlock Classes="caption" Text="{Binding UsedText}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="secondary" Content="{Binding DeleteText}" Command="{Binding DeleteCommand}" IsEnabled="{Binding CanDelete}"
+                            ToolTip.Tip="An image in use can't be deleted: delete its containers first." Foreground="{DynamicResource MiuDangerFg}" />
+                    <Button Classes="secondary" Content="Cancel" Command="{Binding CancelDeleteCommand}" IsVisible="{Binding ConfirmingDelete}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- Volumes -->
+      <ScrollViewer IsVisible="{Binding IsVolumes}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Volumes hold data that outlives containers, such as databases. Deleting one deletes that data for good. Volumes in use can't be deleted." />
+          <ItemsControl ItemsSource="{Binding Volumes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:VolumeRow">
+                <Border Classes="card" Padding="16,12" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Classes="caption" Text="{Binding Details}" />
+                      <TextBlock Classes="caption" Text="{Binding UsedText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Button Classes="secondary" Content="{Binding DeleteText}" Command="{Binding DeleteCommand}" IsEnabled="{Binding CanDelete}" Foreground="{DynamicResource MiuDangerFg}" />
+                      <Button Classes="secondary" Content="Cancel" Command="{Binding CancelDeleteCommand}" IsVisible="{Binding ConfirmingDelete}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </Panel>
+  </DockPanel>
+</UserControl>

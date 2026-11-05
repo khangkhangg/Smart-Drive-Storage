@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             x:Class="Miu.App.Views.RulesView"
+             x:DataType="vm:RulesViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="40,32" Spacing="22">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+          <Button Classes="secondary" Content="Import…" Click="OnImport" />
+          <Button Classes="secondary" Content="Export…" Click="OnExport" />
+        </StackPanel>
+        <StackPanel Spacing="4">
+          <TextBlock Classes="h1" Text="Rules engine" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="680" HorizontalAlignment="Left"
+                     Text="Every Keep or Delete you make, and why, teaches Miu. Rules decide the safety badge on each file and folder. Protected system folders always win." />
+        </StackPanel>
+      </DockPanel>
+      <TextBlock Text="{Binding Message}" Foreground="{DynamicResource MiuSafeFg}" FontWeight="SemiBold" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <UniformGrid Columns="4">
+        <Border Classes="card" Margin="0,0,10,0"><StackPanel Spacing="2"><TextBlock Classes="muted" Text="Built-in rules" /><TextBlock Text="{Binding BuiltInCount}" FontSize="26" FontWeight="SemiBold" /><TextBlock Classes="caption" Text="Windows, browsers, dev tools" /></StackPanel></Border>
+        <Border Classes="card" Margin="5,0"><StackPanel Spacing="2"><TextBlock Classes="muted" Text="Learned from you" /><TextBlock Text="{Binding LearnedCount}" FontSize="26" FontWeight="SemiBold" /><TextBlock Classes="caption" Text="Suggestions you turned on" /></StackPanel></Border>
+        <Border Classes="card" Margin="5,0"><StackPanel Spacing="2"><TextBlock Classes="muted" Text="Your choices" /><TextBlock Text="{Binding YourCount}" FontSize="26" FontWeight="SemiBold" /><TextBlock Classes="caption" Text="Keep / OK to delete" /></StackPanel></Border>
+        <Border Classes="card" Margin="10,0,0,0"><StackPanel Spacing="2"><TextBlock Classes="muted" Text="Waiting for your OK" /><TextBlock Text="{Binding PendingCount}" FontSize="26" FontWeight="SemiBold" /><TextBlock Classes="caption" Text="Patterns Miu spotted" /></StackPanel></Border>
+      </UniformGrid>
+
+      <StackPanel Spacing="10" IsVisible="{Binding HasSuggestions}">
+        <TextBlock Classes="h2" Text="Suggested rules" />
+        <ItemsControl ItemsSource="{Binding Suggestions}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SuggestionRow">
+              <Border Classes="card" Padding="16,14" Margin="0,0,0,10">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                  <Border Width="36" Height="36" CornerRadius="18" Background="#EEF4FB" Margin="0,0,14,0" VerticalAlignment="Center">
+                    <Path Data="M9,18 L15,18 M10,21 L14,21 M12,3 A6,6 0 0 0 8,13.5 C8.8,14.3 9,15 9,16 L15,16 C15,15 15.2,14.3 16,13.5 A6,6 0 0 0 12,3 Z"
+                          Stroke="{StaticResource MiuAccent}" StrokeThickness="1.8" Width="18" Height="18" Stretch="Uniform" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
+                    <TextBlock Classes="muted" Text="{Binding Evidence}" TextWrapping="Wrap" />
+                    <TextBlock Classes="caption" Text="{Binding ConfidenceText}" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Classes="secondary" Content="Not now" Command="{Binding NotNowCommand}" Margin="8,0" VerticalAlignment="Center" />
+                  <Button Grid.Column="3" Classes="primary" Content="Turn on" Command="{Binding TurnOnCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <DockPanel>
+        <ListBox DockPanel.Dock="Right" Classes="segmented" ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}">
+          <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+          <ListBox.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" FontSize="13" /></DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock Classes="h2" Text="All rules" VerticalAlignment="Center" />
+      </DockPanel>
+      <Border Classes="card" Padding="0">
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RuleRow">
+              <Border BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1" Padding="16,10">
+                <Grid ColumnDefinitions="3*,110,3*,90,Auto,Auto">
+                  <TextBlock Text="{Binding Pattern}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <Border Grid.Column="1" Background="{Binding VerdictBg}" CornerRadius="9" Padding="7,1" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0">
+                    <TextBlock Text="{Binding VerdictText}" Foreground="{Binding VerdictFg}" FontSize="11" FontWeight="SemiBold" />
+                  </Border>
+                  <TextBlock Grid.Column="2" Classes="muted" Text="{Binding Reason}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SourceText}" VerticalAlignment="Center" Margin="8,0" />
+                  <ToggleSwitch Grid.Column="4" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEdit}" OnContent="" OffContent="" VerticalAlignment="Center" />
+                  <Button Grid.Column="5" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanEdit}" Background="Transparent" Foreground="{DynamicResource MiuDangerFg}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

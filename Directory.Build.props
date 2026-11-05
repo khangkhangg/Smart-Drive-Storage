@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Authors>Miu Smart Storage contributors</Authors>
+    <Product>Miu Smart Storage</Product>
+    <Version>0.1.0</Version>
+    <Company>Khang · duykhang.com</Company>
+  </PropertyGroup>
+</Project>

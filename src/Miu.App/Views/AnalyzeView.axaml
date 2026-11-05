@@ -1,0 +1,327 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             xmlns:c="using:Miu.App.Controls"
+             x:Class="Miu.App.Views.AnalyzeView"
+             x:DataType="vm:AnalyzeViewModel">
+  <DockPanel>
+    <!-- Toolbar -->
+    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1" Padding="24,14">
+      <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
+        <TextBox Text="{Binding PathInput}" Watermark="Folder or drive to scan, e.g. C:\ or ~/code" Height="36" VerticalContentAlignment="Center" />
+        <Button Grid.Column="1" Classes="secondary" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" IsEnabled="{Binding IsIdle}" />
+        <Panel Grid.Column="2" Margin="8,0,0,0">
+          <Button Classes="primary" Content="Scan" Command="{Binding ScanCommand}" IsVisible="{Binding IsIdle}" />
+          <Button Classes="secondary" Content="Cancel" Command="{Binding CancelScanCommand}" IsVisible="{Binding IsScanning}" />
+        </Panel>
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
+          <ProgressBar IsIndeterminate="True" Width="120" IsVisible="{Binding IsScanning}" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding ProgressText}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding TotalText}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Breadcrumb -->
+    <Border DockPanel.Dock="Top" Padding="16,8" IsVisible="{Binding HasResult}">
+      <DockPanel>
+      <ListBox DockPanel.Dock="Right" Classes="segmented" ItemsSource="{Binding Views}" SelectedItem="{Binding ViewMode}">
+        <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" FontSize="13" /></DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Command="{Binding GoUpCommand}" ToolTip.Tip="Up one level" Background="Transparent" Padding="8,4">
+          <Path Data="M15,6 L9,12 L15,18" Stroke="{DynamicResource MiuText}" StrokeThickness="2" Width="14" Height="14" Stretch="Uniform" />
+        </Button>
+        <ItemsControl ItemsSource="{Binding Breadcrumbs}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:Crumb">
+              <StackPanel Orientation="Horizontal">
+                <Button Content="{Binding Name}" Background="Transparent" Padding="6,4" FontSize="13"
+                        Command="{Binding $parent[ItemsControl].((vm:AnalyzeViewModel)DataContext).GoToCrumbCommand}" CommandParameter="{Binding}" />
+                <TextBlock Text="›" Classes="muted" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Empty state -->
+    <StackPanel IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="460">
+      <TextBlock Classes="h2" Text="Nothing scanned yet" HorizontalAlignment="Center" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                 Text="Type a folder above or press Browse, then Scan. Miu only reads your files — it never deletes anything without asking." />
+    </StackPanel>
+
+    <!-- Results -->
+    <Grid ColumnDefinitions="2*,3*,Auto,380" IsVisible="{Binding HasResult}">
+      <ListBox Classes="rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent"
+               SelectionMode="Multiple" SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
+               DoubleTapped="OnRowDoubleTapped" Margin="8,0,0,8" IsVisible="{Binding IsFoldersView}">
+        <ListBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" InputGesture="Enter" />
+            <MenuItem Header="{Binding RevealLabel}" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Search the web for this name" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                      ToolTip.Tip="Opens a Google search for the file or folder name only. The path is never sent." />
+            <Separator />
+            <MenuItem Header="Copy path" Click="OnCopyPath" />
+            <MenuItem Header="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}" InputGesture="Space" />
+            <Separator />
+            <MenuItem Header="Keep — never suggest" Command="{Binding TeachKeepCommand}" />
+            <MenuItem Header="Always OK to delete" Command="{Binding TeachOkCommand}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:NodeItemViewModel">
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+              <Path Data="{Binding Glyph}" Stroke="#B07E00" StrokeThickness="1.6" Width="16" Height="16" Stretch="Uniform" Margin="0,0,10,0" VerticalAlignment="Center" StrokeJoin="Round" />
+              <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                <Border Background="{Binding BadgeBg}" CornerRadius="9" Padding="7,1" IsVisible="{Binding ShowsBadge}">
+                  <TextBlock Text="{Binding BadgeText}" Foreground="{Binding BadgeFg}" FontSize="11" FontWeight="SemiBold" />
+                </Border>
+                <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="13" MinWidth="64" TextAlignment="Right" VerticalAlignment="Center" />
+              </StackPanel>
+              <ProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="size" Value="{Binding Fraction}" Margin="0,6,0,0" Height="4" MinHeight="4" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <Border Grid.Column="1" Margin="8,0,8,12" CornerRadius="8" ClipToBounds="True" IsVisible="{Binding IsFoldersView}">
+        <c:TreemapControl Items="{Binding Items}" SelectedItem="{Binding Selected}" OpenCommand="{Binding OpenCommand}" />
+      </Border>
+
+      <!-- Types -->
+      <ScrollViewer Grid.ColumnSpan="2" IsVisible="{Binding IsTypesView}" Margin="24,8,24,12">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="muted" Text="What kind of files take the space in this folder." />
+          <ItemsControl ItemsSource="{Binding TypeRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TypeRow">
+                <Grid ColumnDefinitions="180,*,110,110" Margin="0,6">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Brush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <ProgressBar Grid.Column="1" Classes="size" Value="{Binding Fraction}" Foreground="{Binding Brush}" Height="10" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Classes="muted" Text="{Binding FilesText}" TextAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Largest files -->
+      <ListBox Grid.ColumnSpan="2" Classes="rows" ItemsSource="{Binding LargestRows}" SelectedItem="{Binding Selected}" Background="Transparent"
+               SelectionMode="Multiple" SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
+               Margin="8,0,8,8" IsVisible="{Binding IsLargestView}">
+        <ListBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" InputGesture="Enter" />
+            <MenuItem Header="{Binding RevealLabel}" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Search the web for this name" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                      ToolTip.Tip="Opens a Google search for the file or folder name only. The path is never sent." />
+            <Separator />
+            <MenuItem Header="Copy path" Click="OnCopyPath" />
+            <MenuItem Header="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}" InputGesture="Space" />
+            <Separator />
+            <MenuItem Header="Keep — never suggest" Command="{Binding TeachKeepCommand}" />
+            <MenuItem Header="Always OK to delete" Command="{Binding TeachOkCommand}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:NodeItemViewModel">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <StackPanel>
+                <TextBlock Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" Text="{Binding FullPath}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <Border Grid.Column="1" Background="{Binding BadgeBg}" CornerRadius="9" Padding="7,1" IsVisible="{Binding ShowsBadge}" VerticalAlignment="Center" Margin="8,0">
+                <TextBlock Text="{Binding BadgeText}" Foreground="{Binding BadgeFg}" FontSize="11" FontWeight="SemiBold" />
+              </Border>
+              <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="13" MinWidth="70" TextAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <!-- Duplicates -->
+      <DockPanel Grid.ColumnSpan="2" IsVisible="{Binding IsDuplicatesView}" Margin="24,8,24,12">
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="primary" Content="Find duplicates" Command="{Binding FindDuplicatesCommand}" />
+            <Button Classes="secondary" Content="Stop" Command="{Binding CancelDuplicatesCommand}" IsVisible="{Binding IsFindingDuplicates}" />
+            <Button Classes="secondary" Content="Add all copies to cart" Command="{Binding AddAllDuplicatesToCartCommand}" />
+            <ProgressBar IsIndeterminate="True" Width="100" IsVisible="{Binding IsFindingDuplicates}" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="{Binding DuplicatesTotalText}" FontWeight="SemiBold" FontSize="14" />
+          <TextBlock Classes="muted" Text="{Binding DuplicatesStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding DuplicateGroups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DuplicateGroupRow">
+                <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                  <StackPanel Spacing="6">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Classes="secondary" Content="Add copies to cart"
+                              Command="{Binding $parent[ItemsControl].((vm:AnalyzeViewModel)DataContext).AddGroupToCartCommand}" CommandParameter="{Binding}" />
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding WastedText}" Foreground="{DynamicResource MiuSafeFg}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Files}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DuplicateFileRow">
+                          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                            <Border Background="#E6F2E6" CornerRadius="8" Padding="6,1" Margin="0,0,8,0" IsVisible="{Binding IsKeep}">
+                              <TextBlock Text="Keep" Foreground="#0E700E" FontSize="11" FontWeight="SemiBold" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding Path}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ModifiedText}" Margin="12,0,0,0" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+
+      <!-- Drag to make the details panel wider or narrower. -->
+      <GridSplitter Grid.Column="2" Width="6" Background="Transparent" ResizeDirection="Columns" ToolTip.Tip="Drag to resize the details panel" />
+      <Border Grid.Column="3" MinWidth="300" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,0,0,0">
+        <!-- Padding goes inside the scroll area: on the ScrollViewer itself it made content wider than the panel. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <Panel Margin="20">
+        <!-- Several selected -->
+        <StackPanel Spacing="14" IsVisible="{Binding IsMultiSelection}">
+          <TextBlock Text="{Binding MultiTitle}" FontSize="20" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding MultiSizeText}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" Text="{Binding MultiNote}" TextWrapping="Wrap" />
+          <Button Classes="primary" Content="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <TextBlock Text="Teach Miu about all of them" FontWeight="SemiBold" FontSize="13" />
+          <Button Classes="secondary" Content="Keep — never suggest" Command="{Binding TeachKeepCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Classes="secondary" Content="Always OK to delete" Command="{Binding TeachOkCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </StackPanel>
+        <StackPanel Spacing="16" IsVisible="{Binding IsSingleSelection}">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="caption" Text="{Binding Selected.FullPath}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Selected.Name}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Classes="muted" Text="{Binding Selected.KindText}" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+            <TextBlock Text="{Binding Selected.SizeText}" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="1" Text="{Binding Selected.PercentText}" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Grid.Row="1" Classes="caption" Text="{Binding Selected.FilesText}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="of this folder" />
+          </Grid>
+          <TextBlock Classes="muted" Text="{Binding Selected.ModifiedText}" />
+          <Border Background="{Binding Selected.VerdictBg}" CornerRadius="8" Padding="14">
+            <StackPanel Spacing="6">
+              <TextBlock Text="{Binding Selected.VerdictText}" Foreground="{Binding Selected.VerdictFg}" FontWeight="Bold" FontSize="14" />
+              <TextBlock Text="{Binding Selected.Reason}" Foreground="#2B2B2B" FontSize="13" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Selected.RebuildText}" Foreground="#2B2B2B" FontSize="12" FontWeight="SemiBold" IsVisible="{Binding Selected.HasRebuildHint}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Selected.RuleText}" Foreground="#5D5D5D" FontSize="11" />
+            </StackPanel>
+          </Border>
+          <!-- What is this? -->
+          <Border BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="8" Padding="14" IsVisible="{Binding HasExplanation}">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="caption" Text="WHAT IS THIS?" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Explanation.Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Explanation.What}" FontSize="13" TextWrapping="Wrap" />
+              <TextBlock Classes="muted" Text="{Binding Explanation.WhyBig, StringFormat='Why it gets big: {0}'}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding Explanation.HasWhyBig}" />
+              <TextBlock Text="{Binding Explanation.GitText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding Explanation.IsWorktree}" />
+              <Border Background="{Binding Explanation.SafetyBg}" CornerRadius="6" Padding="10,8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="{Binding Explanation.SafetyLabel}" Foreground="{Binding Explanation.SafetyFg}" FontWeight="Bold" FontSize="13" />
+                  <TextBlock Text="{Binding Explanation.SafetyText}" Foreground="#2B2B2B" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+              <StackPanel Spacing="4" IsVisible="{Binding Explanation.HasSteps}">
+                <TextBlock Text="How to remove it properly" FontWeight="SemiBold" FontSize="12" />
+                <ItemsControl ItemsSource="{Binding Explanation.Steps}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ExplainStep">
+                      <Grid ColumnDefinitions="20,*" Margin="0,2">
+                        <TextBlock Text="{Binding Number, StringFormat='{}{0}.'}" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Explanation.Commands}" IsVisible="{Binding Explanation.HasCommands}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ExplainCommandRow">
+                    <StackPanel Spacing="2" Margin="0,4">
+                      <TextBlock Classes="caption" Text="{Binding Label}" />
+                      <Grid ColumnDefinitions="*,Auto">
+                        <Border Background="{DynamicResource MiuContentBg}" CornerRadius="4" Padding="8,6">
+                          <SelectableTextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="11" TextWrapping="Wrap" />
+                        </Border>
+                        <Button Grid.Column="1" Classes="secondary" Content="Copy" Padding="8,4" Margin="6,0,0,0" VerticalAlignment="Top"
+                                Click="OnCopyCommand" Tag="{Binding Text}" ToolTip.Tip="Copy this command" />
+                      </Grid>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="secondary" Content="Search the web for more" Command="{Binding Explanation.SearchCommand}"
+                      ToolTip.Tip="Searches for the name only. The path is never sent." />
+            </StackPanel>
+          </Border>
+          <Button Classes="secondary" Content="What is this? Search the web" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                  IsVisible="{Binding !HasExplanation}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Searches for the name only. The path is never sent." />
+          <!-- Teach Miu -->
+          <StackPanel Spacing="8">
+            <TextBlock Text="Teach Miu" FontWeight="SemiBold" FontSize="13" />
+            <StackPanel Spacing="6">
+              <Button Classes="secondary" Content="Keep — never suggest" Command="{Binding TeachKeepCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+              <Button Classes="secondary" Content="Always OK to delete" Command="{Binding TeachOkCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            </StackPanel>
+            <TextBlock Classes="caption" Text="Why? (optional)" />
+            <ListBox Classes="chips" ItemsSource="{Binding Reasons}" SelectedItem="{Binding SelectedReason}">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="6" LineSpacing="6" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" FontSize="12" /></DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+          <Button Classes="primary" Content="Add to cleanup cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding !SelectedInCart}" />
+          <Button Classes="secondary" Content="Remove from cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Command="{Binding RemoveFromCartCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding SelectedInCart}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="secondary" Content="Show in folder" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <Button Classes="secondary" Content="Copy path" Click="OnCopyPath" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="secondary" Content="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" />
+            <Button Classes="secondary" Content="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+          </StackPanel>
+        </StackPanel>
+        </Panel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

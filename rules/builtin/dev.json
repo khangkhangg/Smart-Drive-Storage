@@ -1,0 +1,951 @@
+{
+  "rules": [
+    {
+      "id": "dev.node_modules.idle",
+      "match": {
+        "names": [
+          "node_modules"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Installed JavaScript packages. Rebuilt by running `npm install`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "npm install"
+    },
+    {
+      "id": "dev.node_modules.active",
+      "match": {
+        "names": [
+          "node_modules"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Installed JavaScript packages. Check it is generated output before removing; it is rebuilt with `npm install`.",
+      "priority": 400,
+      "rebuildHint": "npm install"
+    },
+    {
+      "id": "dev.js-framework-build.idle",
+      "match": {
+        "names": [
+          ".next",
+          ".nuxt",
+          ".svelte-kit",
+          ".output",
+          "storybook-static"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Framework build output. Rebuilt by running `npm run build`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-framework-build.active",
+      "match": {
+        "names": [
+          ".next",
+          ".nuxt",
+          ".svelte-kit",
+          ".output",
+          "storybook-static"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Framework build output. Check it is generated output before removing; it is rebuilt with `npm run build`.",
+      "priority": 400,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-build.idle",
+      "match": {
+        "names": [
+          "dist",
+          "build",
+          "out"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Build output of a JavaScript project. Rebuilt by running `npm run build`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-build.active",
+      "match": {
+        "names": [
+          "dist",
+          "build",
+          "out"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Build output of a JavaScript project. Check it is generated output before removing; it is rebuilt with `npm run build`.",
+      "priority": 400,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-cache.idle",
+      "match": {
+        "names": [
+          ".turbo",
+          ".parcel-cache",
+          ".vite",
+          ".angular",
+          ".vercel",
+          ".netlify",
+          ".nyc_output"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json",
+          "angular.json"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Tool cache of a JavaScript project. Rebuilt by running `npm run build`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-cache.active",
+      "match": {
+        "names": [
+          ".turbo",
+          ".parcel-cache",
+          ".vite",
+          ".angular",
+          ".vercel",
+          ".netlify",
+          ".nyc_output"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json",
+          "angular.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Tool cache of a JavaScript project. Check it is generated output before removing; it is rebuilt with `npm run build`.",
+      "priority": 400,
+      "rebuildHint": "npm run build"
+    },
+    {
+      "id": "dev.js-coverage.idle",
+      "match": {
+        "names": [
+          "coverage"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Test coverage report. Rebuilt by running `npm test`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "npm test"
+    },
+    {
+      "id": "dev.js-coverage.active",
+      "match": {
+        "names": [
+          "coverage"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "package.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Test coverage report. Check it is generated output before removing; it is rebuilt with `npm test`.",
+      "priority": 400,
+      "rebuildHint": "npm test"
+    },
+    {
+      "id": "dev.python-venv.idle",
+      "match": {
+        "names": [
+          ".venv",
+          "venv",
+          "env",
+          ".env"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "requirements*.txt",
+          "pyproject.toml",
+          "Pipfile",
+          "Pipfile.lock",
+          "poetry.lock",
+          "uv.lock",
+          "setup.py"
+        ],
+        "requiresChildMarker": [
+          "pyvenv.cfg"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Python virtual environment. Rebuilt by running `python -m venv .venv && pip install -r requirements.txt`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "python -m venv .venv && pip install -r requirements.txt"
+    },
+    {
+      "id": "dev.python-venv.active",
+      "match": {
+        "names": [
+          ".venv",
+          "venv",
+          "env",
+          ".env"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "requirements*.txt",
+          "pyproject.toml",
+          "Pipfile",
+          "Pipfile.lock",
+          "poetry.lock",
+          "uv.lock",
+          "setup.py"
+        ],
+        "requiresChildMarker": [
+          "pyvenv.cfg"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Python virtual environment. Check it is generated output before removing; it is rebuilt with `python -m venv .venv && pip install -r requirements.txt`.",
+      "priority": 400,
+      "rebuildHint": "python -m venv .venv && pip install -r requirements.txt"
+    },
+    {
+      "id": "dev.rust-target.idle",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "Cargo.toml"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Rust build output. Rebuilt by running `cargo build`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "cargo build"
+    },
+    {
+      "id": "dev.rust-target.active",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "Cargo.toml"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Rust build output. Check it is generated output before removing; it is rebuilt with `cargo build`.",
+      "priority": 400,
+      "rebuildHint": "cargo build"
+    },
+    {
+      "id": "dev.maven-target.idle",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pom.xml"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Maven build output. Rebuilt by running `mvn package`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "mvn package"
+    },
+    {
+      "id": "dev.maven-target.active",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pom.xml"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Maven build output. Check it is generated output before removing; it is rebuilt with `mvn package`.",
+      "priority": 400,
+      "rebuildHint": "mvn package"
+    },
+    {
+      "id": "dev.dotnet-binobj.idle",
+      "match": {
+        "names": [
+          "bin",
+          "obj"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "*.csproj",
+          "*.fsproj",
+          "*.vbproj",
+          "*.sln",
+          "*.slnx"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": ".NET build output. Rebuilt by running `dotnet build`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "dotnet build"
+    },
+    {
+      "id": "dev.dotnet-binobj.active",
+      "match": {
+        "names": [
+          "bin",
+          "obj"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "*.csproj",
+          "*.fsproj",
+          "*.vbproj",
+          "*.sln",
+          "*.slnx"
+        ]
+      },
+      "verdict": "Review",
+      "reason": ".NET build output. Check it is generated output before removing; it is rebuilt with `dotnet build`.",
+      "priority": 400,
+      "rebuildHint": "dotnet build"
+    },
+    {
+      "id": "dev.gradle-cache.idle",
+      "match": {
+        "names": [
+          ".gradle"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "build.gradle",
+          "build.gradle.kts",
+          "settings.gradle",
+          "settings.gradle.kts"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Gradle project cache. Rebuilt by running `gradle build`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "gradle build"
+    },
+    {
+      "id": "dev.gradle-cache.active",
+      "match": {
+        "names": [
+          ".gradle"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "build.gradle",
+          "build.gradle.kts",
+          "settings.gradle",
+          "settings.gradle.kts"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Gradle project cache. Check it is generated output before removing; it is rebuilt with `gradle build`.",
+      "priority": 400,
+      "rebuildHint": "gradle build"
+    },
+    {
+      "id": "dev.gradle-build.idle",
+      "match": {
+        "names": [
+          "build"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "build.gradle",
+          "build.gradle.kts",
+          "settings.gradle",
+          "settings.gradle.kts"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Gradle build output. Rebuilt by running `gradle build`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "gradle build"
+    },
+    {
+      "id": "dev.gradle-build.active",
+      "match": {
+        "names": [
+          "build"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "build.gradle",
+          "build.gradle.kts",
+          "settings.gradle",
+          "settings.gradle.kts"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Gradle build output. Check it is generated output before removing; it is rebuilt with `gradle build`.",
+      "priority": 400,
+      "rebuildHint": "gradle build"
+    },
+    {
+      "id": "dev.terraform.idle",
+      "match": {
+        "names": [
+          ".terraform"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "*.tf"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Terraform providers and modules. Rebuilt by running `terraform init`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "terraform init"
+    },
+    {
+      "id": "dev.terraform.active",
+      "match": {
+        "names": [
+          ".terraform"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "*.tf"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Terraform providers and modules. Check it is generated output before removing; it is rebuilt with `terraform init`.",
+      "priority": 400,
+      "rebuildHint": "terraform init"
+    },
+    {
+      "id": "dev.dart-tool.idle",
+      "match": {
+        "names": [
+          ".dart_tool"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pubspec.yaml"
+        ],
+        "projectIdleDays": 14
+      },
+      "verdict": "Safe",
+      "reason": "Flutter/Dart tool cache. Rebuilt by running `flutter pub get`. Project idle for 14+ days.",
+      "priority": 600,
+      "rebuildHint": "flutter pub get"
+    },
+    {
+      "id": "dev.dart-tool.active",
+      "match": {
+        "names": [
+          ".dart_tool"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pubspec.yaml"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Flutter/Dart tool cache. Check it is generated output before removing; it is rebuilt with `flutter pub get`.",
+      "priority": 400,
+      "rebuildHint": "flutter pub get"
+    },
+    {
+      "id": "dev.dart-build.idle",
+      "match": {
+        "names": [
+          "build"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pubspec.yaml"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Flutter build output. Rebuilt by running `flutter build`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "flutter build"
+    },
+    {
+      "id": "dev.dart-build.active",
+      "match": {
+        "names": [
+          "build"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "pubspec.yaml"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Flutter build output. Check it is generated output before removing; it is rebuilt with `flutter build`.",
+      "priority": 400,
+      "rebuildHint": "flutter build"
+    },
+    {
+      "id": "dev.go-vendor.idle",
+      "match": {
+        "names": [
+          "vendor"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "go.mod"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Vendored Go modules. Rebuilt by running `go mod vendor`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "go mod vendor"
+    },
+    {
+      "id": "dev.go-vendor.active",
+      "match": {
+        "names": [
+          "vendor"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "go.mod"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Vendored Go modules. Check it is generated output before removing; it is rebuilt with `go mod vendor`.",
+      "priority": 400,
+      "rebuildHint": "go mod vendor"
+    },
+    {
+      "id": "dev.composer-vendor.idle",
+      "match": {
+        "names": [
+          "vendor"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "composer.json"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Installed PHP packages. Rebuilt by running `composer install`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "composer install"
+    },
+    {
+      "id": "dev.composer-vendor.active",
+      "match": {
+        "names": [
+          "vendor"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "composer.json"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Installed PHP packages. Check it is generated output before removing; it is rebuilt with `composer install`.",
+      "priority": 400,
+      "rebuildHint": "composer install"
+    },
+    {
+      "id": "dev.unity-library.idle",
+      "match": {
+        "names": [
+          "Library",
+          "Temp",
+          "Obj"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "ProjectSettings"
+        ],
+        "projectIdleDays": 14,
+        "requiresGitIgnored": true
+      },
+      "verdict": "Safe",
+      "reason": "Unity's generated cache. Rebuilt by running `reopen the project in Unity`. Project idle for 14+ days. Your .gitignore lists it as generated.",
+      "priority": 600,
+      "rebuildHint": "reopen the project in Unity"
+    },
+    {
+      "id": "dev.unity-library.active",
+      "match": {
+        "names": [
+          "Library",
+          "Temp",
+          "Obj"
+        ],
+        "isDir": true
+      },
+      "conditions": {
+        "requiresSiblingMarker": [
+          "ProjectSettings"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Unity's generated cache. Check it is generated output before removing; it is rebuilt with `reopen the project in Unity`.",
+      "priority": 400,
+      "rebuildHint": "reopen the project in Unity"
+    },
+    {
+      "id": "dev.python-cache",
+      "match": {
+        "names": [
+          "__pycache__",
+          ".pytest_cache",
+          ".mypy_cache",
+          ".ruff_cache",
+          ".tox",
+          ".hypothesis"
+        ],
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Python cache files. Python recreates them automatically.",
+      "priority": 500,
+      "rebuildHint": "automatic"
+    },
+    {
+      "id": "dev.notebook-checkpoints",
+      "match": {
+        "names": [
+          ".ipynb_checkpoints"
+        ],
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Jupyter's saved checkpoints of your notebooks (used by \"Revert to checkpoint\"). Not a cache.",
+      "priority": 500
+    },
+    {
+      "id": "dev.npm-cache",
+      "match": {
+        "path": "**/{npm-cache,.npm}/_cacache",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "npm download cache. Packages re-download on the next install.",
+      "priority": 550,
+      "rebuildHint": "npm install"
+    },
+    {
+      "id": "dev.pnpm-store",
+      "match": {
+        "path": "**/{.pnpm-store,pnpm/store}",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "pnpm package store. Packages re-download on the next install.",
+      "priority": 550,
+      "rebuildHint": "pnpm install"
+    },
+    {
+      "id": "dev.yarn-cache",
+      "match": {
+        "path": "**/{Yarn/Cache,.yarn/berry/cache,.cache/yarn}",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Yarn download cache.",
+      "priority": 550,
+      "rebuildHint": "yarn install"
+    },
+    {
+      "id": "dev.bun-cache",
+      "match": {
+        "path": "**/.bun/install/cache",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Bun download cache.",
+      "priority": 550,
+      "rebuildHint": "bun install"
+    },
+    {
+      "id": "dev.pip-cache",
+      "match": {
+        "path": "**/{pip/cache,pip/Cache,.cache/pip}",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "pip download cache.",
+      "priority": 550,
+      "rebuildHint": "pip install"
+    },
+    {
+      "id": "dev.nuget-http",
+      "match": {
+        "path": "**/NuGet/v3-cache",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "NuGet HTTP cache.",
+      "priority": 550,
+      "rebuildHint": "dotnet restore"
+    },
+    {
+      "id": "dev.go-build-cache",
+      "match": {
+        "path": "**/{.cache,Caches,AppData/Local}/go-build",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Go build cache.",
+      "priority": 550,
+      "rebuildHint": "go build"
+    },
+    {
+      "id": "dev.cargo-registry-cache",
+      "match": {
+        "path": "**/.cargo/registry/cache",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Downloaded Rust crates (compressed).",
+      "priority": 550,
+      "rebuildHint": "cargo build"
+    },
+    {
+      "id": "dev.gradle-caches",
+      "match": {
+        "path": "**/.gradle/caches",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Gradle dependency cache shared by all projects.",
+      "priority": 550,
+      "rebuildHint": "gradle build"
+    },
+    {
+      "id": "dev.playwright",
+      "match": {
+        "path": "**/ms-playwright",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Browsers downloaded by Playwright.",
+      "priority": 550,
+      "rebuildHint": "npx playwright install"
+    },
+    {
+      "id": "dev.puppeteer",
+      "match": {
+        "path": "**/.cache/puppeteer",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Browsers downloaded by Puppeteer.",
+      "priority": 550,
+      "rebuildHint": "npm install"
+    },
+    {
+      "id": "dev.cypress",
+      "match": {
+        "path": "**/Cypress/Cache",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Cypress test runner binaries.",
+      "priority": 550,
+      "rebuildHint": "npx cypress install"
+    },
+    {
+      "id": "dev.huggingface",
+      "match": {
+        "path": "**/.cache/huggingface",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Downloaded AI models (Hugging Face). Big, but slow to download again.",
+      "priority": 550
+    },
+    {
+      "id": "dev.ollama",
+      "match": {
+        "path": "**/.ollama/models",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Local AI models (Ollama). Remove models you no longer use with `ollama rm`.",
+      "priority": 550
+    },
+    {
+      "id": "dev.lmstudio",
+      "match": {
+        "path": "**/{.lmstudio,.cache/lm-studio}/models",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "Local AI models (LM Studio).",
+      "priority": 550
+    },
+    {
+      "id": "dev.torch-hub",
+      "match": {
+        "path": "**/.cache/torch",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "PyTorch model cache.",
+      "priority": 550
+    },
+    {
+      "id": "dev.conda-pkgs",
+      "match": {
+        "path": "**/{anaconda3,miniconda3,.conda}/pkgs",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Conda package cache. Clean with `conda clean --all`.",
+      "priority": 550,
+      "rebuildHint": "conda clean --all"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "rules": [
+    {
+      "id": "linux.thumbnails",
+      "match": {
+        "path": "**/.cache/thumbnails/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Picture thumbnails. Your file manager recreates them when needed.",
+      "priority": 480
+    },
+    {
+      "id": "linux.mozilla-cache",
+      "match": {
+        "path": "**/.cache/mozilla/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Firefox's cache (not your bookmarks or passwords, which live elsewhere).",
+      "priority": 480
+    },
+    {
+      "id": "linux.chromium-cache",
+      "match": {
+        "path": "**/.cache/{google-chrome,chromium}/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Chrome / Chromium cache (not your profile).",
+      "priority": 480
+    },
+    {
+      "id": "linux.fontconfig",
+      "match": {
+        "path": "**/.cache/fontconfig/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Font cache. Rebuilt automatically.",
+      "priority": 480
+    },
+    {
+      "id": "linux.mesa-shader",
+      "match": {
+        "path": "**/.cache/mesa_shader_cache/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Graphics shader cache. Rebuilt automatically.",
+      "priority": 480
+    },
+    {
+      "id": "linux.flatpak-cache",
+      "match": {
+        "path": "**/.var/app/*/cache/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "A Flatpak app's cache folder. The app rebuilds it.",
+      "priority": 480
+    },
+    {
+      "id": "linux.snap-cache",
+      "match": {
+        "path": "**/snap/*/common/.cache/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "A Snap app's cache folder. The app rebuilds it.",
+      "priority": 480
+    },
+    {
+      "id": "linux.cache-other",
+      "match": {
+        "path": "**/.cache/*",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "An app's cache folder. Usually safe to remove (the app rebuilds it), but it may slow that app down once.",
+      "priority": 300
+    },
+    {
+      "id": "linux.old-logs",
+      "match": {
+        "path": "**/.local/share/*/logs/**"
+      },
+      "conditions": {
+        "olderThanDays": 30
+      },
+      "verdict": "Safe",
+      "reason": "Old log files.",
+      "priority": 480
+    },
+    {
+      "id": "linux.core-dumps",
+      "match": {
+        "path": "**/core.[0-9]*",
+        "isDir": false
+      },
+      "conditions": {
+        "olderThanDays": 7
+      },
+      "verdict": "Review",
+      "reason": "A program crash dump (core file). Only useful for debugging that crash.",
+      "priority": 480
+    }
+  ]
+}

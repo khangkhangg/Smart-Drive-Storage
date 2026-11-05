@@ -1,0 +1,68 @@
+{
+  "rules": [
+    {
+      "id": "dev.git-worktree",
+      "match": {
+        "path": "**/{.claude/worktrees,.worktrees,worktrees}/*",
+        "isDir": true
+      },
+      "conditions": {
+        "requiresChildMarker": [
+          ".git"
+        ]
+      },
+      "verdict": "Review",
+      "reason": "Git worktree: extra checkout of {project}. Its branch may hold work that isn't merged or pushed. Remove it with `git worktree remove`, or clean only its build folders.",
+      "priority": 950
+    },
+    {
+      "id": "db.mysql-binlog",
+      "match": {
+        "names": [
+          "binlog.[0-9]*",
+          "mysql-bin.[0-9]*",
+          "*-bin.[0-9]*",
+          "binlog.index",
+          "mysql-bin.index"
+        ],
+        "isDir": false
+      },
+      "conditions": {},
+      "verdict": "Keep",
+      "reason": "MySQL binary log. Don't delete it by hand: MySQL still lists it. Free the space with `PURGE BINARY LOGS BEFORE NOW() - INTERVAL 3 DAY;`.",
+      "priority": 950
+    },
+    {
+      "id": "db.innodb-data",
+      "match": {
+        "names": [
+          "ibdata1",
+          "ib_logfile*",
+          "ibtmp1",
+          "#innodb_redo",
+          "#innodb_temp",
+          "undo_00*",
+          "*.ibd"
+        ]
+      },
+      "conditions": {},
+      "verdict": "Keep",
+      "reason": "MySQL database files. Deleting them destroys the database: drop tables from MySQL instead.",
+      "priority": 950
+    },
+    {
+      "id": "db.postgres-wal",
+      "match": {
+        "names": [
+          "pg_wal",
+          "pg_xlog"
+        ],
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Keep",
+      "reason": "PostgreSQL's transaction log. Deleting it corrupts the database.",
+      "priority": 950
+    }
+  ]
+}

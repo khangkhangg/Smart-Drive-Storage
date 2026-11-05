@@ -1,0 +1,148 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Miu.App.ViewModels"
+        xmlns:v="using:Miu.App.Views"
+        xmlns:c="using:Miu.App.Controls"
+        x:Class="Miu.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Miu Smart Storage"
+        Icon="avares://Miu/Assets/miu-256.png"
+        Width="1360" Height="860" MinWidth="900" MinHeight="600"
+        Background="{DynamicResource MiuShellBg}"
+        TransparencyLevelHint="Mica, AcrylicBlur, None">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+1" Command="{Binding GoToPageCommand}" CommandParameter="1" />
+    <KeyBinding Gesture="Ctrl+2" Command="{Binding GoToPageCommand}" CommandParameter="2" />
+    <KeyBinding Gesture="Ctrl+3" Command="{Binding GoToPageCommand}" CommandParameter="3" />
+    <KeyBinding Gesture="Ctrl+4" Command="{Binding GoToPageCommand}" CommandParameter="4" />
+    <KeyBinding Gesture="Ctrl+5" Command="{Binding GoToPageCommand}" CommandParameter="5" />
+    <KeyBinding Gesture="Ctrl+6" Command="{Binding GoToPageCommand}" CommandParameter="6" />
+    <KeyBinding Gesture="Ctrl+7" Command="{Binding GoToPageCommand}" CommandParameter="7" />
+    <KeyBinding Gesture="Ctrl+8" Command="{Binding GoToPageCommand}" CommandParameter="8" />
+    <KeyBinding Gesture="Ctrl+9" Command="{Binding GoToPageCommand}" CommandParameter="9" />
+  </Window.KeyBindings>
+
+  <Grid ColumnDefinitions="232,*">
+    <DockPanel Grid.Column="0" Margin="12,18,12,16">
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="10,0,0,20">
+        <c:MiuLogo Width="34" Height="34" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Miu" FontSize="16" FontWeight="SemiBold" />
+          <TextBlock Text="Smart Storage" Classes="caption" />
+        </StackPanel>
+      </StackPanel>
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="16">
+          <ListBox Classes="nav" ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:NavItem">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Path Data="{Binding Icon}" Stroke="{DynamicResource MiuText}" StrokeThickness="1.7" Width="18" Height="18" Stretch="Uniform" StrokeLineCap="Round" StrokeJoin="Round" />
+                  <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <!-- Support the project -->
+          <Border Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="4,0">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Enjoying Miu? ♥" FontWeight="SemiBold" FontSize="13" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Miu is free. A small donation says thanks and helps keep it updated with new rules, fixes and features." />
+              <Button Classes="secondary" Content="☕ Buy me a coffee" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Command="{Binding OpenDonationCommand}" CommandParameter="coffee" ToolTip.Tip="buymeacoffee.com/dkhang" />
+              <Button Classes="secondary" Content="Donate with PayPal" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Command="{Binding OpenDonationCommand}" CommandParameter="paypal" ToolTip.Tip="paypal.com" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+    <Border Grid.Column="1" Background="{DynamicResource MiuContentBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0" ClipToBounds="True">
+      <DockPanel>
+        <!-- New version -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdate}" Background="{DynamicResource MiuCardBg}" Padding="20,10"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Text="{Binding UpdateText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="primary" Content="Download" Command="{Binding DownloadUpdateCommand}" Margin="12,0,0,0" />
+            <Button Grid.Column="2" Classes="secondary" Content="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="8,0,0,0" />
+          </Grid>
+        </Border>
+
+        <!-- Result banner with Undo -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasNotice}" Background="{DynamicResource MiuSafeBg}" Padding="20,12"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" DataContext="{Binding Notice}" x:DataType="vm:NoticeViewModel">
+            <Path Data="M5,12 L9,16 L19,6" Stroke="{DynamicResource MiuSafeFg}" StrokeThickness="2.4" Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0" StrokeLineCap="Round" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Message}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Text="{Binding Details}" Classes="caption" IsVisible="{Binding HasDetails}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="secondary" Content="Undo" Command="{Binding UndoCommand}" IsVisible="{Binding CanUndo}" Margin="12,0,0,0" />
+            <Button Grid.Column="3" Classes="secondary" Content="{Binding ActionLabel}" Command="{Binding RunActionCommand}" IsVisible="{Binding HasAction}" Margin="12,0,0,0" />
+            <Button Grid.Column="4" Content="✕" Command="{Binding DismissCommand}" Background="Transparent" Margin="8,0,0,0" ToolTip.Tip="Dismiss"
+                    AutomationProperties.Name="Dismiss" />
+          </Grid>
+        </Border>
+
+        <!-- Cleanup cart -->
+        <Border DockPanel.Dock="Bottom" IsVisible="{Binding Cart.HasItems}" Background="{DynamicResource MiuCardBg}" Padding="24,12"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,1,0,0">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <Path Data="M3,4 L5,4 L7.5,15 L18.5,15 L21,7 L6.5,7 M9,19 A1.5,1.5 0 1 1 8.99,19 Z M17,19 A1.5,1.5 0 1 1 16.99,19 Z"
+                  Stroke="{DynamicResource MiuText}" StrokeThickness="1.6" Width="20" Height="20" Stretch="Uniform" Margin="0,0,12,0" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="14">
+              <Run Text="{Binding Cart.CountText}" FontWeight="SemiBold" />
+              <Run Text=" · " />
+              <Run Text="{Binding Cart.TotalText}" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" />
+              <Run Text=" to free" />
+            </TextBlock>
+            <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Cart.SummaryText}" Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="3" Classes="secondary" Content="Clear" Command="{Binding Cart.ClearCommand}" Margin="0,0,8,0" />
+            <Button Grid.Column="4" Classes="primary" Content="Review &amp; Clean" Command="{Binding Cart.ReviewCommand}" Background="{StaticResource MiuSafeSolid}" />
+          </Grid>
+        </Border>
+
+      <ContentControl Content="{Binding CurrentPage}">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
+          <DataTemplate x:DataType="vm:AnalyzeViewModel"><v:AnalyzeView /></DataTemplate>
+          <DataTemplate x:DataType="vm:DevProjectsViewModel"><v:DevProjectsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:DockerPageViewModel"><v:DockerPageView /></DataTemplate>
+          <DataTemplate x:DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
+          <DataTemplate x:DataType="vm:ActivityViewModel"><v:ActivityView /></DataTemplate>
+          <DataTemplate x:DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
+          <DataTemplate x:DataType="vm:AutomationsViewModel"><v:AutomationsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:SettingsViewModel"><v:SettingsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:CloudNetworkViewModel"><v:CloudNetworkView /></DataTemplate>
+          <DataTemplate x:DataType="vm:PlaceholderViewModel">
+            <StackPanel Margin="40,32" Spacing="8">
+              <TextBlock Classes="h1" Text="{Binding Title}" />
+              <TextBlock Classes="muted" Text="{Binding Message}" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left" />
+            </StackPanel>
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+      </DockPanel>
+    </Border>
+
+    <!-- First run -->
+    <Border Grid.ColumnSpan="2" IsVisible="{Binding HasOnboarding}" Background="#66000000">
+      <ContentControl Content="{Binding Onboarding}" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="vm:OnboardingViewModel"><v:OnboardingView /></DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Border>
+
+    <!-- Review & Clean sheet -->
+    <Border Grid.ColumnSpan="2" IsVisible="{Binding IsReviewOpen}" Background="#66000000">
+      <ContentControl Content="{Binding Review}" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="vm:ReviewViewModel"><v:ReviewView /></DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Border>
+  </Grid>
+</Window>
