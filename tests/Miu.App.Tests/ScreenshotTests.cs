@@ -123,6 +123,23 @@ public class ScreenshotTests
             cn.Hour = 2;
             await cn.SaveJobCommand.ExecuteAsync(null);
             Save(window, Path.Combine(outDir, "sync.png"));
+
+            // Milestone 7: Cloud backup.
+            var cloud = new Miu.Cloud.InMemoryCloudStorage();
+            vm.Services.CloudStorageOverride = _ => cloud;
+            vm.Services.CloudAccounts.Add("s3", "Backblaze B2 · alex-backup");
+            var bk = cn.Backup;
+            bk.Load();
+            bk.FoldersText = Path.Combine(root, "Pictures") + "\n" + Path.Combine(root, "Documents");
+            bk.PlanName = "Photos & documents";
+            bk.Mode = "Back up, then free space";
+            bk.Frequency = "Every week";
+            bk.Day = DayOfWeek.Sunday;
+            bk.Hour = 1;
+            await bk.SavePlanCommand.ExecuteAsync(null);
+            tabs.SelectedIndex = 2;
+            window.Height = 1300;
+            Save(window, Path.Combine(outDir, "backup.png"));
             tabs.SelectedIndex = 0;
             window.Height = 860;
             var toast = new ToastWindow(new MiuNotification("Downloads tidy",

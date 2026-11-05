@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Miu.App.ViewModels"
              xmlns:p="using:Miu.Platform.Portable"
+             xmlns:svc="using:Miu.App.Services"
+             xmlns:data="using:Miu.Data"
              x:Class="Miu.App.Views.CloudNetworkView"
              x:DataType="vm:CloudNetworkViewModel">
   <ScrollViewer>
@@ -9,7 +11,7 @@
       <StackPanel Spacing="4">
         <TextBlock Classes="h1" Text="Cloud &amp; Network" />
         <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                   Text="Connect network drives, scan them like any folder, and keep folders in sync. Sync never deletes: files it replaces or removes are set aside in a .miu-sync-trash folder and can be put back from Activity." />
+                   Text="Back up folders to the cloud, connect network drives, and keep folders in sync. Nothing is ever simply deleted: replaced or removed files are kept as older versions or set aside, and can be put back." />
       </StackPanel>
 
       <TabControl Name="Tabs">
@@ -218,13 +220,184 @@
 
         <!-- ===== Cloud backup ===== -->
         <TabItem Header="Cloud backup">
-          <Border Classes="card" Padding="20" Margin="0,16,0,0">
-            <StackPanel Spacing="6">
-              <TextBlock Classes="h2" Text="Coming in the next milestone" />
-              <TextBlock Classes="muted" TextWrapping="Wrap"
-                         Text="Back up chosen folders to Google Drive, OneDrive, Dropbox or S3-compatible storage, then free the space on this computer once each file is safely uploaded." />
+          <StackPanel Spacing="16" Margin="0,16,0,0" DataContext="{Binding Backup}" x:DataType="vm:CloudBackupViewModel">
+            <TextBlock Text="{Binding PlanMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" IsVisible="{Binding !PlanMessageIsError}" />
+            <TextBlock Text="{Binding PlanMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E" IsVisible="{Binding PlanMessageIsError}" />
+
+            <!-- Preview -->
+            <Border Classes="card" Padding="20" IsVisible="{Binding HasPreview}" BorderBrush="{DynamicResource MiuSafeFg}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="h2" Text="{Binding Previewing.Name, StringFormat='Preview: {0}', FallbackValue=''}" />
+                <TextBlock Text="{Binding PreviewText}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding ProgressText}" IsVisible="{Binding IsRunning}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="primary" Content="Back up now" Command="{Binding RunPreviewCommand}" IsVisible="{Binding PreviewCanRun}" IsEnabled="{Binding !IsRunning}" />
+                  <Button Classes="secondary" Content="Run anyway (removed files are kept as older versions)" Command="{Binding RunAnywayCommand}" IsVisible="{Binding PreviewRefused}" IsEnabled="{Binding !IsRunning}" />
+                  <Button Classes="secondary" Content="{Binding IsRunning, Converter={x:Static vm:CloudNetworkConverters.CloseOrStop}}" Command="{Binding ClosePreviewCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Restore -->
+            <Border Classes="card" Padding="20" IsVisible="{Binding HasRestore}" BorderBrush="{DynamicResource MiuSafeFg}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="h2" Text="{Binding Restoring.Name, StringFormat='Restore from: {0}', FallbackValue=''}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBox Text="{Binding RestoreFilter}" Watermark="Search the backup" Width="320" />
+                  <Button Classes="secondary" Content="Select all shown" Command="{Binding SelectAllRestoreCommand}" />
+                </StackPanel>
+                <TextBlock Classes="caption" Text="{Binding RestoreCountText}" />
+                <ScrollViewer MaxHeight="280">
+                  <ItemsControl ItemsSource="{Binding RestoreRows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:RestoreRow">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                          <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" />
+                          <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                            <TextBlock Classes="caption" Text="{Binding Folder}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="caption" Text="{Binding Info}" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <CheckBox IsChecked="{Binding RestoreToOriginal}" Content="Put them back where they were (a different file in the way is never replaced)" />
+                <TextBox Text="{Binding RestoreFolder}" Watermark="…or restore into this folder" Width="420" HorizontalAlignment="Left" IsVisible="{Binding !RestoreToOriginal}" />
+                <TextBlock Text="{Binding RestoreMessage}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="primary" Content="Restore selected" Command="{Binding RunRestoreCommand}" IsEnabled="{Binding !IsRunning}" />
+                  <Button Classes="secondary" Content="Close" Command="{Binding CloseRestoreCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Accounts -->
+            <Border Classes="card" Padding="20">
+              <StackPanel Spacing="12">
+                <TextBlock Classes="h2" Text="Cloud accounts" />
+                <ItemsControl ItemsSource="{Binding AccountRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AccountRow">
+                      <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                        <StackPanel>
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Kind}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="secondary" Content="Disconnect" Command="{Binding DisconnectCommand}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="muted" Text="Connect where your backups should go. Miu only gets access to its own folder." />
+                <ItemsControl ItemsSource="{Binding Providers}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="10" LineSpacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="svc:CloudProviderChoice">
+                      <Button Classes="secondary" Padding="14,8" ToolTip.Tip="{Binding Note}"
+                              Command="{Binding $parent[ItemsControl].((vm:CloudBackupViewModel)DataContext).ConnectOAuthCommand}" CommandParameter="{Binding}">
+                        <StackPanel Spacing="1">
+                          <TextBlock Text="{Binding Name, StringFormat='Connect {0}'}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Note}" MaxWidth="230" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Expander Header="S3-compatible storage (AWS, Backblaze B2, Wasabi, Cloudflare R2, MinIO)" HorizontalAlignment="Stretch">
+                  <StackPanel Spacing="10">
+                    <WrapPanel ItemSpacing="10" LineSpacing="10">
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Endpoint" /><TextBox Text="{Binding S3Endpoint}" Width="330" /></StackPanel>
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Region" /><TextBox Text="{Binding S3Region}" Width="140" /></StackPanel>
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Bucket" /><TextBox Text="{Binding S3Bucket}" Width="200" /></StackPanel>
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Access key ID" /><TextBox Text="{Binding S3AccessKey}" Width="220" /></StackPanel>
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Secret key" /><TextBox Text="{Binding S3SecretKey}" PasswordChar="●" Width="260" /></StackPanel>
+                      <StackPanel Spacing="4"><TextBlock Classes="caption" Text="Name (optional)" /><TextBox Text="{Binding S3Name}" Width="200" /></StackPanel>
+                    </WrapPanel>
+                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Tip: create a key that can only use this one bucket. The secret key is kept in your system's secure store." />
+                    <Button Classes="primary" Content="Test and connect" Command="{Binding ConnectS3Command}" IsEnabled="{Binding !IsConnecting}" HorizontalAlignment="Left" />
+                  </StackPanel>
+                </Expander>
+                <TextBlock Text="{Binding AccountMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" IsVisible="{Binding !AccountMessageIsError}" />
+                <TextBlock Text="{Binding AccountMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E" IsVisible="{Binding AccountMessageIsError}" />
+              </StackPanel>
+            </Border>
+
+            <!-- Plan editor -->
+            <Border Classes="card" Padding="20" IsVisible="{Binding HasAccounts}">
+              <StackPanel Spacing="12">
+                <TextBlock Classes="h2" Text="New backup plan" />
+                <WrapPanel ItemSpacing="10" LineSpacing="10">
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="caption" Text="Folders to back up (one per line)" />
+                    <TextBox Text="{Binding FoldersText}" AcceptsReturn="True" Height="76" Width="380" Watermark="C:\Users\you\Pictures&#10;C:\Users\you\Documents" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="caption" Text="Account" />
+                    <ComboBox ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount}" Width="230">
+                      <ComboBox.ItemTemplate><DataTemplate x:DataType="data:CloudAccount"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Classes="caption" Text="Cloud folder" Margin="0,6,0,0" />
+                    <TextBox Text="{Binding RemoteFolder}" Width="230" />
+                  </StackPanel>
+                </WrapPanel>
+                <WrapPanel ItemSpacing="8" LineSpacing="10">
+                  <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" />
+                  <TextBlock Text="for files untouched for" VerticalAlignment="Center" IsVisible="{Binding IsFreeMode}" />
+                  <NumericUpDown Value="{Binding FreeAfterDays}" Minimum="7" Maximum="3650" FormatString="0" Width="110" IsVisible="{Binding IsFreeMode}" />
+                  <TextBlock Text="days," VerticalAlignment="Center" IsVisible="{Binding IsFreeMode}" />
+                  <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
+                  <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
+                  <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
+                  <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                  <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
+                  <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                </WrapPanel>
+                <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" />
+                <WrapPanel ItemSpacing="8" LineSpacing="10">
+                  <TextBlock Text="Keep" VerticalAlignment="Center" />
+                  <NumericUpDown Value="{Binding KeepVersions}" Minimum="1" Maximum="100" FormatString="0" Width="100" />
+                  <TextBlock Text="older versions of each file · limit upload speed to" VerticalAlignment="Center" />
+                  <NumericUpDown Value="{Binding BandwidthKBps}" Minimum="0" Maximum="1000000" Increment="100" FormatString="0" Width="130" />
+                  <TextBlock Text="KB/s (0 = no limit)" VerticalAlignment="Center" />
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
+                  <TextBox Text="{Binding PlanName}" Width="260" Watermark="Photos" />
+                </StackPanel>
+                <Button Classes="primary" Content="Save and preview" Command="{Binding SavePlanCommand}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+
+            <!-- Plans -->
+            <StackPanel Spacing="10" IsVisible="{Binding HasAccounts}">
+              <TextBlock Classes="h2" Text="Your backups" />
+              <TextBlock Classes="muted" Text="None yet." IsVisible="{Binding !HasPlans}" />
+              <ItemsControl ItemsSource="{Binding Plans}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BackupPlanRow">
+                    <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="" OffContent="" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Route}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" />
+                          <TextBlock Classes="caption" Text="{Binding LastText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                          <Button Classes="secondary" Content="Preview / Run" Command="{Binding PreviewCommand}" />
+                          <Button Classes="secondary" Content="Restore" Command="{Binding RestoreCommand}" />
+                          <Button Classes="secondary" Content="Delete" Command="{Binding DeleteCommand}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </StackPanel>
-          </Border>
+          </StackPanel>
         </TabItem>
       </TabControl>
     </StackPanel>

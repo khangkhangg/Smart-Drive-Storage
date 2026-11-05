@@ -46,9 +46,12 @@ public partial class CloudNetworkViewModel : ObservableObject
     {
         _shell = shell;
         Network = new NetworkService(shell.Services);
+        Backup = new CloudBackupViewModel(shell);
         RefreshDrives();
         LoadJobs();
     }
+
+    public CloudBackupViewModel Backup { get; }
 
     public NetworkService Network { get; }
     public AppServices Services => _shell.Services;

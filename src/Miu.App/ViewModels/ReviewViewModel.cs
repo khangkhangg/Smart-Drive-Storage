@@ -1,3 +1,4 @@
+using Miu.App.Services;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -57,6 +58,15 @@ public partial class ReviewViewModel : ObservableObject
         : "Cleaning isn't available on this system yet (coming to macOS soon).";
     public bool HasAttentionRows => Rows.Any(r => r.NeedsAttention);
 
+    /// <summary>The first connected cloud account, used by "Back up first".</summary>
+    public Miu.Data.CloudAccount? BackupAccount => _shell.Services.CloudAccounts.All().FirstOrDefault();
+    public bool CanBackUpFirst => BackupAccount is not null;
+    public string BackUpFirstText => BackupAccount is { } a
+        ? $"Back up to {a.DisplayName} first (Miu cleans only after every file is uploaded and checked)"
+        : "Back up first: connect a cloud account in Cloud & Network to use this";
+
+    [ObservableProperty] private bool backUpFirst;
+    [ObservableProperty] private string backupStatus = "";
     [ObservableProperty] private string buttonText = "";
     [ObservableProperty] private string totalText = "";
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(CleanCommand))] private bool isBusy;
@@ -69,7 +79,17 @@ public partial class ReviewViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            await _shell.CleanAsync(Rows.Where(r => r.IsChecked).Select(r => r.Item).ToList(), _origin);
+            var items = Rows.Where(r => r.IsChecked).Select(r => r.Item).ToList();
+            if (BackUpFirst && BackupAccount is { } account)
+            {
+                var progress = new Progress<BackupProgress>(p => BackupStatus = $"Backing up {p.Done + 1} of {p.Total}: {p.Current}");
+                string? problem;
+                try { problem = await _shell.Automation.Backup.BackUpBeforeCleaningAsync(account, items.Select(i => i.Path).ToList(), progress, default); }
+                catch (Exception ex) when (ex is Miu.Cloud.CloudException or IOException or UnauthorizedAccessException) { problem = "Backup failed: " + ex.Message + " Nothing was cleaned."; }
+                if (problem is not null) { BackupStatus = problem; return; }
+                BackupStatus = "Backed up and checked.";
+            }
+            await _shell.CleanAsync(items, _origin);
         }
         finally { IsBusy = false; }
     }

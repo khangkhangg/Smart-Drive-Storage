@@ -18,6 +18,11 @@
         <Button Grid.Column="1" Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0" />
         <Button Grid.Column="2" Classes="primary" Content="{Binding ButtonText}" Command="{Binding CleanCommand}" Background="{StaticResource MiuSafeSolid}" />
       </Grid>
+      <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,12,0,0">
+        <CheckBox IsChecked="{Binding BackUpFirst}" IsEnabled="{Binding CanBackUpFirst}" Content="{Binding BackUpFirstText}" />
+        <TextBlock Classes="caption" Text="{Binding BackupStatus}" TextWrapping="Wrap"
+                   IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
       <ScrollViewer>
         <ItemsControl ItemsSource="{Binding Rows}">
           <ItemsControl.ItemTemplate>
