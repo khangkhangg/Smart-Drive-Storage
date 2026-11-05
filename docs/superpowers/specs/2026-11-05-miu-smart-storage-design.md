@@ -793,14 +793,14 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F7.9 Restore
 
 ### Phase 8 — Polish & Release
-- [ ] F8.1 Onboarding
-- [ ] F8.2 Explorer context menu
-- [ ] F8.3 Settings complete — partial in M4 (background, automatic cleaning, quiet hours, battery)
-- [ ] F8.4 Packaging & updates
-- [ ] F8.5 Accessibility pass
-- [ ] F8.6 Performance pass
-- [ ] F8.7 Crash & DB resilience
-- [ ] F8.8 Docs
+- [x] F8.1 Onboarding
+- [x] F8.2 Explorer context menu
+- [x] F8.3 Settings complete
+- [x] F8.4 Packaging & updates — Inno Setup / .dmg / .deb+AppImage, update check (code signing, notarization and delta updates pending)
+- [x] F8.5 Accessibility pass — contrast test, keyboard pages, names on icon buttons (full Narrator walk-through pending)
+- [x] F8.6 Performance pass — benchmark test (~53k files/s)
+- [x] F8.7 Crash & DB resilience
+- [x] F8.8 Docs
 
 ### Phase 9 — macOS & Linux
 - [ ] F9.1 macOS adapters

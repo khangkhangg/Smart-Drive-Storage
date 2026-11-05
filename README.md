@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 7 (Cloud backup)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 8 (Polish & release)**. Builds for **Windows, macOS and Linux**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -41,9 +41,13 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 |---|---|
 | ![Network drives](docs/screenshots/network.png) | ![Sync jobs](docs/screenshots/sync.png) |
 
-| Cloud backup | Notification |
+| Welcome | Cloud backup |
 |---|---|
-| ![Cloud backup](docs/screenshots/backup.png) | ![Notification](docs/screenshots/notification.png) |
+| ![Welcome](docs/screenshots/onboarding.png) | ![Cloud backup](docs/screenshots/backup.png) |
+
+| Notification | |
+|---|---|
+| ![Notification](docs/screenshots/notification.png) | |
 
 | Splash | About |
 |---|---|
@@ -143,8 +147,25 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 5. ~~**Telegram**~~ ✅
 6. ~~**Network drives and sync**~~ ✅
 7. ~~**Cloud backup**~~ ✅
-8. **Polish and release:** onboarding, installer and auto-update.
+8. ~~**Polish and release**~~ ✅ · onboarding, installers for all three systems, update check, crash and database safety.
 9. **macOS and Linux releases.**
+
+## Download
+Get the file for your system from the [latest release](https://github.com/khangkhangg/Smart-Drive-Storage/releases/latest):
+- **Windows:** the installer (`…-setup.exe`, no admin rights needed) or the portable `.zip`.
+- **macOS:** the `.dmg` for Apple silicon or Intel.
+- **Linux:** an AppImage, a `.deb` or a `.tar.gz`.
+
+See the [user guide](docs/USER-GUIDE.md) for details.
+
+**Making a release:**
+```
+git tag v0.8.0 && git push origin v0.8.0
+```
+The **Release** workflow tests and packages on all three systems and publishes the files with `SHA256SUMS.txt`. To build locally, run one of these:
+- `build/package-linux.sh <version>`
+- `build/package-macos.sh <version>` (on a Mac)
+- `pwsh build/package-windows.ps1 -Version <version>` (on Windows, with Inno Setup 6)
 
 ## Cloud sign-in setup (for builds)
 S3-compatible storage works out of the box. Google Drive, OneDrive and Dropbox need Miu's own app registrations, which have no secrets you must protect: they're public "desktop" clients that use PKCE. To enable them:
