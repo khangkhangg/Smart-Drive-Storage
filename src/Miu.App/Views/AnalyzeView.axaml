@@ -54,6 +54,13 @@
     <Grid ColumnDefinitions="2*,3*,320" IsVisible="{Binding HasResult}">
       <ListBox Classes="rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent"
                DoubleTapped="OnRowDoubleTapped" Margin="8,0,0,8">
+        <ListBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Add to cleanup cart" Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Open folder" Command="{Binding OpenCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Show in folder" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:NodeItemViewModel">
             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
@@ -97,6 +104,10 @@
               <TextBlock Text="{Binding Selected.RuleText}" Foreground="#5D5D5D" FontSize="11" />
             </StackPanel>
           </Border>
+          <Button Classes="primary" Content="Add to cleanup cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding !SelectedInCart}" />
+          <Button Classes="secondary" Content="Remove from cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Command="{Binding RemoveFromCartCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding SelectedInCart}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Classes="secondary" Content="Show in folder" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
             <Button Classes="secondary" Content="Copy path" Click="OnCopyPath" />

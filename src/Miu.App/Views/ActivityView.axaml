@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             x:Class="Miu.App.Views.ActivityView"
+             x:DataType="vm:ActivityViewModel">
+  <DockPanel Margin="40,32,40,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,20">
+      <TextBlock Classes="h1" Text="Activity" />
+      <TextBlock Classes="muted" Text="Everything Miu has cleaned. Items wait in the Recycle Bin, so you can put them back." />
+    </StackPanel>
+    <TextBlock DockPanel.Dock="Top" Classes="muted" IsVisible="{Binding IsEmpty}" Text="Nothing cleaned yet." />
+    <ScrollViewer>
+      <ItemsControl ItemsSource="{Binding Rows}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ActivityRow">
+            <Border Classes="card" Padding="18,14" Margin="0,0,0,10">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="{Binding ItemsText}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="caption">
+                    <Run Text="{Binding WhenText}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding OriginText}" />
+                  </TextBlock>
+                </StackPanel>
+                <Panel Grid.Column="1" VerticalAlignment="Center">
+                  <Button Classes="secondary" Content="Undo" Command="{Binding UndoCommand}" IsVisible="{Binding CanUndo}" />
+                  <TextBlock Text="Restored" Classes="muted" IsVisible="{Binding Undone}" />
+                </Panel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

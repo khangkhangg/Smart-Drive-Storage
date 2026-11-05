@@ -22,7 +22,8 @@ public class ScreenshotTests
         var root = DemoData.Create();
         try
         {
-            var vm = new MainWindowViewModel(AppServices.Create(":memory:"));
+            var trash = Path.Combine(Path.GetDirectoryName(root)!, "Trash"); // never the real Recycle Bin
+            var vm = new MainWindowViewModel(AppServices.Create(":memory:", new Miu.Platform.Portable.FreedesktopTrash(trash)));
             var window = new MainWindow { DataContext = vm, Width = 1360, Height = 860 };
             window.Show();
             await vm.Analyze.ScanPathAsync(root);
@@ -41,8 +42,22 @@ public class ScreenshotTests
             vm.Analyze.Selected = vm.Analyze.Items.First(i => i.Name == "node_modules");
             Save(window, Path.Combine(outDir, "analyze-project.png"));
 
+            vm.Analyze.AddToCartCommand.Execute(vm.Analyze.Selected);
+            Save(window, Path.Combine(outDir, "cart.png"));
+            vm.Cart.ClearCommand.Execute(null);
+
             vm.Navigate(vm.DevProjects);
+            await vm.DevProjects.Docker.Refresh();
             Save(window, Path.Combine(outDir, "dev-projects.png"));
+
+            vm.Navigate(vm.Home);
+            vm.Home.QuickCleanCommand.Execute(null);
+            Save(window, Path.Combine(outDir, "review.png"));
+            await vm.Review!.CleanCommand.ExecuteAsync(null);
+            Save(window, Path.Combine(outDir, "after-clean.png"));
+
+            vm.Navigate(vm.Activity);
+            Save(window, Path.Combine(outDir, "activity.png"));
 
             vm.Navigate(vm.About);
             Save(window, Path.Combine(outDir, "about.png"));

@@ -30,19 +30,63 @@
         </ListBox.ItemTemplate>
       </ListBox>
     </DockPanel>
-    <Border Grid.Column="1" Background="{DynamicResource MiuContentBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0">
+    <Border Grid.Column="1" Background="{DynamicResource MiuContentBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0" ClipToBounds="True">
+      <DockPanel>
+        <!-- Result banner with Undo -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasNotice}" Background="{DynamicResource MiuSafeBg}" Padding="20,12"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" DataContext="{Binding Notice}" x:DataType="vm:NoticeViewModel">
+            <Path Data="M5,12 L9,16 L19,6" Stroke="{DynamicResource MiuSafeFg}" StrokeThickness="2.4" Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0" StrokeLineCap="Round" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Message}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Text="{Binding Details}" Classes="caption" IsVisible="{Binding HasDetails}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="secondary" Content="Undo" Command="{Binding UndoCommand}" IsVisible="{Binding CanUndo}" Margin="12,0,0,0" />
+            <Button Grid.Column="3" Content="✕" Command="{Binding DismissCommand}" Background="Transparent" Margin="8,0,0,0" ToolTip.Tip="Dismiss" />
+          </Grid>
+        </Border>
+
+        <!-- Cleanup cart -->
+        <Border DockPanel.Dock="Bottom" IsVisible="{Binding Cart.HasItems}" Background="{DynamicResource MiuCardBg}" Padding="24,12"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,1,0,0">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <Path Data="M3,4 L5,4 L7.5,15 L18.5,15 L21,7 L6.5,7 M9,19 A1.5,1.5 0 1 1 8.99,19 Z M17,19 A1.5,1.5 0 1 1 16.99,19 Z"
+                  Stroke="{DynamicResource MiuText}" StrokeThickness="1.6" Width="20" Height="20" Stretch="Uniform" Margin="0,0,12,0" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="14">
+              <Run Text="{Binding Cart.CountText}" FontWeight="SemiBold" />
+              <Run Text=" · " />
+              <Run Text="{Binding Cart.TotalText}" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" />
+              <Run Text=" to free" />
+            </TextBlock>
+            <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Cart.SummaryText}" Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="3" Classes="secondary" Content="Clear" Command="{Binding Cart.ClearCommand}" Margin="0,0,8,0" />
+            <Button Grid.Column="4" Classes="primary" Content="Review &amp; Clean" Command="{Binding Cart.ReviewCommand}" Background="{StaticResource MiuSafeSolid}" />
+          </Grid>
+        </Border>
+
       <ContentControl Content="{Binding CurrentPage}">
         <ContentControl.DataTemplates>
           <DataTemplate x:DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
           <DataTemplate x:DataType="vm:AnalyzeViewModel"><v:AnalyzeView /></DataTemplate>
           <DataTemplate x:DataType="vm:DevProjectsViewModel"><v:DevProjectsView /></DataTemplate>
           <DataTemplate x:DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
+          <DataTemplate x:DataType="vm:ActivityViewModel"><v:ActivityView /></DataTemplate>
           <DataTemplate x:DataType="vm:PlaceholderViewModel">
             <StackPanel Margin="40,32" Spacing="8">
               <TextBlock Classes="h1" Text="{Binding Title}" />
               <TextBlock Classes="muted" Text="{Binding Message}" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left" />
             </StackPanel>
           </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+      </DockPanel>
+    </Border>
+
+    <!-- Review & Clean sheet -->
+    <Border Grid.ColumnSpan="2" IsVisible="{Binding IsReviewOpen}" Background="#66000000">
+      <ContentControl Content="{Binding Review}" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="vm:ReviewViewModel"><v:ReviewView /></DataTemplate>
         </ContentControl.DataTemplates>
       </ContentControl>
     </Border>

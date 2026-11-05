@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Miu.App.Services;
+using Miu.Core.Cleanup;
+using Miu.Core.Formatting;
 
 namespace Miu.App.ViewModels;
 
@@ -11,6 +13,9 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(AppServices services)
     {
         Services = services;
+        Cleanup = new CleanupService(services);
+        Cart = new CartViewModel(this, services.Cart);
+        Activity = new ActivityViewModel(this);
         Home = new HomeViewModel(this);
         Analyze = new AnalyzeViewModel(services, this);
         DevProjects = new DevProjectsViewModel(this);
@@ -24,6 +29,7 @@ public partial class MainWindowViewModel : ObservableObject
             new("Analyze", "M3,3 L13,3 L13,21 L3,21 Z M13,3 L21,3 L21,11 L13,11 Z M13,11 L21,11 L21,21 L13,21 Z", Analyze),
             new("Dev Projects", "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20", DevProjects),
             new("Rules", "M12,3 L20,7 L20,12 C20,17 16.5,20 12,21 C7.5,20 4,17 4,12 L4,7 Z", Rules),
+            new("Activity", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 L12,12 L15.5,14", Activity),
             new("Cloud & Network", "M7,18 A5,5 0 0 1 7,8 A6,6 0 0 1 18.5,10 A4,4 0 0 1 18,18 Z", CloudNetwork),
             new("Settings", "M12,9 A3,3 0 1 1 11.99,9 Z M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M5,5 L7,7 M17,17 L19,19 M5,19 L7,17 M17,7 L19,5", Settings),
             new("About", "M12,3 A9,9 0 1 1 11.99,3 Z M12,11 L12,17 M12,7.5 L12,8", About),
@@ -33,6 +39,9 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public AppServices Services { get; }
+    public CleanupService Cleanup { get; }
+    public CartViewModel Cart { get; }
+    public ActivityViewModel Activity { get; }
     public HomeViewModel Home { get; }
     public AnalyzeViewModel Analyze { get; }
     public DevProjectsViewModel DevProjects { get; }
@@ -44,8 +53,56 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty] private NavItem selectedNav;
     [ObservableProperty] private object currentPage;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsReviewOpen))] private ReviewViewModel? review;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNotice))] private NoticeViewModel? notice;
 
-    partial void OnSelectedNavChanged(NavItem value) => CurrentPage = value.Page;
+    public bool IsReviewOpen => Review is not null;
+    public bool HasNotice => Notice is not null;
+
+    partial void OnSelectedNavChanged(NavItem value)
+    {
+        CurrentPage = value.Page;
+        if (value.Page == Activity) Activity.Load();
+        if (value.Page == DevProjects) _ = DevProjects.Docker.Refresh();
+    }
+
+    public void OpenReview(IReadOnlyList<CartItem> items, string title, string origin)
+    {
+        if (items.Count == 0) return;
+        Review = new ReviewViewModel(this, items, title, origin);
+    }
+
+    public void CloseReview() => Review = null;
+
+    /// <summary>Cleans through the guarded Recycle Bin, then refreshes every screen and shows the result with Undo.</summary>
+    public async Task CleanAsync(IReadOnlyList<CartItem> items, string origin)
+    {
+        var outcome = await Cleanup.CleanAsync(items, Analyze.Session, origin);
+        CloseReview();
+        if (Analyze.Session is { } session)
+        {
+            Analyze.RefreshCurrent();
+            OnScanCompleted(session);
+        }
+        var message = outcome.Count == 0
+            ? "Nothing was cleaned."
+            : $"Moved {outcome.Count} {(outcome.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(outcome.FreedBytes)}) to the {Services.RecycleBinName}.";
+        var details = outcome.Failed.Count == 0 ? "" :
+            $"{outcome.Failed.Count} could not be moved: " + string.Join("; ", outcome.Failed.Take(3).Select(f => $"{Path.GetFileName(f.Path)} — {f.Reason}"));
+        Notice = new NoticeViewModel(this, message, details, outcome.ActionId);
+        if (CurrentPage == Activity) Activity.Load();
+    }
+
+    /// <summary>Puts a clean back and rescans so the screens show the restored items.</summary>
+    public async Task UndoAsync(long actionId)
+    {
+        var result = await Cleanup.UndoAsync(actionId);
+        var details = result.Failed.Count == 0 ? "" :
+            $"{result.Failed.Count} could not be restored: " + string.Join("; ", result.Failed.Take(3).Select(f => $"{Path.GetFileName(f.Path)} — {f.Reason}"));
+        Notice = new NoticeViewModel(this, $"Restored {result.Restored.Count} {(result.Restored.Count == 1 ? "item" : "items")}.", details, 0);
+        Activity.Load();
+        if (Analyze.Session is { } session && result.Restored.Count > 0) await Analyze.RescanAsync(session.Tree.RootPath);
+    }
 
     public void Navigate(object page) => SelectedNav = NavItems.First(n => n.Page == page);
 

@@ -25,7 +25,51 @@ public partial class AnalyzeViewModel : ObservableObject
         _shell = shell;
         pathInput = services.Settings.Get(SettingKeys.LastScanPath)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        services.Cart.Changed += (_, _) => CartChanged();
     }
+
+    public bool SelectedInCart => Selected is { } s && _services.Cart.Contains(s.FullPath);
+    public bool CanAddSelected => Selected is { } s && s.Verdict.Verdict != Miu.Core.Rules.Verdict.Protected && !SelectedInCart;
+
+    partial void OnSelectedChanged(NodeItemViewModel? value) => CartChanged();
+
+    private void CartChanged()
+    {
+        OnPropertyChanged(nameof(SelectedInCart));
+        OnPropertyChanged(nameof(CanAddSelected));
+        AddToCartCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanAdd(NodeItemViewModel? item) =>
+        item is not null && item.Verdict.Verdict != Miu.Core.Rules.Verdict.Protected && !_services.Cart.Contains(item.FullPath);
+
+    [RelayCommand(CanExecute = nameof(CanAdd))]
+    private void AddToCart(NodeItemViewModel? item)
+    {
+        if (item is null || !CanAdd(item)) return;
+        _services.Cart.Add(new Miu.Core.Cleanup.CartItem(item.FullPath, item.Name, item.Size, item.Verdict.Verdict, item.Reason));
+    }
+
+    [RelayCommand]
+    private void RemoveFromCart(NodeItemViewModel? item)
+    {
+        if (item is not null) _services.Cart.Remove(item.FullPath);
+    }
+
+    /// <summary>Re-reads the current folder after a clean (climbing up if it was removed itself).</summary>
+    public void RefreshCurrent()
+    {
+        if (Session is null) return;
+        var id = _current;
+        while (id > Session.Tree.Root && Session.Tree.IsRemoved(id)) id = Session.Tree.Parent(id);
+        var selectedId = Selected?.Id;
+        ShowNode(Math.Max(id, Session.Tree.Root));
+        Selected = Items.FirstOrDefault(i => i.Id == selectedId) ?? Selected;
+        var t = Session.Tree;
+        TotalText = $"{SizeFormatter.Format(t.Size(t.Root))} · {t.FileCount(t.Root):N0} files";
+    }
+
+    public Task RescanAsync(string path) => ScanPathAsync(path);
 
     public ScanSession? Session { get; private set; }
     public ObservableCollection<NodeItemViewModel> Items { get; } = [];

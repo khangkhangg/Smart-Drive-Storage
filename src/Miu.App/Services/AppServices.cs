@@ -1,6 +1,7 @@
 using Miu.Core.Cleanup;
 using Miu.Core.Rules;
 using Miu.Data;
+using Miu.Dev.Docker;
 using Miu.Platform.Abstractions;
 using Miu.Platform.Portable;
 using Miu.Platform.Windows;
@@ -21,7 +22,10 @@ public sealed class AppServices : IDisposable
         // Everything that deletes goes through the guard, at deletion time.
         Recycler = new SafeRecycler(recycleBin, guard);
         Cart = new CleanupCart(PathNormalizer.Current);
+        Docker = new DockerService(new ProcessRunner(TimeSpan.FromMinutes(10)));
     }
+
+    public DockerService Docker { get; }
 
     public MiuDatabase Database { get; }
     public SettingsRepository Settings { get; }

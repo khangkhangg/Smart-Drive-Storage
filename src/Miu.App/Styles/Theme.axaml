@@ -80,6 +80,7 @@
   <Style Selector="ProgressBar.size">
     <Setter Property="Height" Value="6" />
     <Setter Property="MinHeight" Value="6" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="CornerRadius" Value="3" />
     <Setter Property="Background" Value="{DynamicResource MiuTrack}" />
     <Setter Property="Foreground" Value="{StaticResource MiuAccent}" />

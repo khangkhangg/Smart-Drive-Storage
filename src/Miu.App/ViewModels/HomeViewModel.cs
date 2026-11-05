@@ -54,6 +54,7 @@ public partial class HomeViewModel : ObservableObject
     [ObservableProperty] private string devSummary = "";
 
     public bool HasNoScan => !HasScan;
+    public string SafeHint => $"Temp files, caches, crash dumps, old installers and rebuildable dev folders. Everything goes to the {_shell.Services.RecycleBinName} first.";
     public string LocationsText => $"{Drives.Count} {(Drives.Count == 1 ? "location" : "locations")} connected";
     public string LastScanText => _scannedAtUtc is { } at
         ? $"Last scan {HumanTime.Ago(at, DateTime.UtcNow)} · {LocationsText}"
@@ -72,6 +73,18 @@ public partial class HomeViewModel : ObservableObject
     {
         _shell.Navigate(_shell.Analyze);
         await _shell.Analyze.ScanPathAsync(HomeFolder);
+    }
+
+    private bool CanQuickClean() => HasScan && SafeTotalBytes > 0 && _shell.Services.CanClean;
+
+    /// <summary>Opens Review &amp; Clean with every 🟢 Safe item from the last scan.</summary>
+    [RelayCommand(CanExecute = nameof(CanQuickClean))]
+    private void QuickClean()
+    {
+        if (_shell.Analyze.Session is not { } s) return;
+        var items = s.SafeItems.Select(i => new Miu.Core.Cleanup.CartItem(
+            s.Tree.GetFullPath(i.NodeId), s.Tree.Name(i.NodeId), s.Tree.Size(i.NodeId), i.Verdict.Verdict, i.Verdict.Reason)).ToList();
+        _shell.OpenReview(items, "Quick Clean", "quick-clean");
     }
 
     [RelayCommand]
@@ -149,6 +162,7 @@ public partial class HomeViewModel : ObservableObject
                 SizeFormatter.Format(p.RebuildableBytes)));
 
         OnPropertyChanged(nameof(LastScanText));
+        QuickCleanCommand.NotifyCanExecuteChanged();
     }
 
     private static IEnumerable<DriveCard> DiscoverDrives()
