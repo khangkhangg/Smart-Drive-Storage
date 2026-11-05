@@ -701,7 +701,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F0.3 Avalonia shell — partial in M1 (shell; Rules/Settings are placeholders)
 - [ ] F0.4 DI, hosting, logging — partial in M1 (manual composition root, no DI container yet)
 - [x] F0.5 SQLite + migrations
-- [ ] F0.6 Credential store
+- [x] F0.6 Credential store
 
 ### Phase 1 — Scan & Analyze
 - [x] F1.1 ScanTree model
@@ -767,12 +767,12 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F4.12 Weekly digest
 
 ### Phase 5 — Telegram
-- [ ] F5.1 Pairing wizard
-- [ ] F5.2 Bot service
-- [ ] F5.3 Notifications + buttons
-- [ ] F5.4 Commands
-- [ ] F5.5 Remote-action gate
-- [ ] F5.6 Preferences
+- [x] F5.1 Pairing wizard
+- [x] F5.2 Bot service
+- [x] F5.3 Notifications + buttons
+- [x] F5.4 Commands
+- [x] F5.5 Remote-action gate
+- [x] F5.6 Preferences
 
 ### Phase 6 — Network drives
 - [ ] F6.1 Discovery

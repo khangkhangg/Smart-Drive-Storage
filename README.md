@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 4 (Background & automations)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 5 (Telegram)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -73,6 +73,11 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 - **Background mode:** a tray icon, start at sign-in, and closing keeps Miu in the tray. You can switch it off.
   - Automations pause on battery, in quiet hours, or when you pause them. A paused run is postponed, not lost.
 - **Notifications** with actions (Review, Undo), a weekly digest, **What grew this week**, and **Full in ~N weeks** on drive cards.
+- **Telegram:**
+  - Connect your own bot (from @BotFather) and pair it with a 6-digit code.
+  - Alerts arrive with **Clean now**, **Show list**, **Snooze 7 days** and **Never for this folder**.
+  - Commands: `/status /scan /suggest /pause 2h /resume /digest /help /unpair`.
+  - From Telegram, Miu only moves items that are *still* Safe to the Recycle Bin. You confirm first, buttons expire after 24 h, and every clean can be undone.
 - **For developers:** clean one project's rebuildable folders, or every idle project at once. **Docker** shows its disk usage and offers safe prunes: build cache, unused image layers and stopped containers. Volumes are never touched.
 - **Folders that hold cleanable files** are labelled with how much inside is safe, e.g. "4.8 GB to clean".
 
@@ -115,7 +120,7 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 2. **Developer tools:** ~~Docker cleanup~~ ✅ · WSL/Docker disk compaction, "Make this a rule".
 3. ~~**Learning rules**~~ ✅ · ~~duplicates, Types view~~ ✅
 4. ~~**Background and schedules**~~ ✅
-5. **Telegram:** alerts with action buttons.
+5. ~~**Telegram**~~ ✅
 6. **Network drives and cloud backup.**
 7. **macOS and Linux releases.**
 
