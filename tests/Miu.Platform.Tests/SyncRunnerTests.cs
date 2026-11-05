@@ -102,13 +102,11 @@ public sealed class SyncRunnerTests : IDisposable
         var t = SyncLister.List(Dst, default);
         var plan = SyncDiff.Plan(s.Entries, t.Entries, null, SyncMode.Mirror, Ci, DateOnly.FromDateTime(Now));
 
+        // Stopped before it finished (cancelled up front, so a fast machine can't finish the copy first).
         using var cts = new CancellationTokenSource();
-        var progress = new SyncInlineProgress(p => { if (p.Bytes > 0) cts.Cancel(); });
+        cts.Cancel();
         var runner = new SyncRunner(Src, Dst, s.Entries!, t.Entries!, Ci, Now);
-        // Cancel as soon as the first chunk is written.
-        var write = runner.RunAsync(plan, progress, cts.Token);
-        cts.CancelAfter(0);
-        await FluentActions.Awaiting(() => write).Should().ThrowAsync<OperationCanceledException>();
+        await FluentActions.Awaiting(() => runner.RunAsync(plan, null, cts.Token)).Should().ThrowAsync<OperationCanceledException>();
         File.Exists(Path.Combine(Dst, "big.bin")).Should().BeFalse();
 
         // A partial from this exact version is resumed; one from another version is thrown away.
