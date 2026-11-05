@@ -1,6 +1,7 @@
 # Miu Smart Storage — Design Spec
 
-**Date:** 2026-11-05 · **Status:** Draft for review · **Platform:** Windows 10 (22H2) / Windows 11
+**Date:** 2026-11-05 · **Status:** Approved (rev 2) · **Platform:** Windows 10 (22H2) / Windows 11 first; macOS and Linux later (Phase 9)
+**License / distribution:** Free · direct download (no Store)
 **Mockups:** https://claude.ai/artifact/5PtfhdDaUqJTD6ykYroEwN (Home, Analyze, Rules, Cloud & Network)
 
 ---
@@ -25,6 +26,12 @@
 - Local-first: no Miu server. All data stays on the PC, apart from what the user sends to their own cloud or Telegram bot.
 - Deletes go to the **Recycle Bin** by default. Permanent delete is opt-in and needs extra confirmation.
 - English UI first, with strings kept in resource files so it can be localized later.
+
+**Decisions (rev 2, from the owner)**
+- **Free**, distributed as a **direct download** (Velopack installer and auto-update). No Microsoft Store and no paid tier.
+- **AutoCleanSafe automations are off until the user turns them on once** in Settings › Automations ("Allow automatic cleaning of 🟢 Safe items").
+- **Primary audience: indie hackers and "vibe coders".** Their disks fill up with `node_modules`, framework build output, Docker images and volumes, Python venvs, and local AI models. Developer junk detection is a first-class feature (§5.11), not an add-on.
+- **Cross-platform-ready:** the UI is **Avalonia** (C#/XAML, Fluent theme) and all logic sits in OS-independent libraries. Windows ships first; macOS and Linux come in Phase 9 by adding platform adapters, without rewriting the UI.
 
 **Success criteria**
 1. A first-time user frees space safely within **60 seconds** of opening the app (Quick Clean).
@@ -57,7 +64,7 @@
 - **Network drives**: `WNetAddConnection2W` / `WNetCancelConnection2W` to map and unmap; `NetShareEnum`, WS-Discovery and mDNS to discover shares.
 - **Secrets**: Windows Credential Manager (`CredWriteW`) plus DPAPI. No tokens in plain files.
 - **Telegram**: the Bot API with **long polling** (`getUpdates`) needs no open ports and no server, and works behind NAT.
-- **.NET version:** .NET 8 support ends on **10 Nov 2026**. **Miu targets .NET 10 LTS** (supported until Nov 2028): same C#/WinUI 3 stack, longer support.
+- **.NET version:** .NET 8 support ends on **10 Nov 2026**. **Miu targets .NET 10 LTS** (supported until Nov 2028): same C# stack, longer support.
 
 ---
 
@@ -72,8 +79,8 @@
 | RAM while idle | ~25 MB (agent only) | ~25 MB | 0 when closed, 150 MB+ when open |
 | Turn off | Toggle in Settings removes the startup task | Service config (needs admin) | n/a |
 
-**Decision: A.** It has three parts:
-- **`Miu.App`**: the WinUI 3 window. It opens on demand and closes completely.
+**Decision: A.** Every OS-specific call goes through interfaces in `Miu.Platform.Abstractions` (`IScanner`, `IRecycleBin`, `ISecretStore`, `IStartupRegistration`, `INotifier`, `INetworkMapper`, `IChangeWatcher`), implemented in `Miu.Platform.Windows` now and in `Miu.Platform.MacOS` / `Miu.Platform.Linux` later. It has three parts:
+- **`Miu.App`**: the Avalonia window. It opens on demand and closes completely.
 - **`Miu.Agent`**: a headless tray process that runs schedules, watches the USN journal, polls Telegram, and runs backups and syncs.
 - **`Miu.Elevated`**: a tiny helper started with admin rights only for MFT and USN reads. It streams results back and exits.
 
@@ -82,7 +89,7 @@ They talk over **named pipes**, carrying JSON messages defined in `Miu.Contracts
 ```
 ┌──────────────┐  named pipe   ┌───────────────────────────────┐
 │  Miu.App     │◀─────────────▶│  Miu.Agent (tray, per user)   │
-│  WinUI 3 UI  │               │  Scheduler · Watchers · Jobs  │
+│  Avalonia UI │               │  Scheduler · Watchers · Jobs  │
 └──────┬───────┘               │  Telegram poller · Toasts     │
        │                       └──────┬─────────────┬──────────┘
        │ (in-proc when agent off)     │             │
@@ -107,19 +114,20 @@ When background mode is **off**, the App hosts the same services in-process, so 
 | Concern | Choice |
 |---|---|
 | Language / runtime | C# 14, **.NET 10 LTS** |
-| UI | **WinUI 3** (Windows App SDK 1.8+), Mica backdrop, Fluent controls, light/dark/high-contrast |
+| UI | **Avalonia 11** with the Fluent theme (Windows 11 look, Mica on Windows), light/dark/high-contrast. Runs on Windows, macOS and Linux. |
 | MVVM | CommunityToolkit.Mvvm (source generators) |
 | DI / hosting | Microsoft.Extensions.Hosting (App and Agent share the same composition) |
-| Tray icon | H.NotifyIcon.WinUI |
+| Tray icon | Avalonia `TrayIcon` (cross-platform) |
 | Storage | **SQLite** (Microsoft.Data.Sqlite + Dapper), WAL mode, a single file in `%LOCALAPPDATA%\Miu` |
 | Scan snapshots | Compact binary file per scan (`.miuscan`, compressed with Brotli). Folder-level aggregates also go into SQLite for trends. |
 | Hashing (duplicates) | `System.IO.Hashing.XxHash3`. SHA-256 only on request. |
-| Treemap | Custom `Win2D` CanvasControl using the squarified algorithm, GPU drawn |
+| Treemap | Custom Avalonia control drawn with Skia, squarified layout in `Miu.Core` (pure, unit-tested) |
 | Cloud | Google.Apis.Drive.v3, Microsoft.Graph (OneDrive), Dropbox.Api, AWSSDK.S3 (any S3-compatible service) |
 | Telegram | Telegram.Bot |
-| Notifications | Windows App SDK `AppNotificationManager` (toasts with buttons) |
+| Notifications | `INotifier`: Windows toast (WinRT `ToastNotificationManager`) first; macOS `UNUserNotificationCenter` and Linux libnotify in Phase 9 |
 | Logging | Serilog to rolling files, plus an in-app Activity log backed by SQLite |
-| Packaging / updates | MSIX (Store-ready) **and** an unpackaged build updated with **Velopack** |
+| Packaging / updates | **Velopack** direct-download installer with delta auto-updates (Windows now; `.dmg`/AppImage in Phase 9) |
+| Secrets | `ISecretStore`: Windows Credential Manager + DPAPI now; macOS Keychain and Linux libsecret in Phase 9 |
 | Tests | xUnit, FluentAssertions, Verify (snapshot tests); WinAppDriver/Appium for UI smoke tests |
 | CI | GitHub Actions on `windows-latest`: build, test, package |
 
@@ -186,7 +194,7 @@ Watch { path, mode: Suggest | AutoCleanSafe | NotifyOnly, schedule (cron-like: d
 - Dev projects: `node_modules` / `bin` / `obj` in projects idle for 90 days.
 - Low space guard: when a drive drops below X% free, run a suggestion scan and notify.
 
-**AutoCleanSafe only ever acts on 🟢 Safe items.** Anything else becomes a suggestion.
+**AutoCleanSafe only ever acts on 🟢 Safe items, and only after the user has turned on "Allow automatic cleaning" once in Settings.** Until then, AutoCleanSafe watches behave like Suggest. Anything that isn't Safe always becomes a suggestion.
 
 ### 5.6 "Smart and helps your life" features
 - **Space forecast:** a linear trend over snapshots, e.g. "C: will be full in about 3 weeks at this rate."
@@ -197,8 +205,54 @@ Watch { path, mode: Suggest | AutoCleanSafe | NotifyOnly, schedule (cron-like: d
 - **Forgotten big files:** large files not opened in over a year.
 - **Plain-language everything:** no jargon, every number has context ("about 9 movies' worth").
 
+### 5.11 Developer junk (indie hackers and vibe coders) — first-class
+Vibe-coding produces dozens of throwaway projects, each with hundreds of MB to GBs of rebuildable files. Miu detects them, explains them, and turns cleanup into one-tap rules.
+
+**Project detection.** A folder is a *project* when it has a marker file: `package.json`, `pnpm-lock.yaml`, `bun.lockb`, `Cargo.toml`, `pyproject.toml`, `requirements.txt`, `go.mod`, `pom.xml`, `build.gradle`, `*.csproj`/`*.sln`, `Gemfile`, `composer.json`, `pubspec.yaml`, `Dockerfile`/`compose.yaml`, `.git`.
+- **Last activity** is the newest of: the git HEAD commit time, the newest source-file mtime (excluding junk folders), and the last opened time.
+- **Idle buckets:** active (under 14 days), cooling (14–90 days), idle (over 90 days), abandoned (over 1 year).
+
+**Dev junk catalog** (built-in rules in `rules/builtin/dev.json`; all *rebuildable*):
+| Ecosystem | Folders / files | Verdict |
+|---|---|---|
+| Node / JS | `node_modules`, `.next`, `.nuxt`, `.svelte-kit`, `.turbo`, `.parcel-cache`, `.vite`, `.angular/cache`, `dist`/`build`/`out` *with a build-script marker*, `.vercel/output`, `.netlify`, `storybook-static`, `coverage` | 🟢 when the project is idle > 14 d; 🟡 when active |
+| Package caches | npm `_cacache`, pnpm store, Yarn cache, Bun cache, Deno cache | 🟢 (shows "re-downloads on next install") |
+| Python | `.venv`/`venv`/`env` (with `pyvenv.cfg`), `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, pip cache, conda `pkgs` | 🟢 |
+| Rust / Go / JVM / .NET | `target/` (with `Cargo.toml`), Cargo registry cache, Go build and mod cache, `.gradle`, `build/` (Gradle), `~/.m2` (old artifacts), `bin`/`obj` (with a project file), NuGet `http-cache` | 🟢 / 🟡 (`~/.m2`, NuGet packages) |
+| Mobile | Android `build/`, old AVD images, Gradle caches, Xcode `DerivedData` (macOS) | 🟢 / 🟡 |
+| Docker | dangling images, stopped containers, unused volumes (🟡), build cache, and on Windows the **WSL2 / Docker Desktop VHDX that never shrinks** (`docker_data.vhdx`, `ext4.vhdx`) | 🟢 cache and dangling items; 🟡 volumes; VHDX: guided "Compact" |
+| AI / ML | Hugging Face cache, Ollama models, LM Studio models, PyTorch hub, Playwright and Puppeteer browsers, Cypress cache | 🟡 (big but slow to re-download: shows size and last-used date) |
+| Misc | `.terraform`, Unity `Library/`, `.cache` in projects, editor logs, crash dumps | 🟢 / 🟡 |
+
+**Docker integration.**
+- Talks to the Docker Engine API (named pipe `//./pipe/docker_engine`, or `/var/run/docker.sock`), falling back to `docker system df -v`.
+- Shows images, containers, volumes and build cache with sizes and their last-used time.
+- Offers the same actions as `docker image prune`, `docker builder prune` and `docker container prune`. Volumes are always 🟡 and need an explicit choice.
+- **VHDX compaction wizard (Windows):**
+  1. Prune inside Docker.
+  2. `wsl --shutdown`.
+  3. `Optimize-VHD`, or `diskpart compact vdisk` when Hyper-V tools are missing.
+
+  This step needs admin rights and shows the before and after sizes. It is often the single biggest win (10–100 GB).
+
+**"Dev Projects" view** (a tab in Analyze, plus a Home card for developers):
+- A table of every project found: name, path, stack icons, last activity, total size, **rebuildable size**, and git status (uncommitted changes ⚠).
+- Row actions:
+  - **Clean rebuildables**: removes only the junk folders, never the source.
+  - **Archive project**: zips the source without junk, then optionally backs it up to the cloud and removes it locally.
+  - **Open in editor**.
+- **Bulk action:** "Clean all projects idle > 90 days: 47.3 GB".
+- **Safety:**
+  - Never touches a project with uncommitted git changes unless confirmed.
+  - Never removes source files.
+  - Shows "rebuild with `npm install`" (or the stack's own command) on every item.
+
+**One-tap rules from recommendations.** Every dev recommendation has **"Make this a rule"**. It pre-fills a rule or watch, for example: *"Every **week**, in **D:\Code**, remove **node_modules / .next / dist** in projects idle **> 30 days**"* (a Suggest watch by default, or auto once automation is allowed). Learned decisions on dev folders (§5.4) also produce such suggestions.
+
+**Dev digest line:** "Your 23 side projects hold 31 GB of rebuildable files; 18 are idle > 90 days."
+
 ### 5.7 Telegram integration
-- **Setup wizard:** (1) the user creates a bot with @BotFather and pastes the token; (2) Miu shows a 6-digit pairing code; (3) the user sends `/pair 123456` to the bot. Miu then stores **only** that `chat_id`. The token is kept in Credential Manager.
+- **Setup wizard:** (1) the user creates a bot with @BotFather and pastes the token; (2) Miu shows a 6-digit pairing code; (3) the user sends `/pair 123456` to the bot. Miu then stores **only** that `chat_id`. The token is kept in the OS secret store.
 - **Transport:** long polling from the Agent. No webhook and no open port.
 - **Messages with inline buttons**, for example:
   `🧹 Downloads has 4.2 GB of old installers (9 files).  [Clean now] [Show list] [Snooze 7d] [Never for this folder]`
@@ -218,7 +272,7 @@ Watch { path, mode: Suggest | AutoCleanSafe | NotifyOnly, schedule (cron-like: d
 
 ### 5.9 Network drives
 - **Discover:** WS-Discovery, mDNS and NetBIOS browsing, plus manual `\\server\share` entry.
-- **Map / unmap:** pick a drive letter, enter credentials (saved in Credential Manager), and choose whether to reconnect at sign-in.
+- **Map / unmap:** pick a drive letter, enter credentials (saved in the OS secret store), and choose whether to reconnect at sign-in.
 - **Scan:** uses the parallel fallback scanner with throttling, because MFT reading is not possible over SMB.
 - **Sync jobs:**
   - Modes: **one-way mirror**, **one-way copy (no delete)**, or **two-way**. Two-way keeps a conflict copy named `name (conflict YYYY-MM-DD).ext`.
@@ -227,7 +281,7 @@ Watch { path, mode: Suggest | AutoCleanSafe | NotifyOnly, schedule (cron-like: d
 
 ### 5.10 Cloud backup
 - **Providers v1:** Google Drive, OneDrive, Dropbox, and S3-compatible storage (AWS, Backblaze B2, Wasabi, Cloudflare R2).
-- **Sign-in:** OAuth 2.0 with PKCE in the system browser, using a loopback redirect. Tokens go to Credential Manager.
+- **Sign-in:** OAuth 2.0 with PKCE in the system browser, using a loopback redirect. Tokens go to the OS secret store.
 - **Backup plan:** selected folders (tri-state tree), a destination folder, a schedule, and one of these modes:
   - **Incremental copy**
   - **Mirror**
@@ -254,7 +308,7 @@ rule_suggestions(id PK, rule_json, evidence_json, confidence, status[pending|acc
 watches(id PK, path, json, enabled, next_run)
 job_runs(id PK, watch_id|plan_id|sync_id, started, finished, status, freed_bytes, summary_json)
 actions_log(id PK, ts, kind[recycle|delete|move|backup|sync|map], items_json, bytes, undo_token, origin)
-cloud_accounts(id PK, provider, display_name, cred_ref)               -- secret lives in Credential Manager
+cloud_accounts(id PK, provider, display_name, cred_ref)               -- secret lives in the OS secret store
 backup_plans(id PK, account_id, json, enabled, next_run)
 backup_manifest(plan_id, local_path, size, mtime, hash, remote_id, uploaded_at)
 network_shares(id PK, unc, letter, cred_ref, reconnect)
@@ -268,7 +322,7 @@ Migrations are versioned SQL scripts under `src/Miu.Data/Migrations/`.
 
 ## 7. UI and UX
 
-**Shell:** a NavigationView with Home · Analyze · Clean · Automations · Rules · Cloud & Network · Activity · Settings. The cleanup cart bar is always visible when it holds items.
+**Shell:** a sidebar with Home · Analyze (incl. Dev Projects) · Clean · Automations · Rules · Cloud & Network · Activity · Settings. The cleanup cart bar is always visible when it holds items.
 
 | Screen | Key elements |
 |---|---|
@@ -344,28 +398,33 @@ Smart-Drive-Storage/
 │  │  ├─ Insights/                  # Forecast, Digest, WhatGrew
 │  │  ├─ Backup/                    # BackupPlan, BackupRunner, Manifest, ICloudProvider
 │  │  └─ Sync/                      # SyncJob, SyncDiff, SyncRunner
-│  ├─ Miu.Platform/                 # Windows-only
+│  ├─ Miu.Platform.Abstractions/    # IScanner, IRecycleBin, ISecretStore, IStartupRegistration, INotifier, INetworkMapper, IChangeWatcher
+│  ├─ Miu.Platform.Portable/        # cross-platform implementations: ManagedScanner (System.IO, parallel), path guard base
+│  ├─ Miu.Platform.Windows/         # Windows-only
 │  │  ├─ Scanning/                  # FallbackScanner (FindFirstFileEx), MftClient (talks to Elevated)
-│  │  ├─ FileOps/                   # RecycleBin (IFileOperation), SafeDelete guard
+│  │  ├─ FileOps/                   # RecycleBin (IFileOperation), Windows protected paths
 │  │  ├─ Network/                   # WNetMapper, ShareDiscovery
 │  │  ├─ Security/                  # CredentialStore (CredMan + DPAPI)
-│  │  └─ System/                    # StartupTask, PowerState, IdleDetector, Elevation
+│  │  └─ System/                    # StartupTask, PowerState, IdleDetector, Elevation, VhdxCompactor
+│  ├─ (Miu.Platform.MacOS/, Miu.Platform.Linux/ — Phase 9)
+│  ├─ Miu.Dev/                      # ProjectDetector, DevJunkCatalog, DockerClient, GitStatus
 │  ├─ Miu.Elevated/                 # tiny admin exe: MFT enumerate + USN journal read → pipe
 │  ├─ Miu.Data/                     # SqliteDb, Migrations/*.sql, repositories
 │  ├─ Miu.Cloud/                    # GoogleDriveProvider, OneDriveProvider, DropboxProvider, S3Provider, OAuthLoopback
 │  ├─ Miu.Notify/                   # ToastNotifier, TelegramBotService, PairingService, RemoteActionGate
 │  ├─ Miu.Agent/                    # Program.cs (Generic Host), Tray, Scheduler, UsnWatcher, PipeServer
-│  └─ Miu.App/                      # WinUI 3
-│     ├─ App.xaml, MainWindow.xaml
+│  └─ Miu.App/                      # Avalonia (cross-platform UI)
+│     ├─ App.axaml, Views/MainWindow.axaml
 │     ├─ Views/                     # Home, Analyze, Clean, Automations, Rules, CloudNetwork, Activity, Settings, Onboarding
 │     ├─ ViewModels/
-│     ├─ Controls/                  # Treemap (Win2D), SizeBar, VerdictBadge, CartBar, ReasonChips, SentenceRuleEditor
+│     ├─ Controls/                  # Treemap (Skia), SizeBar, VerdictBadge, CartBar, ReasonChips, SentenceRuleEditor
 │     ├─ Services/                  # AgentClient (pipe), NavigationService, ThemeService
-│     ├─ Strings/en-US/Resources.resw
+│     ├─ Strings/Resources.resx
 │     └─ Assets/
 └─ tests/
    ├─ Miu.Core.Tests/
    ├─ Miu.Platform.Tests/
+   ├─ Miu.Dev.Tests/
    ├─ Miu.Data.Tests/
    ├─ Miu.Notify.Tests/
    └─ Miu.App.UiTests/
@@ -379,17 +438,19 @@ Each phase ends with something **usable** that is shipped to the owner as an int
 
 | Phase | Name | Outcome | Depends on |
 |---|---|---|---|
-| **0** | Foundation | Solution, CI, WinUI shell with navigation, theme, SQLite, logging, settings | — |
+| **0** | Foundation | Solution, CI, Avalonia shell with navigation, theme, SQLite, logging, settings | — |
 | **1** | Scan & Analyze | Fast scan (fallback scanner, then MFT), tree, treemap, types, largest files, search, snapshots | 0 |
 | **2** | Safety & Clean | Protected guard, built-in rules, verdict badges, cart, Review & Clean, Recycle Bin, Activity and undo, Quick Clean, duplicates | 1 |
+| **2D** | Developer junk | Project detection, dev junk catalog, Dev Projects view, Docker integration, VHDX compaction, "Make this a rule" | 2 |
 | **3** | Learning rules | Teach Miu, decisions, pattern miner, suggested rules, Rules page, import/export | 2 |
 | **4** | Background & Automations | Agent and tray, startup toggle, IPC, USN watcher, watched folders, schedules, templates, toasts, forecast, digest | 2 (3 optional) |
 | **5** | Telegram | Pairing wizard, notifications, inline actions, commands, remote-action gate | 4 |
 | **6** | Network drives | Discover, map, scan, sync jobs | 1, 4 |
 | **7** | Cloud backup | Providers, OAuth, plans, back-up-then-free, restore | 2, 4 |
-| **8** | Polish & Release | Onboarding, Explorer context menu, MSIX and Velopack, auto-update, accessibility pass, performance pass, docs | all |
+| **8** | Polish & Release | Onboarding, Explorer context menu, Velopack direct download, auto-update, accessibility pass, performance pass, docs | all |
+| **9** | macOS & Linux | Platform adapters, packaging (.dmg, AppImage/.deb), OS-specific junk rules | 8 |
 
-**MVP = Phases 0–2.** Phases 3–4 are what make Miu "smart"; 5–7 extend its reach; 8 is release.
+**MVP = Phases 0–2 + 2D** (developer junk is core for the target audience). Phases 3–4 are what make Miu "smart"; 5–7 extend its reach; 8 is release.
 
 ---
 
@@ -400,10 +461,10 @@ IDs are used by the prompts (§13) and the checklist (§14).
 ### Phase 0 — Foundation
 - **F0.1** Solution and projects layout, `Directory.Build.props`, nullable, analyzers, .NET 10
 - **F0.2** GitHub Actions CI: build, test and package on windows-latest
-- **F0.3** WinUI 3 shell: NavigationView, Mica, light/dark/high-contrast, title bar
+- **F0.3** Avalonia shell: sidebar navigation, Fluent theme, light/dark/high-contrast, custom title bar
 - **F0.4** DI and Generic Host shared by App and Agent; Serilog logging
 - **F0.5** SQLite database, migration runner, settings repository
-- **F0.6** Credential store (Credential Manager plus DPAPI wrapper)
+- **F0.6** `ISecretStore` + Windows implementation (Credential Manager plus DPAPI)
 
 ### Phase 1 — Scan & Analyze
 - **F1.1** `ScanTree` in-memory model (struct arrays, string pool, aggregate sizes)
@@ -412,7 +473,7 @@ IDs are used by the prompts (§13) and the checklist (§14).
 - **F1.4** Categorizer (extension and path heuristics)
 - **F1.5** Home: drive cards with usage bars and a "Scan" action
 - **F1.6** Analyze: breadcrumb, folder tree with size bars, sorting
-- **F1.7** Treemap control (Win2D, squarified, click to zoom, hover tooltips)
+- **F1.7** Treemap control (Skia, squarified, click to zoom, hover tooltips)
 - **F1.8** Types view, and Largest-files view (top 100)
 - **F1.9** Search and filter query language (`size:`, `ext:`, `older:`, `type:`)
 - **F1.10** Details pane: path, size, counts, dates, Open in Explorer, Copy path
@@ -431,6 +492,18 @@ IDs are used by the prompts (§13) and the checklist (§14).
 - **F2.10** Duplicate finder (size, then partial hash, then full hash; keep-best suggestion)
 - **F2.11** System big-file explainer (hiberfil, pagefile, WinSxS, Windows.old) with guided actions
 - **F2.12** Optional permanent delete (setting plus double confirmation)
+
+### Phase 2D — Developer junk
+- **F2D.1** `ProjectDetector`: marker files, stack detection, last activity (git HEAD, source mtimes), idle buckets
+- **F2D.2** Dev junk catalog (`rules/builtin/dev.json`) with project-aware conditions (`projectIdleDays`, `requiresMarker`)
+- **F2D.3** Git status check (uncommitted changes guard) via `git status --porcelain` or LibGit2Sharp
+- **F2D.4** Dev Projects view (table, rebuildable size, clean rebuildables, bulk idle clean)
+- **F2D.5** Global dev caches (npm/pnpm/yarn/bun, pip/conda, cargo, go, gradle, NuGet, Playwright, HF/Ollama/LM Studio)
+- **F2D.6** Docker integration (Engine API: images, containers, volumes, build cache; prune actions)
+- **F2D.7** WSL2 / Docker VHDX compaction wizard (Windows, elevated)
+- **F2D.8** "Make this a rule" from any recommendation (pre-filled rule or watch)
+- **F2D.9** Archive project (zip without junk, optional cloud backup, then remove)
+- **F2D.10** Dev digest line and Home "Dev projects" card
 
 ### Phase 3 — Learning rules
 - **F3.1** Teach Miu buttons (Keep / Always OK / Never suggest) and reason chips
@@ -486,11 +559,17 @@ IDs are used by the prompts (§13) and the checklist (§14).
 - **F8.1** Onboarding (3 steps)
 - **F8.2** Explorer context menu "Analyze with Miu"
 - **F8.3** Settings page complete (all toggles, data export, about)
-- **F8.4** Packaging: MSIX plus Velopack installer, signing, auto-update
+- **F8.4** Packaging: Velopack direct-download installer, signing, auto-update, download page
 - **F8.5** Accessibility pass (Narrator, contrast, keyboard)
 - **F8.6** Performance pass (1M-file benchmark, agent idle RAM, cold start)
 - **F8.7** Crash reporting (local), DB backup and auto-restore
 - **F8.8** User docs and README with screenshots
+
+### Phase 9 — macOS & Linux
+- **F9.1** `Miu.Platform.MacOS`: Trash, Keychain, LaunchAgent, notifications, APFS-aware scanning
+- **F9.2** `Miu.Platform.Linux`: freedesktop Trash, libsecret, systemd user service / autostart, libnotify
+- **F9.3** OS-specific junk rules (Xcode DerivedData, Homebrew cache, `~/.cache`, journald, snap/flatpak leftovers)
+- **F9.4** Packaging: notarized `.dmg`, AppImage and `.deb`
 
 ---
 
@@ -502,10 +581,10 @@ Each prompt assumes this spec is in the repo. Start every session with:
 **Phase 0**
 - **F0.1** "Create `Miu.sln` with the projects in §10 (empty), targeting .NET 10, with nullable enabled, warnings as errors, and a shared `Directory.Build.props`. Add the test projects with xUnit and FluentAssertions."
 - **F0.2** "Add `.github/workflows/ci.yml` that restores, builds and tests the solution on windows-latest, and uploads test results."
-- **F0.3** "Build the WinUI 3 shell in `Miu.App`: NavigationView with the 8 pages from §7 as empty placeholders, Mica backdrop, a custom title bar, and a theme switch for light, dark and system."
+- **F0.3** "Build the Avalonia shell in `Miu.App`: a sidebar with the pages from §7 as placeholders, the Fluent theme (Mica on Windows), a custom title bar, and a theme switch for light, dark and system."
 - **F0.4** "Wire Microsoft.Extensions.Hosting and DI into both `Miu.App` and `Miu.Agent` with a shared `AddMiuCore()` extension. Add Serilog with rolling file logs in `%LOCALAPPDATA%\Miu\logs`."
 - **F0.5** "Implement `Miu.Data`: a SQLite connection factory (WAL), a migration runner over embedded `Migrations/*.sql`, and the full schema from §6 as migration 001. Add `SettingsRepository`. Test migrations on an empty database."
-- **F0.6** "Implement `CredentialStore` in `Miu.Platform.Security` using CredWrite/CredRead/CredDelete through P/Invoke, with DPAPI for blobs. Add integration tests that write, read and delete a test credential."
+- **F0.6** "Define `ISecretStore` and implement `WindowsSecretStore` in `Miu.Platform.Windows` using CredWrite/CredRead/CredDelete through P/Invoke, with DPAPI for blobs. Add integration tests that write, read and delete a test credential."
 
 **Phase 1**
 - **F1.1** "Implement `ScanTree` in `Miu.Core.Scanning` as struct arrays with a string pool. Support AddNode, aggregate sizes bottom-up, children enumeration sorted by size, and path lookup. Write tests first, including a 1M-node benchmark."
@@ -514,7 +593,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - **F1.4** "Implement `Categorizer` (extension map plus path heuristics for AppData/Cache, Dev, Games, System) with table-driven tests."
 - **F1.5** "Build the Home page: location cards (letter, label, kind, used/free bar, status chip) bound to `VolumeService`, with a Scan all button and a per-card click that goes to Analyze."
 - **F1.6** "Build the Analyze page layout: breadcrumb, a virtualized TreeView with name, size, size bar and % columns, sorted by size, with live updates during a scan."
-- **F1.7** "Build a `Treemap` Win2D control: squarified layout, category colours from §7, labels when they fit, hover tooltip, click to select, double-click to zoom in, and back to zoom out. Unit-test the layout algorithm separately."
+- **F1.7** "Build a `Treemap` Avalonia control drawn with Skia, with the layout algorithm in `Miu.Core`: squarified layout, category colours from §7, labels when they fit, hover tooltip, click to select, double-click to zoom in, and back to zoom out. Unit-test the layout algorithm separately."
 - **F1.8** "Add the Types view (size per category as a bar list) and the Largest view (top 100 files with path, size and modified date)."
 - **F1.9** "Implement the search query parser (`size:>1GB ext:mp4,mkv older:1y type:video name:*backup*`) and filtering over ScanTree, with tests first. Wire it to the Analyze search box."
 - **F1.10** "Build the details pane: name, path, size, size on disk, file count, dates, Open in Explorer and Copy path, bound to the current selection."
@@ -534,6 +613,18 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - **F2.11** "Add the system big-file explainer cards for hiberfil, pagefile, WinSxS and Windows.old, each with plain text and a guided action button (powercfg, DISM, Settings links)."
 - **F2.12** "Add the permanent-delete setting (off by default). When it is on, show a separate red action with a typed confirmation. It still goes through the guard."
 
+**Phase 2D**
+- **F2D.1** "Implement `ProjectDetector` in `Miu.Dev`: detect projects by the marker files in §5.11, identify the stack(s), compute last activity from git HEAD time and the newest source mtime (excluding junk folders), and assign an idle bucket. Write tests first using a temp folder fixture."
+- **F2D.2** "Write `rules/builtin/dev.json` covering the §5.11 catalog. Extend rule conditions with `projectIdleDays` and `requiresMarker`, and test that each rule matches its fixture and does not match source folders."
+- **F2D.3** "Add `GitStatus` (porcelain parse) and block cleaning a project with uncommitted changes unless confirmed. Add tests."
+- **F2D.4** "Build the Dev Projects tab: project table with stack, last activity, total and rebuildable size, and git warning; row action Clean rebuildables and the bulk 'Clean all idle > N days'."
+- **F2D.5** "Add detectors for global dev caches (npm, pnpm, yarn, bun, pip, conda, cargo, go, gradle, NuGet, Playwright, Hugging Face, Ollama, LM Studio) with size and last-used, listed as recommendations."
+- **F2D.6** "Implement `DockerClient` over the Engine API (named pipe or unix socket) with a `docker system df` fallback. Show images, containers, volumes and build cache, with prune actions; volumes always need an explicit choice."
+- **F2D.7** "Implement the VHDX compaction wizard for Windows: find Docker/WSL VHDX files, prune, `wsl --shutdown`, compact via Optimize-VHD or diskpart (elevated), and show the before and after sizes."
+- **F2D.8** "Add 'Make this a rule' to every recommendation, opening the rule/watch editor pre-filled from the item (path scope, folder names, idle days)."
+- **F2D.9** "Implement Archive project: zip the source excluding the junk catalog, optionally upload through a backup plan, verify, then recycle the folder."
+- **F2D.10** "Add the dev digest line and a Home 'Dev projects' card (project count, rebuildable total, idle count)."
+
 **Phase 3**
 - **F3.1** "Add Teach Miu buttons and reason chips to the details pane and the cart items."
 - **F3.2** "Implement the `Decision` repository and `FeatureExtractor` (parent, ext, name pattern, size and age buckets, category, inGitRepo). Write tests first."
@@ -545,7 +636,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - **F3.8** "Add rules export and import (JSON file, schema-validated, preview the changes before importing)."
 
 **Phase 4**
-- **F4.1** "Create the `Miu.Agent` Generic Host exe with an H.NotifyIcon tray icon and menu (Open Miu, Quick Clean, Pause 1h / until tomorrow, Exit), single instance."
+- **F4.1** "Create the `Miu.Agent` Generic Host exe with an Avalonia `TrayIcon` and menu (Open Miu, Quick Clean, Pause 1h / until tomorrow, Exit), single instance."
 - **F4.2** "Implement `StartupTask` (a per-user Task Scheduler task at sign-in) and the Settings toggle 'Run Miu in the background'. Turning it off removes the task and stops the Agent."
 - **F4.3** "Implement named-pipe JSON IPC between App and Agent (`Miu.Contracts` messages, request/response plus events). `AgentClient` falls back to in-process services when no agent is running."
 - **F4.4** "Implement `UsnWatcher` (through Miu.Elevated or a scheduled-task elevation) that reads USN journal changes and updates `ScanTree` aggregates incrementally."
@@ -554,7 +645,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - **F4.7** "Add the automation templates gallery (5 templates from §5.5), each creating a pre-filled Watch."
 - **F4.8** "Build the sentence-style automation editor (inline dropdowns inside a sentence) plus the Automations list page with next run, last result and enable toggle."
 - **F4.9** "Implement resource guards: battery saver, fullscreen or presentation detection, quiet hours, idle-only, and below-normal CPU and I/O priority."
-- **F4.10** "Add toast notifications through AppNotificationManager with action buttons (Clean now, Review, Snooze) routed to the Agent."
+- **F4.10** "Add `INotifier` with a Windows toast implementation with action buttons (Clean now, Review, Snooze) routed to the Agent."
 - **F4.11** "Implement the `Forecast` (linear regression over snapshots per volume) and show 'Full in ~N weeks' on the Home cards."
 - **F4.12** "Implement the weekly digest (freed, grew, suggestions, backup health) as a toast and an in-app panel, sent to Telegram later."
 
@@ -588,11 +679,16 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - **F8.1** "Build the 3-step onboarding (drives, background mode, optional Telegram/cloud) that ends by starting the first scan."
 - **F8.2** "Add the Explorer context menu 'Analyze with Miu' (IExplorerCommand for Windows 11, a classic verb for Windows 10)."
 - **F8.3** "Complete the Settings page per §7, including data export and reset."
-- **F8.4** "Package as MSIX plus a Velopack installer, set up code signing in CI, and add auto-update checks."
+- **F8.4** "Package with Velopack as a direct-download installer, set up code signing in CI, publish releases on GitHub, and add auto-update checks."
 - **F8.5** "Do an accessibility pass: Narrator names, keyboard paths, high-contrast theme, contrast audit. Fix the findings."
 - **F8.6** "Do a performance pass: 1M-file benchmark, agent idle RAM < 30 MB, cold start < 1.5 s. Add CI budget tests."
 - **F8.7** "Add local crash reports, a daily DB backup (keep 3), and an integrity check with auto-restore."
 - **F8.8** "Write the README and user guide with screenshots and an FAQ."
+**Phase 9**
+- **F9.1** "Implement `Miu.Platform.MacOS` adapters (Trash via NSFileManager, Keychain, LaunchAgent, UNUserNotificationCenter) and run the platform contract tests on macOS CI."
+- **F9.2** "Implement `Miu.Platform.Linux` adapters (freedesktop Trash spec, libsecret, systemd user unit / XDG autostart, libnotify) and run the platform contract tests on Linux CI."
+- **F9.3** "Add macOS and Linux junk rule packs and protected paths (/System, /usr, /etc, ~/Library essentials)."
+- **F9.4** "Package a notarized .dmg, an AppImage and a .deb via Velopack and CI."
 
 ---
 
@@ -601,7 +697,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 ### Phase 0 — Foundation
 - [ ] F0.1 Solution & projects
 - [ ] F0.2 CI workflow
-- [ ] F0.3 WinUI shell
+- [ ] F0.3 Avalonia shell
 - [ ] F0.4 DI, hosting, logging
 - [ ] F0.5 SQLite + migrations
 - [ ] F0.6 Credential store
@@ -632,6 +728,18 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F2.10 Duplicate finder
 - [ ] F2.11 System file explainer
 - [ ] F2.12 Permanent delete option
+
+### Phase 2D — Developer junk
+- [ ] F2D.1 Project detector
+- [ ] F2D.2 Dev junk catalog
+- [ ] F2D.3 Git status guard
+- [ ] F2D.4 Dev Projects view
+- [ ] F2D.5 Global dev caches
+- [ ] F2D.6 Docker integration
+- [ ] F2D.7 VHDX compaction
+- [ ] F2D.8 Make this a rule
+- [ ] F2D.9 Archive project
+- [ ] F2D.10 Dev digest & card
 
 ### Phase 3 — Learning rules
 - [ ] F3.1 Teach Miu UI
@@ -693,15 +801,22 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F8.7 Crash & DB resilience
 - [ ] F8.8 Docs
 
+### Phase 9 — macOS & Linux
+- [ ] F9.1 macOS adapters
+- [ ] F9.2 Linux adapters
+- [ ] F9.3 OS junk rules
+- [ ] F9.4 Packaging
+
 ---
 
 ## 15. Out of scope (v1)
-- macOS/Linux versions; a web dashboard; multi-user or admin consoles.
+- A web dashboard; multi-user or admin consoles. (macOS/Linux is planned as Phase 9.)
 - AI/LLM features (possible later: an optional "explain this folder" button using a user-supplied API key).
 - Mobile companion app (Telegram covers remote control).
 - Non-NTFS fast scanning (FAT/exFAT and ReFS use the fallback scanner).
 
-## 16. Open questions
-1. Should Miu be **free/open-source**, or have a paid tier (e.g. cloud and Telegram as Pro)? This affects licensing and the update server.
-2. Should it be published to the **Microsoft Store** (MSIX) or only as a direct download?
-3. Should AutoCleanSafe automations be **allowed out of the box**, or require the user to turn them on once in Settings? Recommendation: require the user to turn them on.
+## 16. Resolved questions
+1. **Pricing:** free.
+2. **Distribution:** direct download (Velopack + GitHub Releases). No Store.
+3. **Automatic cleaning:** off until turned on once in Settings.
+4. **UI framework:** Avalonia (cross-platform), replacing WinUI 3.
