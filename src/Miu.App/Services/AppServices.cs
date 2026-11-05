@@ -11,8 +11,11 @@ namespace Miu.App.Services;
 /// <summary>Composition root: everything the UI needs, created once.</summary>
 public sealed class AppServices : IDisposable
 {
-    private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard, IRecycleBin recycleBin)
+    private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard, IRecycleBin recycleBin,
+        IStartupRegistration startup, IPowerState power)
     {
+        Startup = startup;
+        Power = power;
         Database = db;
         Settings = new SettingsRepository(db);
         Actions = new ActionsRepository(db);
@@ -33,6 +36,8 @@ public sealed class AppServices : IDisposable
     }
 
     public DockerService Docker { get; }
+    public IStartupRegistration Startup { get; }
+    public IPowerState Power { get; }
 
     public MiuDatabase Database { get; }
     public SettingsRepository Settings { get; }
@@ -57,12 +62,27 @@ public sealed class AppServices : IDisposable
     public bool CanClean => Recycler.IsSupported;
     public string RecycleBinName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
-    public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null)
+    public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null, IStartupRegistration? startup = null, IPowerState? power = null)
     {
         var db = new MiuDatabase(databasePath);
         db.Migrate();
         var rules = RuleLoader.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "builtin"));
-        return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin());
+        return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin(),
+            startup ?? DefaultStartup(), power ?? DefaultPower());
+    }
+
+    private static IStartupRegistration DefaultStartup()
+    {
+        if (OperatingSystem.IsWindows()) return new WindowsRunKey();
+        if (OperatingSystem.IsLinux()) return new LinuxAutostart();
+        return new NoStartupRegistration();
+    }
+
+    private static IPowerState DefaultPower()
+    {
+        if (OperatingSystem.IsWindows()) return new WindowsPowerState();
+        if (OperatingSystem.IsLinux()) return new LinuxPowerState();
+        return new AlwaysPlugged();
     }
 
     private static IRecycleBin DefaultRecycleBin()

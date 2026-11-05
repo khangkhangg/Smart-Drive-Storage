@@ -103,6 +103,7 @@
                       <TextBlock Classes="muted" Text="{Binding UsedText}" />
                       <TextBlock Grid.Column="1" Classes="muted" Text="{Binding FreeText}" />
                     </Grid>
+                    <TextBlock Text="{Binding ForecastText}" IsVisible="{Binding HasForecast}" Foreground="#8A4600" FontSize="12" FontWeight="SemiBold" />
                   </StackPanel>
                 </Border>
               </Button>
@@ -116,8 +117,18 @@
         <Border Classes="card">
           <StackPanel Spacing="10">
             <TextBlock Classes="h2" Text="What grew this week" />
-            <TextBlock Classes="muted" TextWrapping="Wrap"
+            <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasGrew}"
                        Text="Miu compares your scans over time to show which folders are growing. Scan again in a few days to see it here." />
+            <ItemsControl ItemsSource="{Binding Grew}" IsVisible="{Binding HasGrew}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:GrowRow">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                    <TextBlock Text="{Binding Path}" FontSize="13" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+                    <TextBlock Grid.Column="1" Text="{Binding DeltaText}" Foreground="#9D3D00" FontWeight="SemiBold" FontSize="13" Margin="12,0,0,0" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
         </Border>
         <Border Grid.Column="2" Classes="card">

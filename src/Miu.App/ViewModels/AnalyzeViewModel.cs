@@ -257,6 +257,10 @@ public partial class AnalyzeViewModel : ObservableObject
             var session = await ScanSession.RunAsync(_services, path, progress, token);
             if (generation != _scanGeneration) return;
             Session = session;
+            // "What grew" compares with an older scan of the same place; then remember this one.
+            _shell.Home.SetGrew(ScanInsights.WhatGrew(_services, session, DateTime.UtcNow));
+            ScanInsights.Record(_services, session, DateTime.UtcNow);
+            _shell.Home.RefreshForecasts();
             DuplicateGroups.Clear();
             DuplicatesTotalText = "";
             var t = Session.Tree;

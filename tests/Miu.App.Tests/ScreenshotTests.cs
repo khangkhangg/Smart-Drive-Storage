@@ -83,6 +83,26 @@ public class ScreenshotTests
             vm.Navigate(vm.Rules);
             Save(window, Path.Combine(outDir, "rules.png"));
 
+            // Milestone 4: Automations, Settings, a notification.
+            vm.Navigate(vm.Automations);
+            vm.Automations.UseTemplateCommand.Execute(vm.Automations.Templates.First(t => t.Name == "Downloads tidy") with { Path = Path.Combine(root, "Downloads") });
+            vm.Automations.UseTemplateCommand.Execute(vm.Automations.Templates.First(t => t.Name == "Low-space guard"));
+            vm.Automations.Editor.Path = Path.Combine(root, "Code");
+            vm.Automations.Editor.Name = "Idle dev projects";
+            vm.Automations.Editor.Frequency = "Every month";
+            vm.Automations.Editor.Action = "Clean Safe items automatically";
+            vm.Automations.Editor.OlderThanDays = 90;
+            Save(window, Path.Combine(outDir, "automations.png"));
+            vm.Navigate(vm.Settings);
+            Save(window, Path.Combine(outDir, "settings.png"));
+            var toast = new ToastWindow(new MiuNotification("Downloads tidy",
+                "12 items (3.4 GB) in Downloads can be cleaned.",
+                [new NotificationAction("Review", () => Task.CompletedTask), new NotificationAction("Later", () => Task.CompletedTask)]));
+            toast.Show();
+            Dispatcher.UIThread.RunJobs();
+            toast.CaptureRenderedFrame()!.Save(Path.Combine(outDir, "notification.png"));
+            toast.Close();
+
             vm.Navigate(vm.About);
             Save(window, Path.Combine(outDir, "about.png"));
 

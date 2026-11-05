@@ -9,7 +9,12 @@ using Miu.Dev;
 namespace Miu.App.ViewModels;
 
 public sealed record DriveCard(string Title, string Subtitle, string Root, double UsedFraction, string UsedText, string FreeText,
-    string Status, IBrush StatusBg, IBrush StatusFg, IBrush Bar, string Badge);
+    string Status, IBrush StatusBg, IBrush StatusFg, IBrush Bar, string Badge, long TotalBytes = 0, string? ForecastText = null)
+{
+    public bool HasForecast => ForecastText is not null;
+}
+
+public sealed record GrowRow(string Path, string Name, string DeltaText);
 
 public sealed record SafeRow(int NodeId, string Name, string Path, string SizeText, string Reason);
 
@@ -31,11 +36,35 @@ public partial class HomeViewModel : ObservableObject
         foreach (var d in DiscoverDrives()) Drives.Add(d);
         BuiltInRuleCount = shell.Services.Rules.Count;
         RefreshRuleCounts();
+        RefreshForecasts();
     }
 
     public ObservableCollection<DriveCard> Drives { get; } = [];
     public ObservableCollection<SafeRow> TopSafe { get; } = [];
     public ObservableCollection<CategoryChip> Categories { get; } = [];
+    public ObservableCollection<GrowRow> Grew { get; } = [];
+
+    [ObservableProperty] private bool hasGrew;
+
+    public void SetGrew(IReadOnlyList<(string Path, long Delta)> grew)
+    {
+        Grew.Clear();
+        foreach (var (p, d) in grew) Grew.Add(new GrowRow(p, System.IO.Path.GetFileName(p), "+" + SizeFormatter.Format(d)));
+        HasGrew = Grew.Count > 0;
+    }
+
+    /// <summary>Adds "Full in ~N weeks" to drive cards that have enough history.</summary>
+    public void RefreshForecasts()
+    {
+        for (var i = 0; i < Drives.Count; i++)
+        {
+            var card = Drives[i];
+            var samples = _shell.Services.SpaceSamples.For(card.Root, 60);
+            var total = samples.Count > 0 ? samples[^1].Total : card.TotalBytes;
+            var text = Miu.Core.Insights.Forecast.Describe(Miu.Core.Insights.Forecast.DaysUntilFull(samples.Select(x => (x.Ts, x.Used)).ToList(), total));
+            if (text != card.ForecastText) Drives[i] = card with { ForecastText = text };
+        }
+    }
     public ObservableCollection<ProjectChip> TopProjects { get; } = [];
 
     public string VersionText => $"{AppInfo.Name} v{AppInfo.Version}";
@@ -207,7 +236,7 @@ public partial class HomeViewModel : ObservableObject
                 card = new DriveCard(title, kind, root, frac, SizeFormatter.Format(used) + " used", SizeFormatter.Format(d.AvailableFreeSpace) + " free",
                     low ? "Low space" : "Healthy",
                     new SolidColorBrush(Color.Parse(low ? "#FDF0E1" : "#E6F2E6")), new SolidColorBrush(Color.Parse(low ? "#8A4600" : "#0E700E")),
-                    new SolidColorBrush(Color.Parse(low ? "#C25700" : "#005FB8")), badge);
+                    new SolidColorBrush(Color.Parse(low ? "#C25700" : "#005FB8")), badge, d.TotalSize);
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

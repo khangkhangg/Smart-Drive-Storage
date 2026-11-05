@@ -10,9 +10,12 @@ public sealed record NavItem(string Title, string Icon, object Page);
 
 public partial class MainWindowViewModel : ObservableObject
 {
-    public MainWindowViewModel(AppServices services)
+    public MainWindowViewModel(AppServices services, INotifier? notifier = null)
     {
         Services = services;
+        Notifier = notifier ?? new ToastNotifier();
+        Automation = new AutomationService(services, Notifier, services.Power, () => DateTime.Now,
+            items => { Navigate(Home!); OpenReview(items, "Review suggestions", "cart"); });
         Cleanup = new CleanupService(services);
         Learning = new LearningService(services);
         Cart = new CartViewModel(this, services.Cart);
@@ -23,7 +26,8 @@ public partial class MainWindowViewModel : ObservableObject
         Rules = new RulesViewModel(this);
         About = new AboutViewModel();
         CloudNetwork = new PlaceholderViewModel("Cloud & Network", "Back up chosen folders to Google Drive, OneDrive, Dropbox or S3, then free the space locally. Map, scan and sync network drives. Coming in a later milestone.");
-        Settings = new PlaceholderViewModel("Settings", "Background mode, automation, Telegram and theme settings are coming soon.");
+        Automations = new AutomationsViewModel(this);
+        Settings = new SettingsViewModel(this);
         NavItems =
         [
             new("Home", "M3,11 L12,4 L21,11 L21,20 L3,20 Z", Home),
@@ -31,6 +35,7 @@ public partial class MainWindowViewModel : ObservableObject
             new("Dev Projects", "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20", DevProjects),
             new("Rules", "M12,3 L20,7 L20,12 C20,17 16.5,20 12,21 C7.5,20 4,17 4,12 L4,7 Z", Rules),
             new("Activity", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 L12,12 L15.5,14", Activity),
+            new("Automations", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 L12,12 L16,12 M4,4 L7,7", Automations),
             new("Cloud & Network", "M7,18 A5,5 0 0 1 7,8 A6,6 0 0 1 18.5,10 A4,4 0 0 1 18,18 Z", CloudNetwork),
             new("Settings", "M12,9 A3,3 0 1 1 11.99,9 Z M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M5,5 L7,7 M17,17 L19,19 M5,19 L7,17 M17,7 L19,5", Settings),
             new("About", "M12,3 A9,9 0 1 1 11.99,3 Z M12,11 L12,17 M12,7.5 L12,8", About),
@@ -48,7 +53,10 @@ public partial class MainWindowViewModel : ObservableObject
     public DevProjectsViewModel DevProjects { get; }
     public RulesViewModel Rules { get; }
     public LearningService Learning { get; }
-    public PlaceholderViewModel Settings { get; }
+    public SettingsViewModel Settings { get; }
+    public AutomationsViewModel Automations { get; }
+    public INotifier Notifier { get; }
+    public AutomationService Automation { get; }
     public AboutViewModel About { get; }
     public PlaceholderViewModel CloudNetwork { get; }
     public ObservableCollection<NavItem> NavItems { get; }
@@ -66,6 +74,7 @@ public partial class MainWindowViewModel : ObservableObject
         CurrentPage = value.Page;
         if (value.Page == Activity) Activity.Load();
         if (value.Page == Rules) Rules.Load();
+        if (value.Page == Automations) Automations.Load();
         if (value.Page == DevProjects) _ = DevProjects.Docker.Refresh();
     }
 
