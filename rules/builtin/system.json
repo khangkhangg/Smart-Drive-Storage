@@ -1,0 +1,121 @@
+{
+  "rules": [
+    {
+      "id": "sys.temp-files",
+      "match": {
+        "path": "**/AppData/Local/Temp/**"
+      },
+      "conditions": {
+        "olderThanDays": 1
+      },
+      "verdict": "Safe",
+      "reason": "Temporary file older than a day. Apps recreate what they need.",
+      "priority": 500
+    },
+    {
+      "id": "sys.tmp-unix",
+      "match": {
+        "path": "/tmp/**"
+      },
+      "conditions": {
+        "olderThanDays": 1
+      },
+      "verdict": "Safe",
+      "reason": "Temporary file older than a day.",
+      "priority": 500
+    },
+    {
+      "id": "sys.crash-dumps",
+      "match": {
+        "ext": [
+          "dmp"
+        ],
+        "isDir": false
+      },
+      "conditions": {
+        "olderThanDays": 7
+      },
+      "verdict": "Safe",
+      "reason": "Crash dump. Only useful for debugging a crash you no longer care about.",
+      "priority": 500
+    },
+    {
+      "id": "sys.crashdumps-folder",
+      "match": {
+        "path": "**/{CrashDumps,CrashReports,Crashpad/completed}/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Saved crash reports.",
+      "priority": 500
+    },
+    {
+      "id": "sys.old-installers",
+      "match": {
+        "path": "**/Downloads/*.{exe,msi,dmg,pkg,deb,rpm,AppImage}"
+      },
+      "conditions": {
+        "olderThanDays": 30
+      },
+      "verdict": "Review",
+      "reason": "Old installer. You can usually download it again if you need it.",
+      "priority": 500
+    },
+    {
+      "id": "sys.thumbnails",
+      "match": {
+        "path": "**/{.cache/thumbnails,Microsoft/Windows/Explorer}/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Thumbnail cache. Rebuilt automatically when you browse folders.",
+      "priority": 500
+    },
+    {
+      "id": "sys.chrome-cache",
+      "match": {
+        "path": "**/{Google/Chrome,Microsoft/Edge,BraveSoftware/Brave-Browser}/User Data/*/{Cache,Code Cache,GPUCache,Service Worker/CacheStorage}/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Browser cache. Websites load it again when needed.",
+      "priority": 500
+    },
+    {
+      "id": "sys.firefox-cache",
+      "match": {
+        "path": "**/Mozilla/Firefox/Profiles/*/cache2/**"
+      },
+      "conditions": {},
+      "verdict": "Safe",
+      "reason": "Browser cache. Websites load it again when needed.",
+      "priority": 500
+    },
+    {
+      "id": "sys.user-cache-dirs",
+      "match": {
+        "path": "**/.cache/*",
+        "isDir": true
+      },
+      "conditions": {},
+      "verdict": "Review",
+      "reason": "App cache folder. Usually safe, but some apps keep settings here.",
+      "priority": 300
+    },
+    {
+      "id": "sys.logs",
+      "match": {
+        "ext": [
+          "log"
+        ],
+        "isDir": false
+      },
+      "conditions": {
+        "olderThanDays": 30
+      },
+      "verdict": "Safe",
+      "reason": "Old log file.",
+      "priority": 450
+    }
+  ]
+}
