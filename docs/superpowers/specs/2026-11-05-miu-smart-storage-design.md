@@ -775,11 +775,11 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F5.6 Preferences
 
 ### Phase 6 — Network drives
-- [ ] F6.1 Discovery
-- [ ] F6.2 Map/unmap
-- [ ] F6.3 Network scan
-- [ ] F6.4 Sync diff
-- [ ] F6.5 Sync runner + UI
+- [x] F6.1 Discovery
+- [x] F6.2 Map/unmap
+- [x] F6.3 Network scan
+- [x] F6.4 Sync diff
+- [x] F6.5 Sync runner + UI
 
 ### Phase 7 — Cloud backup
 - [ ] F7.1 Provider abstraction + OAuth
