@@ -44,9 +44,17 @@ public class BackupRepositoriesTests
         manifest.Save(id, new ManifestEntry("/home/k/Photos/a.jpg", 10, t, "md5", "h1", "Miu Backup/Photos/a.jpg", t));
         manifest.Save(id, new ManifestEntry("/home/k/Photos/a.jpg", 11, t, "md5", "h2", "Miu Backup/Photos/a.jpg", t, Freed: true));
         manifest.For(id).Single().Should().Be(new ManifestEntry("/home/k/Photos/a.jpg", 11, t, "md5", "h2", "Miu Backup/Photos/a.jpg", t, true));
-        manifest.AddVersion(id, "/home/k/Photos/a.jpg", "v1", t, "changed");
-        manifest.AddVersion(id, "/home/k/Photos/a.jpg", "v2", t.AddDays(1), "changed");
+        manifest.AddVersion(id, new BackupVersion(0, "/home/k/Photos/a.jpg", "v1", t, "changed", 10, t, "md5", "h1"));
+        manifest.AddVersion(id, new BackupVersion(0, "/home/k/Photos/a.jpg", "v2", t.AddDays(1), "changed", Pinned: true));
+        manifest.Versions(id).Should().HaveCount(2);
+        manifest.Versions(id, "/home/k/Photos/a.jpg")[0].Pinned.Should().BeTrue();
+        manifest.Versions(id, "/home/k/Photos/a.jpg")[1].Hash.Should().Be("h1");
         manifest.Versions(id, "/home/k/Photos/a.jpg").Select(v => v.RemotePath).Should().Equal("v2", "v1");
+
+        // On Windows/macOS a rename that only changes case replaces the row instead of adding a second one.
+        manifest.Save(id, new ManifestEntry("/home/k/Photos/A.JPG", 11, t, "md5", "h3", "Miu Backup/Photos/A.JPG", t), caseInsensitive: true);
+        manifest.Save(id, new ManifestEntry("/home/k/Photos/a.jpg", 11, t, "md5", "h4", "Miu Backup/Photos/a.jpg", t), caseInsensitive: true);
+        manifest.For(id).Should().ContainSingle(e => e.LocalPath.EndsWith("a.jpg", StringComparison.OrdinalIgnoreCase)).Which.Hash.Should().Be("h4");
 
         plans.Delete(id);
         manifest.For(id).Should().BeEmpty();

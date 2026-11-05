@@ -21,7 +21,8 @@ public class S3StorageTests
         req.Method.Should().Be(HttpMethod.Put);
         req.Uri.AbsoluteUri.Should().Be("https://s3.us-west-002.backblazeb2.com/my-bucket/Backup/My%20Photos/a%2Bb.jpg");
         req.Headers["authorization"].Should().StartWith("AWS4-HMAC-SHA256 Credential=KEYID/20261105/us-west-002/s3/aws4_request");
-        req.Headers["authorization"].Should().Contain("content-md5");
+        req.Headers["authorization"].Should().Contain("content-md5").And.Contain("x-amz-meta-miu-md5");
+        req.Headers["x-amz-meta-miu-md5"].Should().Be(Convert.ToHexStringLower(MD5.HashData("hi"u8.ToArray())));
         req.Headers["content-md5"].Should().Be(Convert.ToBase64String(MD5.HashData("hi"u8.ToArray())));
         req.Headers["x-amz-content-sha256"].Should().Be(SigV4.Hex(SHA256.HashData("hi"u8.ToArray())));
         item.HashKind.Should().Be(CloudHashes.Md5);
@@ -53,7 +54,8 @@ public class S3StorageTests
         var complete = Encoding.UTF8.GetString(http.Requests.Last().Body);
         complete.Should().Contain("<PartNumber>1</PartNumber><ETag>\"e1\"</ETag>");
         item.HashKind.Should().Be(S3Storage.HashKindFor(size));
-        item.Hash.Should().Be("abc-5");
+        var local = await CloudHashes.ComputeAsync(S3Storage.HashKindFor(size), new MemoryStream(new byte[size]), default);
+        item.Hash.Should().Be(local); // what was sent, every part checked by S3 against its Content-MD5
     }
 
     [Fact]
@@ -91,6 +93,31 @@ public class S3StorageTests
         var ex = await FluentActions.Awaiting(() => Store(http).TestAsync(default)).Should().ThrowAsync<CloudException>();
         ex.Which.Message.Should().Contain("Access denied").And.NotContain("SECRET");
         ex.Which.IsTransient.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_big_copy_that_fails_inside_a_200_keeps_the_original()
+    {
+        var big = 6L << 30;
+        var http = new FakeHttp(r =>
+            r.Method == HttpMethod.Head ? FakeHttp.Ok("", configure: x => x.Content.Headers.ContentLength = big)
+            : r.Method == HttpMethod.Post && r.Uri.Query == "?uploads" ? FakeHttp.Ok("<InitiateMultipartUploadResult><UploadId>U1</UploadId></InitiateMultipartUploadResult>", "application/xml")
+            : r.Method == HttpMethod.Put ? FakeHttp.Ok("<CopyPartResult><ETag>\"p\"</ETag></CopyPartResult>", "application/xml")
+            : FakeHttp.Ok("<Error><Code>InternalError</Code><Message>We encountered an internal error.</Message></Error>", "application/xml"));
+        await FluentActions.Awaiting(() => Store(http).MoveAsync("Backup/big.mkv", "Backup/.miu-versions/x/big.mkv", default)).Should().ThrowAsync<CloudException>();
+        http.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete && r.Uri.AbsolutePath.EndsWith("/Backup/big.mkv"));
+    }
+
+    [Fact]
+    public async Task Encrypted_buckets_are_verified_with_miu_md5_metadata()
+    {
+        var http = new FakeHttp(_ => FakeHttp.Ok("", configure: x =>
+        {
+            x.Content.Headers.ContentLength = 2;
+            x.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"kms-not-an-md5\"");
+            x.Headers.Add("x-amz-meta-miu-md5", "abc123");
+        }));
+        (await Store(http).GetAsync("a.txt", default))!.Hash.Should().Be("abc123");
     }
 
     [Fact]

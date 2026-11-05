@@ -107,7 +107,7 @@ public sealed class OneDriveStorage(OAuthSession session) : ICloudStorage
         }
         catch
         {
-            try { using var _ = await session.Http.DeleteAsync(uploadUrl, CancellationToken.None); } catch (HttpRequestException) { }
+            try { using var _ = await session.Http.DeleteAsync(uploadUrl, CancellationToken.None); } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { }
             throw;
         }
     }
@@ -138,8 +138,10 @@ public sealed class OneDriveStorage(OAuthSession session) : ICloudStorage
         var parent = await EnsureFolderAsync(CloudPath.Parent(path), ct);
         using var c = await session.SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"https://graph.microsoft.com/v1.0/me/drive/items/{parent}/children")
         {
-            Content = JsonContent.Create(new Dictionary<string, object> { ["name"] = CloudPath.Name(path), ["folder"] = new { }, ["@microsoft.graph.conflictBehavior"] = "replace" }),
-        }, ct);
+            // "fail", never "replace": replacing would delete a folder that already exists.
+            Content = JsonContent.Create(new Dictionary<string, object> { ["name"] = CloudPath.Name(path), ["folder"] = new { }, ["@microsoft.graph.conflictBehavior"] = "fail" }),
+        }, ct, allowed: HttpStatusCode.Conflict);
+        if (c.StatusCode == HttpStatusCode.Conflict) return await EnsureFolderAsync(path, ct); // created meanwhile: look it up
         return (await c.Content.ReadFromJsonAsync<DriveItem>(Web, ct))!.Id;
     }
 

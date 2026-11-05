@@ -108,7 +108,7 @@ public static class BackupDiff
 
         var ops = new List<BackupOp>();
         var missing = new List<string>();
-        string? refusal = null;
+        var refusals = new List<string>();
         var final = false;
         foreach (var src in plan.Sources)
         {
@@ -117,9 +117,9 @@ public static class BackupDiff
             if (files is null)
             {
                 missing.Add(src.LocalPath);
-                if (plan.Mode == BackupMode.Mirror && refusal is null)
+                if (plan.Mode == BackupMode.Mirror)
                 {
-                    refusal = $"The folder {src.LocalPath} ({src.RemoteName}) is missing, so mirroring it would set aside its whole backup. Is the drive connected? Nothing was changed.";
+                    refusals.Add($"The folder {src.LocalPath} ({src.RemoteName}) is missing, so mirroring it would set aside its whole backup. Is the drive connected?");
                     final = true;
                 }
                 continue;
@@ -141,15 +141,17 @@ public static class BackupDiff
 
             if (plan.Mode != BackupMode.Mirror) continue;
             var gone = tracked.Where(m => !present.Contains(m.LocalPath)).ToList();
-            if (files.Count == 0 && tracked.Count > 0 && refusal is null)
+            // Every source is checked: one refusal must never hide another (and an empty folder can never be overridden).
+            if (files.Count == 0 && tracked.Count > 0)
             {
-                refusal = $"The folder {src.LocalPath} is empty, so mirroring would set aside all {tracked.Count} backed-up files. Is the drive connected? Nothing was changed.";
+                refusals.Add($"The folder {src.LocalPath} is empty, so mirroring would set aside all {tracked.Count} backed-up files. Is the drive connected?");
                 final = true;
             }
-            else if (gone.Count > BrakeMinFiles && gone.Count * 2 > tracked.Count && refusal is null)
-                refusal = $"This would set aside {gone.Count} of {tracked.Count} backed-up files from {src.RemoteName}. That looks like a mistake (a disconnected drive?), so nothing was changed.";
+            else if (gone.Count > BrakeMinFiles && gone.Count * 2 > tracked.Count)
+                refusals.Add($"This would set aside {gone.Count} of {tracked.Count} backed-up files from {src.RemoteName}. That looks like a mistake (a disconnected drive?).");
             ops.AddRange(gone.Select(m => new BackupOp(BackupOpKind.SetAside, m.LocalPath, m.RemotePath, m.Size, "deleted on this computer")));
         }
+        var refusal = refusals.Count == 0 ? null : string.Join(" ", refusals) + " Nothing was changed.";
         return new BackupPlanResult(ops, refusal, final, missing);
     }
 }

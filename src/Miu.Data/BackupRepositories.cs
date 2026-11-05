@@ -110,7 +110,9 @@ public sealed class BackupPlansRepository(MiuDatabase db)
     }
 }
 
-public sealed record BackupVersion(long Id, string LocalPath, string RemotePath, DateTime CreatedUtc, string Reason);
+/// <param name="Pinned">The only cloud copy of a file Miu freed: never pruned.</param>
+public sealed record BackupVersion(long Id, string LocalPath, string RemotePath, DateTime CreatedUtc, string Reason,
+    long Size = 0, DateTime? MtimeUtc = null, string? HashKind = null, string? Hash = null, bool Pinned = false);
 
 /// <summary>What each plan has in the cloud (written after every file, so a stopped run continues where it left off).</summary>
 public sealed class BackupManifestRepository(MiuDatabase db)
@@ -128,8 +130,17 @@ public sealed class BackupManifestRepository(MiuDatabase db)
         return list;
     }
 
-    public void Save(long planId, ManifestEntry e)
+    /// <param name="caseInsensitive">On Windows and macOS, a rename that only changes case replaces the old row.</param>
+    public void Save(long planId, ManifestEntry e, bool caseInsensitive = false)
     {
+        if (caseInsensitive)
+        {
+            using var del = db.Connection.CreateCommand();
+            del.CommandText = "DELETE FROM backup_manifest WHERE plan_id = $p AND local_path = $l COLLATE NOCASE AND local_path <> $l";
+            del.Parameters.AddWithValue("$p", planId);
+            del.Parameters.AddWithValue("$l", e.LocalPath);
+            del.ExecuteNonQuery();
+        }
         using var cmd = db.Connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO backup_manifest(plan_id, local_path, size, mtime, hash_kind, hash, remote_id, remote_path, uploaded_at, freed)
@@ -158,28 +169,36 @@ public sealed class BackupManifestRepository(MiuDatabase db)
         cmd.ExecuteNonQuery();
     }
 
-    public void AddVersion(long planId, string localPath, string remotePath, DateTime createdUtc, string reason)
+    public void AddVersion(long planId, BackupVersion v)
     {
         using var cmd = db.Connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO backup_versions(plan_id, local_path, remote_path, created, reason) VALUES ($p, $l, $r, $c, $why)";
+        cmd.CommandText = "INSERT INTO backup_versions(plan_id, local_path, remote_path, created, reason, size, mtime, hash_kind, hash, pinned) VALUES ($p, $l, $r, $c, $why, $s, $m, $k, $h, $pin)";
         cmd.Parameters.AddWithValue("$p", planId);
-        cmd.Parameters.AddWithValue("$l", localPath);
-        cmd.Parameters.AddWithValue("$r", remotePath);
-        cmd.Parameters.AddWithValue("$c", Iso.Of(createdUtc));
-        cmd.Parameters.AddWithValue("$why", reason);
+        cmd.Parameters.AddWithValue("$l", v.LocalPath);
+        cmd.Parameters.AddWithValue("$r", v.RemotePath);
+        cmd.Parameters.AddWithValue("$c", Iso.Of(v.CreatedUtc));
+        cmd.Parameters.AddWithValue("$why", v.Reason);
+        cmd.Parameters.AddWithValue("$s", v.Size);
+        cmd.Parameters.AddWithValue("$m", (object?)(v.MtimeUtc is { } m ? Iso.Of(m) : null) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$k", (object?)v.HashKind ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$h", (object?)v.Hash ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$pin", v.Pinned ? 1 : 0);
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Versions of one file, newest first.</summary>
-    public IReadOnlyList<BackupVersion> Versions(long planId, string localPath)
+    /// <summary>Versions of one file (or of every file when <paramref name="localPath"/> is null), newest first.</summary>
+    public IReadOnlyList<BackupVersion> Versions(long planId, string? localPath = null)
     {
         using var cmd = db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT id, local_path, remote_path, created, reason FROM backup_versions WHERE plan_id = $p AND local_path = $l ORDER BY created DESC, id DESC";
+        cmd.CommandText = "SELECT id, local_path, remote_path, created, reason, size, mtime, hash_kind, hash, pinned FROM backup_versions WHERE plan_id = $p" +
+                          (localPath is null ? "" : " AND local_path = $l") + " ORDER BY created DESC, id DESC";
         cmd.Parameters.AddWithValue("$p", planId);
-        cmd.Parameters.AddWithValue("$l", localPath);
+        if (localPath is not null) cmd.Parameters.AddWithValue("$l", localPath);
         using var r = cmd.ExecuteReader();
         var list = new List<BackupVersion>();
-        while (r.Read()) list.Add(new BackupVersion(r.GetInt64(0), r.GetString(1), r.GetString(2), Iso.Parse(r.GetString(3)), r.GetString(4)));
+        while (r.Read())
+            list.Add(new BackupVersion(r.GetInt64(0), r.GetString(1), r.GetString(2), Iso.Parse(r.GetString(3)), r.GetString(4), r.GetInt64(5),
+                r.IsDBNull(6) ? null : Iso.Parse(r.GetString(6)), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetString(8), r.GetInt64(9) == 1));
         return list;
     }
 

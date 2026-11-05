@@ -78,3 +78,11 @@ Older versions are kept. You can restore any file to where it was or to another 
 - **Metered networks:** no automatic pause, because .NET has no cross-platform way to tell; the bandwidth limit and quiet hours cover it for now.
 - **Resuming:** a stopped backup continues per file. A single huge file starts its upload again (provider upload sessions only resume within a run).
 - **Real accounts:** Google Drive, OneDrive and Dropbox are tested against recorded request and response shapes, not against the real services. Before release, run a smoke test with real accounts.
+- **Deferred after review:**
+  - Google resumable uploads ignore a shorter `Range` on 308.
+  - A checksum the provider only adds later is never re-checked.
+  - Undoing a "free" from Activity leaves the manifest marked freed.
+  - Restoring to another folder rejects names that contain `:`.
+- **Encrypted S3 buckets (SSE-KMS / SSE-C):**
+  - Single uploads are verified through Miu's MD5 metadata.
+  - Multipart uploads verify at upload time, but are never freed, because their ETag can't be checked later.

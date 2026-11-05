@@ -34,12 +34,15 @@ public sealed partial class BackupPlanRow(CloudBackupViewModel owner, BackupPlan
     [RelayCommand] private void Delete() => owner.DeletePlan(this);
 }
 
-public sealed partial class RestoreRow(ManifestEntry entry) : ObservableObject
+public sealed partial class RestoreRow(RestoreItem item) : ObservableObject
 {
-    public ManifestEntry Entry { get; } = entry;
+    public RestoreItem Item { get; } = item;
+    public ManifestEntry Entry => Item.Entry;
     public string Name => Path.GetFileName(Entry.LocalPath);
     public string Folder => Path.GetDirectoryName(Entry.LocalPath) ?? "";
-    public string Info => SizeFormatter.Format(Entry.Size) + (Entry.Freed ? " · freed from this computer" : "") + $" · backed up {HumanTime.Ago(Entry.UploadedUtc, DateTime.UtcNow)}";
+    public string Info => SizeFormatter.Format(Entry.Size) +
+        (Item.IsVersion ? $" · {Item.Note}, kept {HumanTime.Ago(Entry.UploadedUtc, DateTime.UtcNow)}"
+                        : (Entry.Freed ? " · freed from this computer" : "") + $" · backed up {HumanTime.Ago(Entry.UploadedUtc, DateTime.UtcNow)}");
     [ObservableProperty] private bool isChecked;
 }
 
@@ -105,7 +108,7 @@ public partial class CloudBackupViewModel : ObservableObject
             Say($"Connected {a.DisplayName}.", false);
             Load();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException) { Say(ex.Message, true); }
+        catch (Exception ex) { Say(ex is OperationCanceledException ? "Sign-in took too long. Try again." : ex.Message, true); }
         finally { IsConnecting = false; }
     }
 
@@ -122,7 +125,7 @@ public partial class CloudBackupViewModel : ObservableObject
             Say($"Connected {a.DisplayName}.", false);
             Load();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException) { Say("Couldn't connect: " + ex.Message, true); }
+        catch (Exception ex) { Say("Couldn't connect: " + (ex is OperationCanceledException ? "the storage took too long to answer." : ex.Message), true); }
         finally { IsConnecting = false; }
     }
 
@@ -210,6 +213,7 @@ public partial class CloudBackupViewModel : ObservableObject
 
     public void DeletePlan(BackupPlanRow row)
     {
+        if (IsRunning) { PlanMessage = "Wait for the running backup or restore to finish first."; PlanMessageIsError = true; return; }
         Services.BackupPlans.Delete(row.Plan.Id);
         if (Previewing == row) Previewing = null;
         if (Restoring == row) Restoring = null;
@@ -241,7 +245,7 @@ public partial class CloudBackupViewModel : ObservableObject
             PreviewCanRun = p.CanRun;
             PreviewRefused = p.CanRunAnyway;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException) { PreviewText = "Couldn't compare: " + ex.Message; }
+        catch (Exception ex) { PreviewText = "Couldn't compare: " + ex.Message; }
     }
 
     [RelayCommand] private Task RunPreview() => RunAsync(null);
@@ -297,7 +301,9 @@ public partial class CloudBackupViewModel : ObservableObject
         Previewing = null;
         Restoring = row;
         RestoreMessage = "";
-        _allRestoreRows = Services.BackupManifest.For(row.Plan.Id).OrderBy(e => e.LocalPath, StringComparer.OrdinalIgnoreCase).Select(e => new RestoreRow(e)).ToList();
+        _allRestoreRows = Backup.RestoreChoices(Services.BackupPlans.Get(row.Plan.Id) ?? row.Plan)
+            .OrderBy(i => i.Entry.LocalPath, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.IsVersion).ThenByDescending(i => i.Entry.UploadedUtc)
+            .Select(i => new RestoreRow(i)).ToList();
         FilterRestore();
     }
 
@@ -322,8 +328,8 @@ public partial class CloudBackupViewModel : ObservableObject
     [RelayCommand]
     private async Task RunRestore()
     {
-        if (Restoring is not { } row) return;
-        var chosen = _allRestoreRows.Where(r => r.IsChecked).Select(r => r.Entry).ToList();
+        if (Restoring is not { } row || IsRunning) return;
+        var chosen = _allRestoreRows.Where(r => r.IsChecked).Select(r => r.Item).ToList();
         if (chosen.Count == 0) { RestoreMessage = "Tick the files to restore."; return; }
         if (!RestoreToOriginal && string.IsNullOrWhiteSpace(RestoreFolder)) { RestoreMessage = "Type the folder to restore into."; return; }
         IsRunning = true;
@@ -337,7 +343,7 @@ public partial class CloudBackupViewModel : ObservableObject
                              (r.Failed.Count > 0 ? $" {r.Failed.Count} failed (first: {Path.GetFileName(r.Failed[0].Path)} — {r.Failed[0].Reason})." : "");
             OpenRestoreKeepMessage(row);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException) { RestoreMessage = "Couldn't restore: " + ex.Message; }
+        catch (Exception ex) { RestoreMessage = "Couldn't restore: " + ex.Message; }
         finally { IsRunning = false; }
     }
 

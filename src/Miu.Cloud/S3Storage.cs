@@ -39,8 +39,10 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
         path = CloudPath.Normalize(path);
         using var r = await SendAsync(HttpMethod.Head, path, null, null, null, ct, allowNotFound: true);
         if (r.StatusCode == HttpStatusCode.NotFound) return null;
-        return new CloudItem(path, r.Content.Headers.ContentLength ?? 0, r.Content.Headers.LastModified?.UtcDateTime, HashKindFor(r.Content.Headers.ContentLength ?? 0),
-            r.Headers.ETag?.Tag.Trim('"'), path);
+        var size = r.Content.Headers.ContentLength ?? 0;
+        // Encrypted buckets (SSE-KMS / SSE-C) don't use the MD5 as ETag, so single uploads also carry Miu's own MD5.
+        var hash = size <= SinglePutLimit && r.Headers.TryGetValues("x-amz-meta-miu-md5", out var md5s) ? md5s.First() : r.Headers.ETag?.Tag.Trim('"');
+        return new CloudItem(path, size, r.Content.Headers.LastModified?.UtcDateTime, HashKindFor(size), hash, path);
     }
 
     public async Task<IReadOnlyList<CloudItem>> ListAsync(string folder, CancellationToken ct)
@@ -79,9 +81,13 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
             await content.ReadExactlyAsync(data, ct);
             if (content.ReadByte() != -1) throw new CloudException("The file grew while it was being uploaded.");
             var md5 = MD5.HashData(data);
-            using var r = await SendAsync(HttpMethod.Put, path, null, data, new Dictionary<string, string> { ["content-md5"] = Convert.ToBase64String(md5) }, ct);
+            using var r = await SendAsync(HttpMethod.Put, path, null, data, new Dictionary<string, string>
+            {
+                ["content-md5"] = Convert.ToBase64String(md5), ["x-amz-meta-miu-md5"] = Convert.ToHexStringLower(md5),
+            }, ct);
             progress?.Report(size);
-            return new CloudItem(path, size, _now(), CloudHashes.Md5, r.Headers.ETag?.Tag.Trim('"') ?? Convert.ToHexStringLower(md5), path);
+            // S3 rejects the upload unless the bytes match Content-MD5, so a 2xx means it stored exactly these bytes.
+            return new CloudItem(path, size, _now(), CloudHashes.Md5, Convert.ToHexStringLower(md5), path);
         }
 
         var partSize = PartSizeFor(size);
@@ -91,6 +97,7 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
         try
         {
             var etags = new List<string>();
+            var partMd5s = new List<byte>();
             var buffer = new byte[partSize];
             long sent = 0;
             for (var part = 1; sent < size; part++)
@@ -98,9 +105,11 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
                 var n = (int)Math.Min(partSize, size - sent);
                 await content.ReadExactlyAsync(buffer.AsMemory(0, n), ct);
                 var chunk = buffer.AsSpan(0, n).ToArray();
+                var partMd5 = MD5.HashData(chunk);
+                partMd5s.AddRange(partMd5);
                 using var r = await SendAsync(HttpMethod.Put, path,
                     new Dictionary<string, string> { ["partNumber"] = part.ToString(CultureInfo.InvariantCulture), ["uploadId"] = uploadId }, chunk,
-                    new Dictionary<string, string> { ["content-md5"] = Convert.ToBase64String(MD5.HashData(chunk)) }, ct);
+                    new Dictionary<string, string> { ["content-md5"] = Convert.ToBase64String(partMd5) }, ct);
                 etags.Add(r.Headers.ETag?.Tag ?? throw new CloudException("The storage didn't confirm a part."));
                 sent += n;
                 progress?.Report(sent);
@@ -110,7 +119,8 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
             using var done = await SendAsync(HttpMethod.Post, path, new Dictionary<string, string> { ["uploadId"] = uploadId }, Encoding.UTF8.GetBytes(xml.ToString(SaveOptions.DisableFormatting)), null, ct);
             var body = await done.Content.ReadAsStringAsync(ct);
             if (body.Contains("<Error>", StringComparison.Ordinal)) throw new CloudException("The storage couldn't complete the upload: " + ErrorMessage(body)); // S3 can report errors with 200
-            var etag = XDocument.Parse(body).Root!.Elements().FirstOrDefault(e => e.Name.LocalName == "ETag")?.Value.Trim('"');
+            // Every part was checked against its Content-MD5, so the multipart ETag of what was sent describes what S3 stored.
+            var etag = Convert.ToHexStringLower(MD5.HashData(partMd5s.ToArray())) + "-" + etags.Count.ToString(CultureInfo.InvariantCulture);
             return new CloudItem(path, size, _now(), HashKindFor(size), etag, path);
         }
         catch
@@ -140,6 +150,9 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
             if (body.Contains("<Error>", StringComparison.Ordinal)) throw new CloudException("Copy failed: " + ErrorMessage(body));
         }
         else await MultipartCopyAsync(source, to, item.Size, ct);
+        // Only remove the original once the copy is really there.
+        var copy = await GetAsync(to, ct);
+        if (copy is null || copy.Size != item.Size) throw new CloudException("The copy didn't arrive complete, so the original was kept.");
         using var _ = await SendAsync(HttpMethod.Delete, from, null, null, null, ct, allowNotFound: true);
     }
 
@@ -162,7 +175,9 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
                 etags.Add(XDocument.Parse(await r.Content.ReadAsStringAsync(ct)).Root!.Elements().First(e => e.Name.LocalName == "ETag").Value);
             }
             var xml = new XElement("CompleteMultipartUpload", etags.Select((e, i) => new XElement("Part", new XElement("PartNumber", i + 1), new XElement("ETag", e))));
-            using var _ = await SendAsync(HttpMethod.Post, to, new Dictionary<string, string> { ["uploadId"] = uploadId }, Encoding.UTF8.GetBytes(xml.ToString(SaveOptions.DisableFormatting)), null, ct);
+            using var done = await SendAsync(HttpMethod.Post, to, new Dictionary<string, string> { ["uploadId"] = uploadId }, Encoding.UTF8.GetBytes(xml.ToString(SaveOptions.DisableFormatting)), null, ct);
+            var body = await done.Content.ReadAsStringAsync(ct);
+            if (body.Contains("<Error>", StringComparison.Ordinal)) throw new CloudException("The storage couldn't complete the copy: " + ErrorMessage(body)); // 200 with an error
         }
         catch
         {

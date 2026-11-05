@@ -85,7 +85,7 @@ public partial class ReviewViewModel : ObservableObject
                 var progress = new Progress<BackupProgress>(p => BackupStatus = $"Backing up {p.Done + 1} of {p.Total}: {p.Current}");
                 string? problem;
                 try { problem = await _shell.Automation.Backup.BackUpBeforeCleaningAsync(account, items.Select(i => i.Path).ToList(), progress, default); }
-                catch (Exception ex) when (ex is Miu.Cloud.CloudException or IOException or UnauthorizedAccessException) { problem = "Backup failed: " + ex.Message + " Nothing was cleaned."; }
+                catch (Exception ex) { problem = "Backup failed: " + ex.Message + " Nothing was cleaned."; } // any failure: clean nothing
                 if (problem is not null) { BackupStatus = problem; return; }
                 BackupStatus = "Backed up and checked.";
             }

@@ -79,6 +79,21 @@ public class BackupDiffTests
     }
 
     [Fact]
+    public void Every_source_is_braked_and_an_empty_one_makes_the_refusal_final()
+    {
+        var a = new BackupSource(Root, "Photos");
+        var bRoot = Root + "-B";
+        var b = new BackupSource(bRoot, "Other");
+        var plan = new BackupPlan(1, "p", 1, [a, b], "Backup", BackupMode.Mirror);
+        var manifest = Enumerable.Range(0, 30).Select(i => M($"f{i}.jpg"))
+            .Concat(Enumerable.Range(0, 10).Select(i => new ManifestEntry(Path.Combine(bRoot, $"g{i}"), 1, Now, "md5", "x", $"Backup/Other/g{i}", Now))).ToArray();
+        var local = new Dictionary<BackupSource, IReadOnlyList<LocalFile>?> { [a] = Enumerable.Range(0, 5).Select(i => F($"f{i}.jpg")).ToList(), [b] = [] };
+        var r = BackupDiff.Plan(plan, local, [], manifest, Now, false);
+        r.Refusal.Should().Contain("25 of 30").And.Contain("empty");
+        r.RefusalIsFinal.Should().BeTrue();
+    }
+
+    [Fact]
     public void Files_under_unknown_folders_are_left_alone()
     {
         var r = BackupDiff.Plan(Plan(BackupMode.Mirror), new Dictionary<BackupSource, IReadOnlyList<LocalFile>?> { [Src] = [F("ok.jpg")] },

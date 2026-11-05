@@ -78,7 +78,7 @@ public sealed class LoopbackOAuth(HttpClient http, Func<Uri, Task> openBrowser)
                     Respond(ctx, 200, "Sign-in was cancelled. You can close this tab.");
                     throw new CloudException(error == "access_denied" ? "Sign-in was cancelled." : "Sign-in failed: " + error);
                 }
-                Respond(ctx, 200, "Miu is connected. You can close this tab and go back to Miu.");
+                Respond(ctx, 200, "Signed in. Miu is finishing the connection; you can close this tab and go back to Miu.");
                 return await ExchangeAsync(client, new Dictionary<string, string>
                 {
                     ["grant_type"] = "authorization_code", ["code"] = query["code"] ?? "", ["redirect_uri"] = redirect, ["code_verifier"] = verifier,
@@ -225,7 +225,8 @@ public sealed record CloudClientIds(string? GoogleClientId, string? GoogleClient
 
     public OAuthClient? Google => GoogleClientId is { Length: > 0 } id
         ? new("Google Drive", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", id, GoogleClientSecret,
-            "https://www.googleapis.com/auth/drive.file", new Dictionary<string, string> { ["access_type"] = "offline", ["prompt"] = "consent" })
+            "https://www.googleapis.com/auth/drive.file", new Dictionary<string, string> { ["access_type"] = "offline", ["prompt"] = "consent" },
+            RedirectHost: "localhost") // Windows lets normal users listen on "localhost" without a URL reservation
         : null;
 
     public OAuthClient? Microsoft => MicrosoftClientId is { Length: > 0 } id

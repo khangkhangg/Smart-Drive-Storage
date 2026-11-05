@@ -40,6 +40,12 @@ public sealed record BackupOutcome(string Status, string Summary, int Uploaded =
     public IReadOnlyList<(string Path, string Reason)> Failed { get; } = Failed ?? [];
 }
 
+/// <param name="VersionPath">Set for an older version: where it is in the cloud (Entry.RemotePath is the file's normal place).</param>
+public sealed record RestoreItem(ManifestEntry Entry, string? VersionPath = null, string? Note = null)
+{
+    public bool IsVersion => VersionPath is not null;
+}
+
 public sealed record RestoreOutcome(int Restored, int Skipped, IReadOnlyList<(string Path, string Reason)> Failed, IReadOnlyList<string> RenamedTo);
 
 /// <summary>
@@ -75,8 +81,23 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
         if (plan.Sources.Select(s => s.RemoteName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != plan.Sources.Count)
             return "Two folders have the same name. Rename one in the cloud folder list.";
         if (plan.Sources.Any(s => !BackupPaths.IsSafeRelative(s.RemoteName))) return "A folder name can't contain / or \\.";
+        // Two plans writing to the same cloud folders would overwrite (and version away) each other's files.
+        var mine = plan.Sources.Select(s => CloudRoot(plan.RemoteFolder, s.RemoteName)).ToList();
+        if (mine.Any(r => Overlaps(r, BeforeCleaningRoot))) return "That cloud folder is used for “Back up first” copies. Pick another name.";
+        foreach (var other in services.BackupPlans.All().Where(p => p.Id != plan.Id && p.AccountId == plan.AccountId))
+            foreach (var r in other.Sources.Select(s => CloudRoot(other.RemoteFolder, s.RemoteName)))
+                if (mine.Any(m => Overlaps(m, r)))
+                    return $"The plan “{other.Name}” already backs up to {r} on this account. Pick another cloud folder so they can't overwrite each other.";
         return null;
     }
+
+    private const string BeforeCleaningFolder = "Miu Backup/Before cleaning";
+    private static readonly string BeforeCleaningRoot = BeforeCleaningFolder.ToLowerInvariant();
+
+    /// <summary>Compared without case: Dropbox and OneDrive ignore it.</summary>
+    private static string CloudRoot(string remoteFolder, string remoteName) => BackupPaths.Remote(remoteFolder, remoteName, "").ToLowerInvariant();
+
+    private static bool Overlaps(string a, string b) => a == b || a.StartsWith(b + "/", StringComparison.Ordinal) || b.StartsWith(a + "/", StringComparison.Ordinal);
 
     /// <summary>Builds the sources list from local folders, giving each a unique cloud name.</summary>
     public static IReadOnlyList<BackupSource> SourcesFor(IEnumerable<string> folders)
@@ -147,19 +168,21 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
                         if (op.Kind == BackupOpKind.Upload)
                         {
                             var b0 = bytes;
-                            if (await UploadWithRetryAsync(plan, cloud, op, p => progress?.Report(new BackupProgress(done, total, b0 + p, Path.GetFileName(op.LocalPath))), ct) is { } why)
+                            if ((await UploadFileAsync(plan, cloud, op, p => progress?.Report(new BackupProgress(done, total, b0 + p, Path.GetFileName(op.LocalPath))), ct)).Why is { } why)
                                 failed.Add((op.LocalPath, why));
                             else { uploaded++; bytes += op.Bytes; }
                         }
                         else
                         {
-                            await KeepAsVersionAsync(plan, cloud, op.LocalPath, op.RemotePath, "deleted on this computer", ct);
+                            await RetryAsync(() => KeepAsVersionAsync(plan, cloud, op.LocalPath, op.RemotePath, "deleted on this computer", ct), ct);
                             services.BackupManifest.Remove(plan.Id, op.LocalPath);
                             setAside++;
                         }
                     }
-                    catch (CloudException ex) { failed.Add((op.LocalPath, ex.Message)); }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed.Add((op.LocalPath, ex.Message)); }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        failed.Add((op.LocalPath, Message(ex))); // one bad file or reply never stops the whole backup
+                    }
                     done++;
                 }
 
@@ -173,14 +196,14 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
                 outcome = new BackupOutcome(failed.Count > 0 ? "partial" : "ok", string.Join(", ", parts) + ".", uploaded, bytes, freed, freedBytes, failed, actionId);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             Log(plan, started, new BackupOutcome("cancelled", $"Stopped after {uploaded} {(uploaded == 1 ? "file" : "files")}. The next run continues from there."));
             throw;
         }
-        catch (Exception ex) when (ex is CloudException or IOException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException)
+        catch (Exception ex)
         {
-            outcome = new BackupOutcome("failed", "Couldn't back up: " + ex.Message, uploaded, bytes, Failed: failed);
+            outcome = new BackupOutcome("failed", "Couldn't back up: " + Message(ex), uploaded, bytes, Failed: failed);
         }
         Log(plan, started, outcome);
         return outcome;
@@ -193,64 +216,101 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
         services.BackupPlans.Patch(plan.Id, p => p with { LastRunUtc = DateTime.UtcNow, LastResult = outcome.Summary });
     }
 
-    /// <summary>Uploads one file, retrying network hiccups. Returns null when done and verified, or why it failed.</summary>
-    private async Task<string?> UploadWithRetryAsync(BackupPlan plan, ICloudStorage cloud, BackupOp op, Action<long> onBytes, CancellationToken ct)
+    private static string Message(Exception ex) => ex switch
+    {
+        CloudException c => c.Message,
+        OperationCanceledException => "the cloud took too long to answer",
+        System.Text.Json.JsonException or System.Xml.XmlException => "the cloud sent an answer Miu didn't understand (a network login page?)",
+        _ => ex.Message,
+    };
+
+    /// <summary>Retries a cloud call after network hiccups (3 tries).</summary>
+    private async Task<T> RetryAsync<T>(Func<Task<T>> call, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
-            try { return await UploadOnceAsync(plan, cloud, op, onBytes, firstAttempt: attempt == 0, ct); }
+            try { return await call(); }
+            catch (CloudException ex) when (ex.IsTransient && attempt < 2) { await Task.Delay(RetryDelay(attempt), ct); }
+        }
+    }
+
+    private Task RetryAsync(Func<Task> call, CancellationToken ct) => RetryAsync(async () => { await call(); return true; }, ct);
+
+    /// <summary>
+    /// Uploads one file. Whatever is in the cloud at that path is first kept as an older version (pinned, never pruned,
+    /// when it is the only copy of a file Miu freed); if that can't be done, nothing is uploaded. Returns why it failed,
+    /// or null, and whether the provider's checksum confirmed the upload.
+    /// </summary>
+    private async Task<(string? Why, bool Verified)> UploadFileAsync(BackupPlan plan, ICloudStorage cloud, BackupOp op, Action<long> onBytes, CancellationToken ct)
+    {
+        try
+        {
+            if (await RetryAsync(() => cloud.GetAsync(op.RemotePath, ct), ct) is not null)
+                await RetryAsync(() => KeepAsVersionAsync(plan, cloud, op.LocalPath, op.RemotePath, "replaced by a newer copy", ct), ct);
+        }
+        catch (CloudException ex) { return ("Miu couldn't keep the cloud's older copy, so it wasn't replaced: " + ex.Message, false); }
+
+        for (var attempt = 0; ; attempt++)
+        {
+            // From here on, what's at the path is the old copy's replacement or this run's own failed attempt.
+            try { return await UploadOnceAsync(plan, cloud, op, onBytes, ct); }
             catch (CloudException ex) when (ex.IsTransient && attempt < 2) { await Task.Delay(RetryDelay(attempt), ct); }
             catch (ChecksumMismatch) when (attempt < 2) { await Task.Delay(RetryDelay(attempt), ct); }
-            catch (ChecksumMismatch ex) { return ex.Message; }
+            catch (ChecksumMismatch ex) { return (ex.Message, false); }
         }
     }
 
     private sealed class ChecksumMismatch(string message) : Exception(message);
 
-    private async Task<string?> UploadOnceAsync(BackupPlan plan, ICloudStorage cloud, BackupOp op, Action<long> onBytes, bool firstAttempt, CancellationToken ct)
+    private async Task<(string? Why, bool Verified)> UploadOnceAsync(BackupPlan plan, ICloudStorage cloud, BackupOp op, Action<long> onBytes, CancellationToken ct)
     {
         var before = new FileInfo(op.LocalPath);
-        if (!before.Exists) return "it was removed before it could be uploaded";
+        if (!before.Exists) return ("it was removed before it could be uploaded", false);
         var (size, mtime) = (before.Length, before.LastWriteTimeUtc);
-
-        // Never replace a cloud file without keeping it as an older version first. (On a retry, what's there is
-        // this run's own failed attempt, not a version worth keeping.)
-        if (firstAttempt && await cloud.GetAsync(op.RemotePath, ct) is not null)
-            await KeepAsVersionAsync(plan, cloud, op.LocalPath, op.RemotePath, "replaced by a newer copy", ct);
-
         var kind = cloud.ExpectedHashKind(size);
-        var hasher = CloudHashes.Create(kind);
-        CloudItem item;
-        await using (var file = new FileStream(op.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true))
+        var progress = new Progress<long>(onBytes);
+        // Reading, hashing and sending happen off the UI thread.
+        var (item, read, localHash) = await Task.Run(async () =>
         {
+            var hasher = CloudHashes.Create(kind);
+            await using var file = new FileStream(op.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true);
             var hashing = new HashingStream(file, hasher);
             Stream body = plan.BandwidthKBps > 0 ? new ThrottledStream(hashing, plan.BandwidthKBps * 1024L) : hashing;
-            item = await cloud.UploadAsync(op.RemotePath, body, size, new Progress<long>(onBytes), ct);
-            if (hashing.BytesRead != size) return "it changed size while it was being uploaded";
-        }
+            var uploaded = await cloud.UploadAsync(op.RemotePath, body, size, progress, ct).ConfigureAwait(false);
+            return (uploaded, hashing.BytesRead, hasher?.Finish());
+        }, ct);
+        if (read != size) return ("it changed size while it was being uploaded", false);
         var after = new FileInfo(op.LocalPath);
         if (!after.Exists || after.Length != size || (after.LastWriteTimeUtc - mtime).Duration() > Tolerance)
-            return "it changed while it was being uploaded; it will be uploaded next time";
+            return ("it changed while it was being uploaded; it will be uploaded next time", false);
         if (item.Size != size) throw new ChecksumMismatch($"the cloud stored {item.Size} bytes instead of {size}");
-        var localHash = hasher?.Finish();
         var verified = item.HashKind is not null && item.HashKind == kind && CloudHashes.Equal(kind, item.Hash, localHash);
         if (item.HashKind is not null && !verified) throw new ChecksumMismatch("the cloud copy's checksum doesn't match");
         if (plan.Id > 0)
-            services.BackupManifest.Save(plan.Id, new ManifestEntry(op.LocalPath, size, mtime, verified ? kind : null, verified ? localHash : null, op.RemotePath, DateTime.UtcNow));
-        return null;
+            services.BackupManifest.Save(plan.Id, new ManifestEntry(op.LocalPath, size, mtime, verified ? kind : null, verified ? localHash : null, op.RemotePath, DateTime.UtcNow),
+                services.CaseInsensitivePaths);
+        return (null, verified);
     }
 
-    /// <summary>Moves a cloud file into .miu-versions and keeps only the newest N versions of it.</summary>
+    /// <summary>
+    /// Moves a cloud file into .miu-versions and keeps only the newest N versions of it. The only copy of a file Miu
+    /// freed is pinned: it is never pruned and stays restorable.
+    /// </summary>
     private async Task KeepAsVersionAsync(BackupPlan plan, ICloudStorage cloud, string localPath, string remotePath, string reason, CancellationToken ct)
     {
+        var current = await cloud.GetAsync(remotePath, ct);
+        if (current is null) return; // nothing there any more
         var versionPath = BackupPaths.Version(plan.RemoteFolder, remotePath, nowLocal());
         for (var i = 2; await cloud.GetAsync(versionPath, ct) is not null; i++)
             versionPath = BackupPaths.Version(plan.RemoteFolder, remotePath, nowLocal()) + $" ({i})";
         try { await cloud.MoveAsync(remotePath, versionPath, ct); }
-        catch (CloudException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { return; } // nothing there any more
+        catch (CloudException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound) { return; }
         if (plan.Id <= 0) return;
-        services.BackupManifest.AddVersion(plan.Id, localPath, versionPath, DateTime.UtcNow, reason);
-        foreach (var old in services.BackupManifest.Versions(plan.Id, localPath).Skip(Math.Max(1, plan.KeepVersions)))
+        var known = services.BackupManifest.For(plan.Id).FirstOrDefault(m => string.Equals(m.LocalPath, localPath, Cmp) && m.RemotePath == remotePath);
+        var pinned = known?.Freed == true;
+        services.BackupManifest.AddVersion(plan.Id, new BackupVersion(0, localPath, versionPath, DateTime.UtcNow, pinned ? "freed from this computer, then replaced" : reason,
+            known?.Size ?? current.Size, known?.MtimeUtc ?? current.ModifiedUtc, known?.HashKind ?? current.HashKind, known?.Hash ?? current.Hash, pinned));
+        foreach (var old in services.BackupManifest.Versions(plan.Id, localPath).Where(v => !v.Pinned).Skip(Math.Max(1, plan.KeepVersions)))
         {
             try
             {
@@ -269,41 +329,46 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
     {
         var failed = new List<(string, string)>();
         if (frees.Count == 0) return (0, 0, 0, failed);
-        var manifest = services.BackupManifest.For(plan.Id).ToDictionary(m => m.LocalPath, services.CaseInsensitivePaths ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var ready = new List<(BackupOp Op, ManifestEntry Entry)>();
-        foreach (var op in frees)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (!manifest.TryGetValue(op.LocalPath, out var m) || m.Freed) continue; // not backed up (its upload failed)
-            if (m.Hash is null || m.HashKind is null) { failed.Add((op.LocalPath, "kept: this cloud doesn't confirm a checksum, so Miu can't prove the copy is complete")); continue; }
-            var fi = new FileInfo(op.LocalPath);
-            if (!fi.Exists || fi.Length != m.Size || (fi.LastWriteTimeUtc - m.MtimeUtc).Duration() > Tolerance) continue; // changed: back it up again first
-            var remote = await cloud.GetAsync(m.RemotePath, ct);
-            if (remote is null || remote.Size != m.Size || remote.HashKind != m.HashKind || !CloudHashes.Equal(m.HashKind, remote.Hash, m.Hash))
-            {
-                failed.Add((op.LocalPath, "kept: its cloud copy doesn't match"));
-                continue;
-            }
-            ready.Add((op, m));
-        }
-        if (ready.Count == 0) return (0, 0, 0, failed);
-
         long freedBytes = 0, actionId = 0;
         var freed = 0;
         var cleanup = new CleanupService(services);
         foreach (var src in plan.Sources)
         {
-            var here = ready.Where(r => r.Op.LocalPath.StartsWith(Path.TrimEndingDirectorySeparator(src.LocalPath) + Path.DirectorySeparatorChar, Cmp)).ToList();
+            var here = frees.Where(o => o.LocalPath.StartsWith(Path.TrimEndingDirectorySeparator(src.LocalPath) + Path.DirectorySeparatorChar, Cmp)).ToList();
             if (here.Count == 0) continue;
-            // A fresh scan so Keep rules and protected locations are honoured, exactly as in a normal clean.
+            // Scan first (Keep rules, protected places), then check each file, then recycle straight away.
             var session = await ScanSession.RunAsync(services, src.LocalPath, null, ct);
-            var items = here.Select(r => new CartItem(r.Op.LocalPath, Path.GetFileName(r.Op.LocalPath), r.Op.Bytes, Verdict.Safe, "Backed up and verified in the cloud")).ToList();
+            var manifest = new Dictionary<string, ManifestEntry>(services.CaseInsensitivePaths ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            foreach (var m in services.BackupManifest.For(plan.Id)) manifest.TryAdd(m.LocalPath, m);
+            var ready = new List<(BackupOp Op, ManifestEntry Entry)>();
+            foreach (var op in here)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!manifest.TryGetValue(op.LocalPath, out var m) || m.Freed) continue; // not backed up (its upload failed)
+                if (m.Hash is null || m.HashKind is null) { failed.Add((op.LocalPath, "kept: this cloud doesn't confirm a checksum, so Miu can't prove the copy is complete")); continue; }
+                CloudItem? remote;
+                try { remote = await RetryAsync(() => cloud.GetAsync(m.RemotePath, ct), ct); }
+                catch (CloudException ex) { failed.Add((op.LocalPath, "kept: " + ex.Message)); continue; }
+                if (remote is null || remote.Size != m.Size || remote.HashKind != m.HashKind || !CloudHashes.Equal(m.HashKind, remote.Hash, m.Hash))
+                {
+                    failed.Add((op.LocalPath, "kept: its cloud copy doesn't match"));
+                    continue;
+                }
+                // The local file must still be exactly what was uploaded: same size and date, and the same content.
+                if (!Unchanged(op.LocalPath, m)) continue;
+                var localHash = await Task.Run(() => HashFileAsync(m.HashKind, op.LocalPath, ct), ct);
+                if (!CloudHashes.Equal(m.HashKind, localHash, m.Hash)) { failed.Add((op.LocalPath, "kept: it changed since it was backed up")); continue; }
+                ready.Add((op, m));
+            }
+            ready = ready.Where(r => Unchanged(r.Op.LocalPath, r.Entry)).ToList(); // last look, right before recycling
+            if (ready.Count == 0) continue;
+            var items = ready.Select(r => new CartItem(r.Op.LocalPath, Path.GetFileName(r.Op.LocalPath), r.Op.Bytes, Verdict.Safe, "Backed up and verified in the cloud")).ToList();
             var outcome = await cleanup.CleanAsync(items, session, "backup", ct: ct);
             failed.AddRange(outcome.Failed.Select(f => (f.Path, "kept: " + f.Reason)));
             var failedPaths = outcome.Failed.Select(f => f.Path).ToHashSet();
-            foreach (var (op, entry) in here.Where(r => !failedPaths.Contains(r.Op.LocalPath) && !File.Exists(r.Op.LocalPath)))
+            foreach (var (op, entry) in ready.Where(r => !failedPaths.Contains(r.Op.LocalPath) && !File.Exists(r.Op.LocalPath)))
             {
-                services.BackupManifest.Save(plan.Id, entry with { Freed = true });
+                services.BackupManifest.Save(plan.Id, entry with { Freed = true }, services.CaseInsensitivePaths);
                 freed++;
             }
             freedBytes += outcome.FreedBytes;
@@ -312,21 +377,59 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
         return (freed, freedBytes, actionId, failed);
     }
 
+    private static bool Unchanged(string path, ManifestEntry m)
+    {
+        var fi = new FileInfo(path);
+        return fi.Exists && fi.Length == m.Size && (fi.LastWriteTimeUtc - m.MtimeUtc).Duration() <= Tolerance;
+    }
+
+    /// <summary>Everything in a plan's backup you can restore: current copies, then older versions (newest first).</summary>
+    public IReadOnlyList<RestoreItem> RestoreChoices(BackupPlan plan)
+    {
+        var list = services.BackupManifest.For(plan.Id).Select(m => new RestoreItem(m)).ToList();
+        foreach (var v in services.BackupManifest.Versions(plan.Id))
+        {
+            var normal = NormalPathOf(v.RemotePath);
+            if (normal is null) continue;
+            var entry = new ManifestEntry(v.LocalPath, v.Size, v.MtimeUtc ?? v.CreatedUtc, v.HashKind, v.Hash, normal, v.CreatedUtc, v.Pinned);
+            list.Add(new RestoreItem(entry, v.RemotePath, v.Pinned ? "the copy Miu freed from this computer" : "older version"));
+        }
+        return list;
+    }
+
+    /// <summary>"Backup/.miu-versions/2026-11-05 140309/Photos/a.jpg" → "Backup/Photos/a.jpg".</summary>
+    private static string? NormalPathOf(string versionPath)
+    {
+        var marker = "/" + BackupPaths.VersionsFolder + "/";
+        var i = versionPath.IndexOf(marker, StringComparison.Ordinal);
+        if (i < 0) return null;
+        var rest = versionPath[(i + marker.Length)..];
+        var slash = rest.IndexOf('/');
+        if (slash < 0) return null;
+        var inside = rest[(slash + 1)..];
+        if (inside.EndsWith(')') && inside.LastIndexOf(" (", StringComparison.Ordinal) is var p and > 0 && int.TryParse(inside[(p + 2)..^1], out _)) inside = inside[..p];
+        return versionPath[..i] + "/" + inside;
+    }
+
     /// <summary>
     /// Downloads files back. A different local file is never overwritten: the copy is saved as
     /// "name (restored YYYY-MM-DD).ext" next to it. <paramref name="toFolder"/> null means "where they were".
     /// </summary>
-    public async Task<RestoreOutcome> RestoreAsync(BackupPlan plan, IReadOnlyList<ManifestEntry> entries, string? toFolder, IProgress<BackupProgress>? progress = null,
+    public Task<RestoreOutcome> RestoreAsync(BackupPlan plan, IReadOnlyList<ManifestEntry> entries, string? toFolder, IProgress<BackupProgress>? progress = null,
+        CancellationToken ct = default) => RestoreAsync(plan, entries.Select(e => new RestoreItem(e)).ToList(), toFolder, progress, ct);
+
+    public async Task<RestoreOutcome> RestoreAsync(BackupPlan plan, IReadOnlyList<RestoreItem> items, string? toFolder, IProgress<BackupProgress>? progress = null,
         CancellationToken ct = default)
     {
         var cloud = accounts.Open(services.CloudAccounts.Get(plan.AccountId) ?? throw new CloudException("The cloud account for this backup is gone."));
         var failed = new List<(string, string)>();
         var renamed = new List<string>();
         int restored = 0, skipped = 0, done = 0;
-        foreach (var e in entries)
+        foreach (var it in items)
         {
+            var e = it.Entry;
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new BackupProgress(done++, entries.Count, 0, Path.GetFileName(e.LocalPath)));
+            progress?.Report(new BackupProgress(done++, items.Count, 0, Path.GetFileName(e.LocalPath)));
             var target = TargetFor(plan, e, toFolder);
             if (target is null) { failed.Add((e.LocalPath, "its path isn't safe to restore")); continue; }
             try
@@ -335,24 +438,30 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
                 if (fi.Exists && fi.Length == e.Size && (fi.LastWriteTimeUtc - e.MtimeUtc).Duration() <= Tolerance) { skipped++; continue; }
                 if (fi.Exists || Directory.Exists(target)) { target = RestoredName(target); renamed.Add(target); }
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                var partial = target + SyncLister.PartialSuffix;
-                await using (var output = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true))
-                    await cloud.DownloadAsync(e.RemotePath, output, ct);
-                var got = new FileInfo(partial).Length;
-                var hashOk = e.Hash is null || CloudHashes.Equal(e.HashKind, e.Hash, await HashFileAsync(e.HashKind, partial, ct));
-                if (got != e.Size || !hashOk)
+                // A fresh, Miu-named temp file: never an existing file of yours.
+                var partial = $"{target}.{Guid.NewGuid().ToString("N")[..8]}-0{SyncLister.PartialSuffix}";
+                var source = it.VersionPath ?? e.RemotePath;
+                try
                 {
-                    File.Delete(partial);
-                    failed.Add((e.LocalPath, "the downloaded copy didn't match the backup"));
-                    continue;
+                    var ok = await Task.Run(async () =>
+                    {
+                        await using (var output = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true))
+                            await cloud.DownloadAsync(source, output, ct).ConfigureAwait(false);
+                        return new FileInfo(partial).Length == e.Size && (e.Hash is null || CloudHashes.Equal(e.HashKind, e.Hash, await HashFileAsync(e.HashKind, partial, ct).ConfigureAwait(false)));
+                    }, ct);
+                    if (!ok)
+                    {
+                        failed.Add((e.LocalPath, "the downloaded copy didn't match the backup"));
+                        continue;
+                    }
+                    File.SetLastWriteTimeUtc(partial, e.MtimeUtc);
+                    File.Move(partial, target);
                 }
-                File.SetLastWriteTimeUtc(partial, e.MtimeUtc);
-                File.Move(partial, target);
+                finally { if (File.Exists(partial)) File.Delete(partial); }
                 restored++;
-                if (e.Freed && string.Equals(target, e.LocalPath, Cmp)) services.BackupManifest.Save(plan.Id, e with { Freed = false });
+                if (!it.IsVersion && e.Freed && string.Equals(target, e.LocalPath, Cmp)) services.BackupManifest.Save(plan.Id, e with { Freed = false }, services.CaseInsensitivePaths);
             }
-            catch (CloudException ex) { failed.Add((e.LocalPath, ex.Message)); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed.Add((e.LocalPath, ex.Message)); }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { failed.Add((e.LocalPath, Message(ex))); }
         }
         return new RestoreOutcome(restored, skipped, failed, renamed);
     }
@@ -398,24 +507,29 @@ public sealed class BackupService(AppServices services, CloudAccountsService acc
         var cloud = accounts.Open(account);
         var stamp = nowLocal().ToString("yyyy-MM-dd HHmm", CultureInfo.InvariantCulture);
         var files = new List<(string Local, string Remote)>();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in paths)
         {
-            var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(p));
-            if (File.Exists(p)) files.Add((p, $"Miu Backup/Before cleaning/{stamp}/{name}"));
+            var leaf = Path.GetFileName(Path.TrimEndingDirectorySeparator(p));
+            var name = leaf;
+            for (var i = 2; !used.Add(name); i++) name = $"{leaf} ({i})"; // two items with the same name never overwrite each other
+
+            if (File.Exists(p)) files.Add((p, $"{BeforeCleaningFolder}/{stamp}/{name}"));
             else if (Directory.Exists(p))
             {
                 var listing = await Task.Run(() => SyncLister.List(p, ct), ct);
                 if (listing.Entries is null || listing.UnknownPaths.Any()) return $"Miu couldn't read everything in {name}, so it wasn't cleaned.";
-                files.AddRange(listing.Entries.Select(e => (Path.Combine(p, e.RelPath.Replace('/', Path.DirectorySeparatorChar)), $"Miu Backup/Before cleaning/{stamp}/{name}/{e.RelPath}")));
+                files.AddRange(listing.Entries.Select(e => (Path.Combine(p, e.RelPath.Replace('/', Path.DirectorySeparatorChar)), $"{BeforeCleaningFolder}/{stamp}/{name}/{e.RelPath}")));
             }
         }
-        var temp = new BackupPlan(0, "Before cleaning", account.Id, [], "Miu Backup/Before cleaning", BackupMode.CopyNew);
+        var temp = new BackupPlan(0, "Before cleaning", account.Id, [], BeforeCleaningFolder, BackupMode.CopyNew);
         var done = 0;
         foreach (var (local, remote) in files)
         {
             progress?.Report(new BackupProgress(done++, files.Count, 0, Path.GetFileName(local)));
-            var why = await UploadWithRetryAsync(temp, cloud, new BackupOp(BackupOpKind.Upload, local, remote, new FileInfo(local).Length, "before cleaning"), _ => { }, ct);
+            var (why, verified) = await UploadFileAsync(temp, cloud, new BackupOp(BackupOpKind.Upload, local, remote, new FileInfo(local).Length, "before cleaning"), _ => { }, ct);
             if (why is not null) return $"{Path.GetFileName(local)} couldn't be backed up ({why}), so nothing was cleaned.";
+            if (!verified) return $"This cloud didn't confirm {Path.GetFileName(local)} with a checksum, so nothing was cleaned.";
         }
         return null;
     }

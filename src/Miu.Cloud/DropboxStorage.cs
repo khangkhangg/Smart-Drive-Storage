@@ -30,7 +30,7 @@ public sealed class DropboxStorage(OAuthSession session) : ICloudStorage
     {
         path = CloudPath.Normalize(path);
         using var r = await RpcAsync("get_metadata", new { path = Dbx(path) }, ct, allowConflict: true);
-        if (r.StatusCode == HttpStatusCode.Conflict) return null; // path/not_found
+        if (await IsNotFoundAsync(r, ct)) return null;
         var e = await r.Content.ReadFromJsonAsync<Entry>(Snake, ct);
         return e is { Tag: "file" } ? Item(path, e) : null;
     }
@@ -40,7 +40,7 @@ public sealed class DropboxStorage(OAuthSession session) : ICloudStorage
         folder = CloudPath.Normalize(folder);
         var items = new List<CloudItem>();
         using var first = await RpcAsync("list_folder", new { path = Dbx(folder), recursive = true, limit = 2000 }, ct, allowConflict: true);
-        if (first.StatusCode == HttpStatusCode.Conflict) return items;
+        if (await IsNotFoundAsync(first, ct)) return items;
         var page = await first.Content.ReadFromJsonAsync<ListResult>(Snake, ct);
         while (page is not null)
         {
@@ -108,7 +108,17 @@ public sealed class DropboxStorage(OAuthSession session) : ICloudStorage
 
     public async Task RemoveAsync(string path, CancellationToken ct)
     {
-        using var _ = await RpcAsync("delete_v2", new { path = Dbx(CloudPath.Normalize(path)) }, ct, allowConflict: true);
+        using var r = await RpcAsync("delete_v2", new { path = Dbx(CloudPath.Normalize(path)) }, ct, allowConflict: true);
+        await IsNotFoundAsync(r, ct); // already gone is fine; any other refusal throws
+    }
+
+    /// <summary>A 409 means "not found" only when Dropbox says so; anything else is a real error.</summary>
+    private static async Task<bool> IsNotFoundAsync(HttpResponseMessage r, CancellationToken ct)
+    {
+        if (r.StatusCode != HttpStatusCode.Conflict) return false;
+        var summary = OAuthSession.Summary(await r.Content.ReadAsStringAsync(ct));
+        if (summary.Contains("not_found", StringComparison.Ordinal)) return true;
+        throw new CloudException("Dropbox refused: " + summary, HttpStatusCode.Conflict);
     }
 
     private Task<HttpResponseMessage> RpcAsync(string endpoint, object body, CancellationToken ct, bool allowConflict = false) =>
