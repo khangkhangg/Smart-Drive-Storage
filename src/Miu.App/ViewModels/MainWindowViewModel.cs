@@ -139,7 +139,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (Services.Actions.Get(actionId) is { Kind: "sync" })
         {
-            var (restored, skipped) = Automation.Sync.Undo(actionId);
+            var (restored, skipped) = await Automation.Sync.UndoAsync(actionId);
             Notice = new NoticeViewModel(this, $"Put back {restored} {(restored == 1 ? "file" : "files")}.",
                 skipped.Count == 0 ? "" : $"{skipped.Count} not restored: " + string.Join("; ", skipped.Take(3)), 0);
             Activity.Load();

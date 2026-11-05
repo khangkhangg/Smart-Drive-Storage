@@ -54,3 +54,16 @@
 5. App: `SyncService` (preview, run, refusal, baseline, Activity + Undo, job runs), `AutomationService` runs due sync jobs and notifies, network scans throttled, reconnect at start-up for saved shares.
 6. UI: Cloud & Network page (tabs), map form, discovered devices list, mapped drives with Scan/Unmap, sync job editor, preview sheet, Activity text for sync. Headless tests and screenshots.
 7. Docs, independent review, fix pass, push.
+
+## Known limits (after review)
+- A rename that only changes upper/lower case (`foo.txt` → `Foo.txt`) isn't copied to a side that ignores case; the file keeps its old name there.
+- Links, junctions and cloud placeholders that appear as reparse points (OneDrive or Dropbox files not downloaded yet) are left alone on both sides and listed in the preview note.
+- Deferred minors:
+  - Resuming trusts the partial file's length (no tail re-check after a power loss).
+  - Very long names (over ~210 characters) can't get a partial name.
+  - FAT stores times in local time, so a daylight-saving change makes Windows report every file 1 hour off.
+  - Drives connected without a letter aren't listed.
+  - Windows' remembered mapping is replaced at reconnect.
+  - `smb://` URLs aren't percent-decoded and can't carry a port.
+  - WS-Discovery shows an IP instead of the computer's name.
+  - Listing drives calls Windows on the UI thread.

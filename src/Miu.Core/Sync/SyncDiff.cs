@@ -24,7 +24,8 @@ public enum SyncOpKind
 
 public sealed record SyncOp(SyncOpKind Kind, Side From, string RelPath, long Bytes, string Reason, string? ConflictName = null);
 
-public sealed record SyncPlan(IReadOnlyList<SyncOp> Ops, string? Refusal, int KeptNewerOnTarget = 0)
+/// <param name="RefusalIsFinal">True for refusals that "Run anyway" may never override (an empty or vanished folder).</param>
+public sealed record SyncPlan(IReadOnlyList<SyncOp> Ops, string? Refusal, int KeptNewerOnTarget = 0, bool RefusalIsFinal = false)
 {
     public int Copies => Ops.Count(o => o.Kind == SyncOpKind.Copy);
     public int Archives => Ops.Count(o => o.Kind == SyncOpKind.Archive);
@@ -59,8 +60,8 @@ public static class SyncDiff
     public static SyncPlan Plan(IReadOnlyCollection<SyncEntry>? source, IReadOnlyCollection<SyncEntry>? target, IReadOnlyCollection<SyncEntry>? baseline,
         SyncMode mode, bool caseInsensitive, DateOnly today, ISet<string>? sameContent = null)
     {
-        if (source is null) return new SyncPlan([], "Miu couldn't read the source folder, so nothing was changed.");
-        if (target is null) return new SyncPlan([], "Miu couldn't read the target folder, so nothing was changed.");
+        if (source is null) return new SyncPlan([], "Miu couldn't read the source folder, so nothing was changed.", RefusalIsFinal: true);
+        if (target is null) return new SyncPlan([], "Miu couldn't read the target folder, so nothing was changed.", RefusalIsFinal: true);
         var cmp = caseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var s = ToMap(source, cmp);
         var t = ToMap(target, cmp);
@@ -132,27 +133,28 @@ public static class SyncDiff
                 break;
         }
 
-        return new SyncPlan(ops, Brake(mode, s.Count, t.Count, b?.Count ?? 0, ops), keptNewer);
+        var (refusal, final) = Brake(mode, s.Count, t.Count, b?.Count ?? 0, ops);
+        return new SyncPlan(ops, refusal, keptNewer, final);
     }
 
     /// <summary>
     /// Refuses runs that look like a missing or disconnected folder rather than real deletions: they would empty the
     /// other side.
     /// </summary>
-    private static string? Brake(SyncMode mode, int sourceCount, int targetCount, int baselineCount, List<SyncOp> ops)
+    private static (string? Refusal, bool Final) Brake(SyncMode mode, int sourceCount, int targetCount, int baselineCount, List<SyncOp> ops)
     {
         if (mode == SyncMode.Mirror && sourceCount == 0 && targetCount > 0)
-            return $"The source folder is empty, so mirroring would set aside all {targetCount} files in the target. Is the drive connected?";
+            return ($"The source folder is empty, so mirroring would set aside all {targetCount} files in the target. Is the drive connected?", true);
         if (mode == SyncMode.TwoWay && baselineCount > 0 && (sourceCount == 0 || targetCount == 0))
-            return $"The {(sourceCount == 0 ? "source" : "target")} folder is empty since the last sync. Is the drive connected? Nothing was changed.";
+            return ($"The {(sourceCount == 0 ? "source" : "target")} folder is empty since the last sync. Is the drive connected? Nothing was changed.", true);
         foreach (var side in new[] { Side.Source, Side.Target })
         {
             var n = ops.Count(o => o.Kind == SyncOpKind.Archive && o.From == side);
             var total = side == Side.Source ? sourceCount : targetCount;
             if (n > BrakeMinFiles && n * 2 > total)
-                return $"This would set aside {n} of {total} files in the {(side == Side.Source ? "source" : "target")}. That looks like a mistake (a disconnected drive?), so nothing was changed.";
+                return ($"This would set aside {n} of {total} files in the {(side == Side.Source ? "source" : "target")}. That looks like a mistake (a disconnected drive?), so nothing was changed.", false);
         }
-        return null;
+        return (null, false);
     }
 
     private static Dictionary<string, SyncEntry> ToMap(IEnumerable<SyncEntry> entries, StringComparer cmp)

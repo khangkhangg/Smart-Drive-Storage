@@ -97,6 +97,7 @@ public partial class CloudNetworkViewModel : ObservableObject
         DevicesText = "Looking for devices…";
         try
         {
+            await Task.Yield();
             var found = await Network.DiscoverAsync();
             Devices.Clear();
             foreach (var d in found) Devices.Add(d);
@@ -104,6 +105,7 @@ public partial class CloudNetworkViewModel : ObservableObject
                 ? @"Nothing answered. Some devices don't announce themselves: type \\name\folder below."
                 : $"Found {found.Count} {(found.Count == 1 ? "device" : "devices")}. Pick one to see its shared folders.";
         }
+        catch (Exception ex) when (ex is not OperationCanceledException) { DevicesText = "Couldn't search the network: " + ex.Message; }
         finally { IsSearching = false; }
     }
 
@@ -113,7 +115,8 @@ public partial class CloudNetworkViewModel : ObservableObject
         if (d is null) return;
         UncText = $@"\\{d.Address}\";
         Shares.Clear();
-        foreach (var s in await Network.Drives.ListSharesAsync(d.Address, default)) Shares.Add(s);
+        try { foreach (var s in await Network.Drives.ListSharesAsync(d.Address, default)) Shares.Add(s); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { System.Diagnostics.Trace.WriteLine("Listing shares failed: " + ex.Message); }
         NetworkMessageIsError = false;
         NetworkMessage = Shares.Count > 0 ? $"{d.Name} shares {Shares.Count} {(Shares.Count == 1 ? "folder" : "folders")}. Pick one." : $"Type the shared folder name after \\\\{d.Address}\\.";
     }
@@ -129,7 +132,9 @@ public partial class CloudNetworkViewModel : ObservableObject
     private async Task Map()
     {
         var letter = SelectedLetter == NoLetter ? null : SelectedLetter;
-        var r = await Network.MapAsync(UncText, letter, UserName, Password, Reconnect);
+        NetResult r;
+        try { r = await Network.MapAsync(UncText, letter, UserName, Password, Reconnect); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { r = NetResult.Fail("Couldn't connect: " + ex.Message); }
         Password = ""; // never kept on screen
         NetworkMessageIsError = !r.Ok;
         NetworkMessage = r.Message;
@@ -140,7 +145,9 @@ public partial class CloudNetworkViewModel : ObservableObject
     private async Task Unmap(MappedRow? row)
     {
         if (row is null) return;
-        var r = await Network.UnmapAsync(row.Drive);
+        NetResult r;
+        try { r = await Network.UnmapAsync(row.Drive); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { r = NetResult.Fail("Couldn't disconnect: " + ex.Message); }
         NetworkMessageIsError = !r.Ok;
         NetworkMessage = r.Message;
         RefreshDrives();
@@ -158,7 +165,7 @@ public partial class CloudNetworkViewModel : ObservableObject
     private async Task ScanPath()
     {
         var path = UncPath.TryParse(ScanPathText, out var unc) && OperatingSystem.IsWindows() ? unc!.ToString() : ScanPathText.Trim();
-        if (!Directory.Exists(path))
+        if (path.Length == 0 || !await Task.Run(() => Directory.Exists(path)))
         {
             NetworkMessageIsError = true;
             NetworkMessage = $"Miu can't open {path}. Is it connected?";
@@ -253,9 +260,16 @@ public partial class CloudNetworkViewModel : ObservableObject
         PreviewOps.Clear();
         PreviewText = "Comparing the two folders…";
         PreviewCanRun = PreviewRefused = false;
-        var p = await _shell.Automation.Sync.PreviewAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job);
+        SyncPreview p;
+        try { p = await _shell.Automation.Sync.PreviewAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PreviewText = "Couldn't compare the folders: " + ex.Message;
+            return;
+        }
         PreviewText = p.Text;
-        PreviewRefused = p.Problem is null && p.Plan.Refusal is not null;
+        _previewRefusal = p.Plan.Refusal;
+        PreviewRefused = p.CanRunAnyway;
         PreviewCanRun = p.CanRun;
         foreach (var op in p.Plan.Ops.Take(100))
             PreviewOps.Add(new PreviewOpRow(op.Kind switch
@@ -267,8 +281,10 @@ public partial class CloudNetworkViewModel : ObservableObject
         if (p.Plan.Ops.Count > 100) PreviewOps.Add(new PreviewOpRow("", $"…and {p.Plan.Ops.Count - 100} more", ""));
     }
 
-    [RelayCommand] private Task RunPreview() => RunAsync(false);
-    [RelayCommand] private Task RunAnyway() => RunAsync(true);
+    private string? _previewRefusal;
+
+    [RelayCommand] private Task RunPreview() => RunAsync(null);
+    [RelayCommand] private Task RunAnyway() => RunAsync(_previewRefusal);
 
     [RelayCommand]
     private void ClosePreview()
@@ -277,7 +293,8 @@ public partial class CloudNetworkViewModel : ObservableObject
         Previewing = null;
     }
 
-    private async Task RunAsync(bool anyway)
+    /// <param name="overrideRefusal">The refusal shown in this preview; a different one (things changed since) still stops the run.</param>
+    private async Task RunAsync(string? overrideRefusal)
     {
         if (Previewing is not { } row || IsRunning) return;
         IsRunning = true;
@@ -285,12 +302,17 @@ public partial class CloudNetworkViewModel : ObservableObject
         var progress = new Progress<SyncProgress>(p => ProgressText = p.Total == 0 ? "" : $"{p.Done} of {p.Total} · {SizeFormatter.Format(p.Bytes)} · {p.Current}");
         try
         {
-            var outcome = await _shell.Automation.RunSyncAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job, anyway, progress, _runCts.Token);
+            var outcome = await _shell.Automation.RunSyncAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job, overrideRefusal, progress, _runCts.Token);
             SyncMessageIsError = outcome.Status is "failed" or "refused" or "partial";
             SyncMessage = $"“{row.Name}”: {outcome.Summary}";
             if (outcome.ActionId > 0) _shell.Activity.Load();
         }
-        catch (OperationCanceledException) { SyncMessage = "Stopped. Finished files are kept; the rest will be copied next time."; }
+        catch (OperationCanceledException) { SyncMessage = "Stopped. Finished files are kept, and anything set aside is in Activity. The rest will be copied next time."; }
+        catch (Exception ex)
+        {
+            SyncMessageIsError = true;
+            SyncMessage = "Couldn't sync: " + ex.Message;
+        }
         finally
         {
             IsRunning = false;

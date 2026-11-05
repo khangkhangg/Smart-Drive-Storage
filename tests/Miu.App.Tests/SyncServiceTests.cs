@@ -72,7 +72,7 @@ public sealed class SyncServiceTests : IDisposable
         var action = _s.Actions.Get(outcome.ActionId)!;
         action.Kind.Should().Be("sync");
 
-        var (restored, skipped) = Service.Undo(outcome.ActionId);
+        var (restored, skipped) = await Service.UndoAsync(outcome.ActionId);
         restored.Should().Be(1);
         skipped.Should().BeEmpty();
         File.ReadAllText(Path.Combine(Dst, "old.txt")).Should().Be("old");
@@ -101,7 +101,7 @@ public sealed class SyncServiceTests : IDisposable
         Write(Path.Combine(Src, "a.txt"), "new");
         Write(Path.Combine(Dst, "a.txt"), "old", 300);
         var outcome = await Service.RunAsync(AddJob(SyncMode.Mirror), "app");
-        var (restored, skipped) = Service.Undo(outcome.ActionId);
+        var (restored, skipped) = await Service.UndoAsync(outcome.ActionId);
         restored.Should().Be(0);
         skipped.Single().Should().Contain("newer");
         File.ReadAllText(Path.Combine(Dst, "a.txt")).Should().Be("new");

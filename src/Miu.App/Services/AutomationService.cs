@@ -105,24 +105,25 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
                 services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = now + Postpone });
                 continue;
             }
-            await RunSyncUnlockedAsync(j, false, null, ct);
-            services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null });
+            try { await RunSyncUnlockedAsync(j, ct); }
+            finally { services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null }); }
         }
     }
 
     /// <summary>Runs one sync job now (from the app). Waits for any run in progress first.</summary>
-    public async Task<SyncOutcome> RunSyncAsync(Miu.Core.Sync.SyncJob job, bool runAnyway, IProgress<Miu.Platform.Portable.SyncProgress>? progress, CancellationToken ct = default)
+    /// <param name="overrideRefusal">The refusal shown in the preview, when you pressed "Run anyway".</param>
+    public async Task<SyncOutcome> RunSyncAsync(Miu.Core.Sync.SyncJob job, string? overrideRefusal, IProgress<Miu.Platform.Portable.SyncProgress>? progress, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);
-        try { return await Sync.RunAsync(job, "app", runAnyway, progress, ct); }
+        try { return await Sync.RunAsync(job, "app", overrideRefusal, progress, ct); }
         finally { _gate.Release(); }
     }
 
-    private async Task RunSyncUnlockedAsync(Miu.Core.Sync.SyncJob j, bool runAnyway, IProgress<Miu.Platform.Portable.SyncProgress>? progress, CancellationToken ct)
+    private async Task RunSyncUnlockedAsync(Miu.Core.Sync.SyncJob j, CancellationToken ct)
     {
         SyncOutcome outcome;
-        try { outcome = await Sync.RunAsync(j, "auto", runAnyway, progress, ct); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        try { outcome = await Sync.RunAsync(j, "auto", null, null, ct); } // a schedule never overrides a refusal
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             outcome = new SyncOutcome("failed", ex.Message);
             services.SyncJobs.Patch(j.Id, x => x with { LastRunUtc = DateTime.UtcNow, LastResult = "Failed: " + ex.Message });
@@ -142,7 +143,7 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
             foreach (var w in services.Watches.All().Where(w => w.Enabled && w.Schedule.Kind == ScheduleKind.AtSignIn))
                 await RunUnlockedAsync(w, null, ct);
             foreach (var j in services.SyncJobs.All().Where(j => j.Enabled && j.Schedule?.Kind == ScheduleKind.AtSignIn))
-                await RunSyncUnlockedAsync(j, false, null, ct);
+                await RunSyncUnlockedAsync(j, ct);
         }
         finally { _gate.Release(); }
     }

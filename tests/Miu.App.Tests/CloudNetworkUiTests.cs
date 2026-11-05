@@ -89,21 +89,27 @@ public sealed class CloudNetworkUiTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task A_refused_preview_offers_run_anyway_only()
+    public async Task An_empty_source_is_refused_without_run_anyway_but_mass_archive_offers_it()
     {
         var src = Path.Combine(_root, "empty");
         var dst = Path.Combine(_root, "full");
         Directory.CreateDirectory(src);
         Directory.CreateDirectory(dst);
-        File.WriteAllText(Path.Combine(dst, "keep.txt"), "x");
+        for (var i = 0; i < 30; i++) File.WriteAllText(Path.Combine(dst, $"keep{i}.txt"), "x");
         var vm = Shell();
         var cn = vm.CloudNetwork;
         cn.JobSource = src;
         cn.JobTarget = dst;
         await cn.SaveJobCommand.ExecuteAsync(null);
         cn.PreviewCanRun.Should().BeFalse();
-        cn.PreviewRefused.Should().BeTrue();
+        cn.PreviewRefused.Should().BeFalse(); // an empty source is never overridden
         cn.PreviewText.Should().Contain("empty");
-        File.Exists(Path.Combine(dst, "keep.txt")).Should().BeTrue();
+
+        File.WriteAllText(Path.Combine(src, "keep0.txt"), "x");
+        await cn.PreviewAsync(cn.Jobs.Single());
+        cn.PreviewRefused.Should().BeTrue(); // "set aside 29 of 30": you may decide
+        await cn.RunAnywayCommand.ExecuteAsync(null);
+        Directory.GetFiles(dst).Should().ContainSingle();
+        Directory.GetFiles(Path.Combine(dst, ".miu-sync-trash"), "*", SearchOption.AllDirectories).Should().HaveCount(29); // keep0 already matched
     }
 }

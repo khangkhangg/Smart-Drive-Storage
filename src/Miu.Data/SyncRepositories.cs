@@ -44,7 +44,7 @@ public sealed class NetworkSharesRepository(MiuDatabase db)
     public void Delete(string unc)
     {
         using var cmd = db.Connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM network_shares WHERE unc = $u";
+        cmd.CommandText = "DELETE FROM network_shares WHERE unc = $u COLLATE NOCASE";
         cmd.Parameters.AddWithValue("$u", unc);
         cmd.ExecuteNonQuery();
     }
