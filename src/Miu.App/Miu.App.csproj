@@ -18,6 +18,7 @@
     <ProjectReference Include="../Miu.Dev/Miu.Dev.csproj" />
     <ProjectReference Include="../Miu.Data/Miu.Data.csproj" />
     <ProjectReference Include="../Miu.Platform.Portable/Miu.Platform.Portable.csproj" />
+    <ProjectReference Include="../Miu.Platform.Windows/Miu.Platform.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../rules/builtin/*.json" Link="rules/builtin/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

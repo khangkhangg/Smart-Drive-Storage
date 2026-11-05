@@ -1,35 +1,53 @@
+using Miu.Core.Cleanup;
 using Miu.Core.Rules;
 using Miu.Data;
 using Miu.Platform.Abstractions;
 using Miu.Platform.Portable;
+using Miu.Platform.Windows;
 
 namespace Miu.App.Services;
 
 /// <summary>Composition root: everything the UI needs, created once.</summary>
 public sealed class AppServices : IDisposable
 {
-    private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard)
+    private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard, IRecycleBin recycleBin)
     {
         Database = db;
         Settings = new SettingsRepository(db);
+        Actions = new ActionsRepository(db);
         Scanner = scanner;
         Rules = rules;
         Guard = guard;
+        // Everything that deletes goes through the guard, at deletion time.
+        Recycler = new SafeRecycler(recycleBin, guard);
+        Cart = new CleanupCart(PathNormalizer.Current);
     }
 
     public MiuDatabase Database { get; }
     public SettingsRepository Settings { get; }
+    public ActionsRepository Actions { get; }
     public IScanner Scanner { get; }
     public IReadOnlyList<Rule> Rules { get; }
     public ProtectedPathGuard Guard { get; }
+    public IRecycleBin Recycler { get; }
+    public CleanupCart Cart { get; }
     public bool CaseInsensitivePaths => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+    public bool CanClean => Recycler.IsSupported;
+    public string RecycleBinName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
-    public static AppServices Create(string databasePath)
+    public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null)
     {
         var db = new MiuDatabase(databasePath);
         db.Migrate();
         var rules = RuleLoader.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "builtin"));
-        return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs());
+        return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin());
+    }
+
+    private static IRecycleBin DefaultRecycleBin()
+    {
+        if (OperatingSystem.IsWindows()) return new WindowsRecycleBin();
+        if (OperatingSystem.IsLinux()) return new FreedesktopTrash();
+        return new UnsupportedRecycleBin(); // macOS arrives in Phase 9
     }
 
     public void Dispose() => Database.Dispose();

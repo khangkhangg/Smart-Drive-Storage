@@ -11,7 +11,7 @@ public sealed class ScanSession
     private readonly RuleEngine _engine;
     private readonly ProtectedPathGuard _guard;
     private readonly bool _ci;
-    private readonly Dictionary<int, DetectedProject> _projectsByNode;
+    private Dictionary<int, DetectedProject> _projectsByNode;
     private readonly Dictionary<int, VerdictResult> _verdicts = new();
     private readonly Dictionary<int, long> _safeUnder = new();
     private readonly object _gate = new();
@@ -28,7 +28,7 @@ public sealed class ScanSession
     }
 
     public ScanTree Tree { get; }
-    public IReadOnlyList<DetectedProject> Projects { get; }
+    public IReadOnlyList<DetectedProject> Projects { get; private set; }
     public DateTime NowUtc { get; }
     public IReadOnlyList<(int NodeId, VerdictResult Verdict)> SafeItems { get; private set; } = [];
     public long SafeTotalBytes { get; private set; }
@@ -68,6 +68,36 @@ public sealed class ScanSession
 
     /// <summary>Bytes inside this folder that are safe to remove (0 for files and for the safe item itself).</summary>
     public long SafeBytesUnder(int id) => _safeUnder.GetValueOrDefault(id);
+
+    /// <summary>The node for a full path inside this scan, or null when it isn't part of it (or was removed).</summary>
+    public int? FindNode(string fullPath)
+    {
+        var root = Tree.RootPath.TrimEnd(Path.DirectorySeparatorChar);
+        var cmp = _ci ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var path = fullPath.TrimEnd(Path.DirectorySeparatorChar);
+        if (string.Equals(path, root, cmp)) return Tree.Root;
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar, cmp)) return null;
+        var id = Tree.Root;
+        foreach (var part in path[(root.Length + 1)..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = Tree.Children(id).Cast<int?>().FirstOrDefault(c => string.Equals(Tree.Name(c!.Value), part, cmp));
+            if (next is null) return null;
+            id = next.Value;
+        }
+        return id;
+    }
+
+    /// <summary>Takes cleaned items out of the scan and recomputes projects, verdicts and the safe total.</summary>
+    public void RemoveAndRefresh(IEnumerable<string> cleanedPaths)
+    {
+        foreach (var p in cleanedPaths)
+            if (FindNode(p) is { } id && id != Tree.Root) Tree.Remove(id);
+        Projects = ProjectDetector.Detect(Tree, NowUtc);
+        _projectsByNode = Projects.ToDictionary(p => p.NodeId);
+        lock (_gate) { _verdicts.Clear(); _gitignoreCache.Clear(); }
+        _safeUnder.Clear();
+        CollectSafeItems(CancellationToken.None);
+    }
 
     public DetectedProject? ProjectAt(int id) => _projectsByNode.GetValueOrDefault(id);
 
