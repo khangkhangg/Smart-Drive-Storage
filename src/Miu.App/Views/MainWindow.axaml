@@ -74,6 +74,7 @@
           <DataTemplate x:DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
           <DataTemplate x:DataType="vm:AutomationsViewModel"><v:AutomationsView /></DataTemplate>
           <DataTemplate x:DataType="vm:SettingsViewModel"><v:SettingsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:CloudNetworkViewModel"><v:CloudNetworkView /></DataTemplate>
           <DataTemplate x:DataType="vm:PlaceholderViewModel">
             <StackPanel Margin="40,32" Spacing="8">
               <TextBlock Classes="h1" Text="{Binding Title}" />

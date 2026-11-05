@@ -24,7 +24,8 @@ public class ScreenshotTests
         {
             var trash = Path.Combine(Path.GetDirectoryName(root)!, "Trash"); // never the real Recycle Bin
             var vm = new MainWindowViewModel(
-                AppServices.Create(":memory:", new Miu.Platform.Portable.FreedesktopTrash(trash), secrets: new TelegramServiceTests.MemorySecrets()),
+                AppServices.Create(":memory:", new Miu.Platform.Portable.FreedesktopTrash(trash), secrets: new TelegramServiceTests.MemorySecrets(),
+                    networkDrives: new NetworkServiceTests.FakeDrives()),
                 telegramApi: _ => new TelegramServiceTests.FakeTelegram());
             var window = new MainWindow { DataContext = vm, Width = 1360, Height = 860 };
             window.Show();
@@ -100,6 +101,29 @@ public class ScreenshotTests
             await vm.Settings.Telegram.ConnectCommand.ExecuteAsync(null);
             window.Height = 1100;
             Save(window, Path.Combine(outDir, "settings.png"));
+
+            // Milestone 6: Cloud & Network.
+            var cn = vm.CloudNetwork;
+            cn.Devices.Add(new Miu.Platform.Portable.DiscoveredDevice("Family NAS", "192.168.1.20", "Bonjour"));
+            cn.Devices.Add(new Miu.Platform.Portable.DiscoveredDevice("KHANG-PC", "192.168.1.31", "Windows network"));
+            cn.DevicesText = "Found 2 devices. Pick one to see its shared folders.";
+            cn.UncText = @"\\192.168.1.20\photos";
+            cn.UserName = "alex";
+            await cn.Network.MapAsync(@"\\192.168.1.20\music", "Y:", null, null, true);
+            cn.RefreshDrives();
+            vm.Navigate(vm.CloudNetwork);
+            Save(window, Path.Combine(outDir, "network.png"));
+            var tabs = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TabControl>().First();
+            tabs.SelectedIndex = 1;
+            cn.JobName = "Documents to NAS";
+            cn.JobSource = Path.Combine(root, "Documents");
+            cn.JobTarget = Path.Combine(Path.GetDirectoryName(root)!, "NAS", "Documents");
+            cn.Frequency = "Every week";
+            cn.Day = DayOfWeek.Sunday;
+            cn.Hour = 2;
+            await cn.SaveJobCommand.ExecuteAsync(null);
+            Save(window, Path.Combine(outDir, "sync.png"));
+            tabs.SelectedIndex = 0;
             window.Height = 860;
             var toast = new ToastWindow(new MiuNotification("Downloads tidy",
                 "12 items (3.4 GB) in Downloads can be cleaned.",

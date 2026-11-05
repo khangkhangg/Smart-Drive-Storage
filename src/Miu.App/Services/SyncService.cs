@@ -58,8 +58,8 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
         var target = await targetTask;
         if (source.Entries is null)
             return new SyncPreview(job, new SyncPlan([], null), source, target, $"Miu can't open the source folder ({job.Source}). Is the drive connected?");
-        if (target.Entries is null && !Directory.Exists(job.Target) && Directory.Exists(Path.GetDirectoryName(Path.GetFullPath(job.Target))))
-            target = new SyncListing([], []); // a new target folder inside an existing one: it will be created
+        if (target.Entries is null && CanCreate(job.Target))
+            target = new SyncListing([], []); // a new target folder: it will be created
         if (target.Entries is null)
             return new SyncPreview(job, new SyncPlan([], null), source, target, $"Miu can't open the target folder ({job.Target}). Is the drive connected?");
 
@@ -167,6 +167,28 @@ public sealed class SyncService(AppServices services, Func<DateTime> nowLocal)
             if (a is not null && a == b) same.Add(e.RelPath);
         }
         return same;
+    }
+
+    /// <summary>
+    /// A missing target may be created when something above it exists and has content. A missing drive or share root,
+    /// or an empty folder above it (often a mount point whose drive isn't connected), is refused instead.
+    /// </summary>
+    public static bool CanCreate(string target)
+    {
+        try
+        {
+            var full = Path.GetFullPath(target);
+            if (Directory.Exists(full)) return false;
+            var root = Path.GetPathRoot(full);
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return false;
+            for (var dir = Path.GetDirectoryName(full); dir is not null; dir = Path.GetDirectoryName(dir))
+            {
+                if (!Directory.Exists(dir)) continue;
+                return Directory.EnumerateFileSystemEntries(dir).Any();
+            }
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return false; }
     }
 
     private List<SyncEntry> Known(IEnumerable<SyncEntry> entries, IReadOnlyList<string> unknownDirs) =>

@@ -35,7 +35,7 @@ public partial class MainWindowViewModel : ObservableObject
         DevProjects = new DevProjectsViewModel(this);
         Rules = new RulesViewModel(this);
         About = new AboutViewModel();
-        CloudNetwork = new PlaceholderViewModel("Cloud & Network", "Back up chosen folders to Google Drive, OneDrive, Dropbox or S3, then free the space locally. Map, scan and sync network drives. Coming in a later milestone.");
+        CloudNetwork = new CloudNetworkViewModel(this);
         Automations = new AutomationsViewModel(this);
         Settings = new SettingsViewModel(this);
         NavItems =
@@ -72,7 +72,7 @@ public partial class MainWindowViewModel : ObservableObject
     public Action? ShowWindow { get; set; }
     public AutomationService Automation { get; }
     public AboutViewModel About { get; }
-    public PlaceholderViewModel CloudNetwork { get; }
+    public CloudNetworkViewModel CloudNetwork { get; }
     public ObservableCollection<NavItem> NavItems { get; }
 
     [ObservableProperty] private NavItem selectedNav;

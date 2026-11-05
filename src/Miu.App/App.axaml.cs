@@ -104,8 +104,20 @@ public partial class App : Application
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _timer.Tick += async (_, _) => await SafeTick();
         _timer.Start();
+        await ReconnectSharesAsync(); // before sign-in syncs, which may use them
         if (!showWindow) await _vm.Automation.RunAtSignInAsync();
         await SafeTick();
+    }
+
+    /// <summary>Connects saved network shares marked "reconnect" that Windows didn't connect itself.</summary>
+    private async Task ReconnectSharesAsync()
+    {
+        if (_vm is null) return;
+        try
+        {
+            if (await _vm.CloudNetwork.Network.ReconnectSavedAsync(_stopping.Token) > 0) _vm.CloudNetwork.RefreshDrives();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { System.Diagnostics.Trace.WriteLine("Reconnecting shares failed: " + ex.Message); }
     }
 
     /// <summary>Listens for Telegram commands and button taps (handled on the UI thread, like everything else).</summary>

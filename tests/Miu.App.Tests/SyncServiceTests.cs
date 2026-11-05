@@ -80,6 +80,22 @@ public sealed class SyncServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_target_is_created_but_not_inside_an_empty_mount_point()
+    {
+        Write(Path.Combine(Src, "a.txt"), "a");
+        var fresh = Path.Combine(_root, "NAS", "Backup", "Docs");
+        var outcome = await Service.RunAsync(_s.SyncJobs.Get(_s.SyncJobs.Add(new SyncJob(0, "New", Src, fresh, SyncMode.Mirror)))!, "app");
+        outcome.Status.Should().Be("ok");
+        File.Exists(Path.Combine(fresh, "a.txt")).Should().BeTrue();
+
+        var mountPoint = Path.Combine(_root, "mnt-nas");
+        Directory.CreateDirectory(mountPoint); // empty: the share isn't mounted
+        var unplugged = Path.Combine(mountPoint, "Docs");
+        (await Service.RunAsync(new SyncJob(0, "Unplugged", Src, unplugged, SyncMode.Mirror), "app")).Status.Should().Be("failed");
+        Directory.Exists(unplugged).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Undo_never_overwrites_a_newer_file()
     {
         Write(Path.Combine(Src, "a.txt"), "new");
@@ -169,7 +185,7 @@ public sealed class SyncServiceTests : IDisposable
 
 public sealed class NetworkServiceTests
 {
-    private sealed class FakeDrives : INetworkDrives
+    internal sealed class FakeDrives : INetworkDrives
     {
         public List<MappedDrive> Current { get; } = [];
         public List<(string Unc, string? Letter, string? User, string? Password, bool Reconnect)> Calls { get; } = [];

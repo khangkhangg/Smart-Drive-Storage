@@ -1,0 +1,315 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Miu.App.Services;
+using Miu.Core.Automation;
+using Miu.Core.Formatting;
+using Miu.Core.Sync;
+using Miu.Platform.Abstractions;
+using Miu.Platform.Portable;
+
+namespace Miu.App.ViewModels;
+
+public sealed record MappedRow(MappedDrive Drive)
+{
+    public string Title => Drive.Letter is { } l ? $"{l}  {Drive.Unc}" : Drive.Unc;
+    public string Status => Drive.Available ? "Connected" : "Not connected right now";
+    public string ScanPath => Drive.Letter is { } l ? l + Path.DirectorySeparatorChar : Drive.Unc;
+}
+
+public sealed record PreviewOpRow(string Action, string Path, string Reason);
+
+public partial class SyncJobRow(CloudNetworkViewModel owner, SyncJob job) : ObservableObject
+{
+    public SyncJob Job { get; private set; } = job;
+    public string Name => Job.Name;
+    public string Route => $"{Job.Source}  →  {Job.Target}";
+    public string Details => $"{Job.ModeText} · {Job.ScheduleText}" + (Job.CompareByHash ? " · compares content" : "");
+    public string LastText => Job.LastResult is { } r ? $"Last run {HumanTime.Ago(Job.LastRunUtc ?? DateTime.UtcNow, DateTime.UtcNow)}: {r}" : "Not run yet.";
+
+    [ObservableProperty] private bool enabled = job.Enabled;
+
+    partial void OnEnabledChanged(bool value) =>
+        Job = owner.Services.SyncJobs.Patch(Job.Id, j => j with { Enabled = value }) ?? Job;
+
+    [RelayCommand] private Task Preview() => owner.PreviewAsync(this);
+    [RelayCommand] private void Delete() => owner.DeleteJob(this);
+}
+
+/// <summary>Cloud &amp; Network: network drives (find, map, scan), sync jobs, and cloud backup (Milestone 7).</summary>
+public partial class CloudNetworkViewModel : ObservableObject
+{
+    private readonly MainWindowViewModel _shell;
+    private CancellationTokenSource? _runCts;
+
+    public CloudNetworkViewModel(MainWindowViewModel shell)
+    {
+        _shell = shell;
+        Network = new NetworkService(shell.Services);
+        RefreshDrives();
+        LoadJobs();
+    }
+
+    public NetworkService Network { get; }
+    public AppServices Services => _shell.Services;
+
+    // ---------- Network drives ----------
+
+    public bool CanMap => Network.Drives.IsSupported;
+    public bool CannotMap => !CanMap;
+    public string UnsupportedReason => Network.Drives.UnsupportedReason;
+
+    public ObservableCollection<DiscoveredDevice> Devices { get; } = [];
+    public ObservableCollection<string> Shares { get; } = [];
+    public ObservableCollection<MappedRow> Mapped { get; } = [];
+    public ObservableCollection<string> Letters { get; } = [];
+
+    [ObservableProperty] private bool isSearching;
+    [ObservableProperty] private string devicesText = "Find computers and NAS boxes that share folders on your network.";
+    [ObservableProperty] private string uncText = "";
+    [ObservableProperty] private string? selectedLetter;
+    [ObservableProperty] private string userName = "";
+    [ObservableProperty] private string password = "";
+    [ObservableProperty] private bool reconnect = true;
+    [ObservableProperty] private string networkMessage = "";
+    [ObservableProperty] private bool networkMessageIsError;
+    [ObservableProperty] private string scanPathText = "";
+    [ObservableProperty] private bool hasMapped;
+
+    public const string NoLetter = "No letter";
+
+    public void RefreshDrives()
+    {
+        Mapped.Clear();
+        foreach (var m in Network.Drives.Mapped()) Mapped.Add(new MappedRow(m));
+        HasMapped = Mapped.Count > 0;
+        var keep = SelectedLetter;
+        Letters.Clear();
+        foreach (var l in Network.Drives.FreeLetters()) Letters.Add(l);
+        Letters.Add(NoLetter);
+        SelectedLetter = keep is not null && Letters.Contains(keep) ? keep : Letters.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task FindDevices()
+    {
+        IsSearching = true;
+        DevicesText = "Looking for devices…";
+        try
+        {
+            var found = await Network.DiscoverAsync();
+            Devices.Clear();
+            foreach (var d in found) Devices.Add(d);
+            DevicesText = found.Count == 0
+                ? @"Nothing answered. Some devices don't announce themselves: type \\name\folder below."
+                : $"Found {found.Count} {(found.Count == 1 ? "device" : "devices")}. Pick one to see its shared folders.";
+        }
+        finally { IsSearching = false; }
+    }
+
+    [RelayCommand]
+    private async Task PickDevice(DiscoveredDevice? d)
+    {
+        if (d is null) return;
+        UncText = $@"\\{d.Address}\";
+        Shares.Clear();
+        foreach (var s in await Network.Drives.ListSharesAsync(d.Address, default)) Shares.Add(s);
+        NetworkMessageIsError = false;
+        NetworkMessage = Shares.Count > 0 ? $"{d.Name} shares {Shares.Count} {(Shares.Count == 1 ? "folder" : "folders")}. Pick one." : $"Type the shared folder name after \\\\{d.Address}\\.";
+    }
+
+    [RelayCommand]
+    private void PickShare(string? share)
+    {
+        if (share is null || !UncPath.TryParse(UncText.TrimEnd('\\') + "\\" + share, out var p)) return;
+        UncText = p!.ToString();
+    }
+
+    [RelayCommand]
+    private async Task Map()
+    {
+        var letter = SelectedLetter == NoLetter ? null : SelectedLetter;
+        var r = await Network.MapAsync(UncText, letter, UserName, Password, Reconnect);
+        Password = ""; // never kept on screen
+        NetworkMessageIsError = !r.Ok;
+        NetworkMessage = r.Message;
+        if (r.Ok) RefreshDrives();
+    }
+
+    [RelayCommand]
+    private async Task Unmap(MappedRow? row)
+    {
+        if (row is null) return;
+        var r = await Network.UnmapAsync(row.Drive);
+        NetworkMessageIsError = !r.Ok;
+        NetworkMessage = r.Message;
+        RefreshDrives();
+    }
+
+    [RelayCommand]
+    private async Task ScanMapped(MappedRow? row)
+    {
+        if (row is null) return;
+        _shell.Navigate(_shell.Analyze);
+        await _shell.Analyze.ScanPathAsync(row.ScanPath);
+    }
+
+    [RelayCommand]
+    private async Task ScanPath()
+    {
+        var path = UncPath.TryParse(ScanPathText, out var unc) && OperatingSystem.IsWindows() ? unc!.ToString() : ScanPathText.Trim();
+        if (!Directory.Exists(path))
+        {
+            NetworkMessageIsError = true;
+            NetworkMessage = $"Miu can't open {path}. Is it connected?";
+            return;
+        }
+        _shell.Navigate(_shell.Analyze);
+        await _shell.Analyze.ScanPathAsync(path);
+    }
+
+    // ---------- Sync jobs ----------
+
+    public ObservableCollection<SyncJobRow> Jobs { get; } = [];
+    public ObservableCollection<PreviewOpRow> PreviewOps { get; } = [];
+
+    public IReadOnlyList<string> Modes { get; } = ["Mirror", "Copy new and changed", "Two-way"];
+    public IReadOnlyList<string> Frequencies { get; } = ["Only when I press Run", "Every day", "Every week", "When I sign in"];
+    public IReadOnlyList<DayOfWeek> Days { get; } = Enum.GetValues<DayOfWeek>();
+    public IReadOnlyList<int> Hours { get; } = Enumerable.Range(0, 24).ToList();
+
+    [ObservableProperty] private bool hasJobs;
+    [ObservableProperty] private string jobName = "";
+    [ObservableProperty] private string jobSource = "";
+    [ObservableProperty] private string jobTarget = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ModeHelp))] private string mode = "Mirror";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowsDay), nameof(ShowsTime))] private string frequency = "Every day";
+    [ObservableProperty] private DayOfWeek day = DayOfWeek.Sunday;
+    [ObservableProperty] private int hour = 2;
+    [ObservableProperty] private bool compareByHash;
+    [ObservableProperty] private string syncMessage = "";
+    [ObservableProperty] private bool syncMessageIsError;
+
+    [ObservableProperty] private SyncJobRow? previewing;
+    [ObservableProperty] private string previewText = "";
+    [ObservableProperty] private bool previewCanRun;
+    [ObservableProperty] private bool previewRefused;
+    [ObservableProperty] private bool isRunning;
+    [ObservableProperty] private string progressText = "";
+
+    public bool ShowsDay => Frequency == "Every week";
+    public bool ShowsTime => Frequency is "Every day" or "Every week";
+    public bool HasPreview => Previewing is not null;
+    partial void OnPreviewingChanged(SyncJobRow? value) => OnPropertyChanged(nameof(HasPreview));
+
+    public string ModeHelp => Mode switch
+    {
+        "Mirror" => "The target becomes an exact copy of the source. Files you remove from the source are set aside in the target's .miu-sync-trash, not deleted.",
+        "Copy new and changed" => "Adds new and newer files to the target. Nothing is ever removed there.",
+        _ => "Changes on either side are copied to the other. If a file changed on both sides, Miu keeps both versions.",
+    };
+
+    private SyncMode ParsedMode => Mode switch { "Mirror" => SyncMode.Mirror, "Copy new and changed" => SyncMode.CopyOnly, _ => SyncMode.TwoWay };
+
+    private WatchSchedule? ParsedSchedule => Frequency switch
+    {
+        "Every day" => WatchSchedule.Daily(new TimeOnly(Hour, 0)),
+        "Every week" => WatchSchedule.Weekly(Day, new TimeOnly(Hour, 0)),
+        "When I sign in" => WatchSchedule.AtSignIn(),
+        _ => null,
+    };
+
+    public void LoadJobs()
+    {
+        Jobs.Clear();
+        foreach (var j in Services.SyncJobs.All()) Jobs.Add(new SyncJobRow(this, j));
+        HasJobs = Jobs.Count > 0;
+    }
+
+    [RelayCommand]
+    private async Task SaveJob()
+    {
+        var repo = Services.SyncJobs;
+        if (_shell.Automation.Sync.Validate(JobSource, JobTarget) is { } problem)
+        {
+            SyncMessageIsError = true;
+            SyncMessage = problem;
+            return;
+        }
+        var name = string.IsNullOrWhiteSpace(JobName) ? $"{Path.GetFileName(JobSource.TrimEnd('\\', '/'))} → {Path.GetFileName(JobTarget.TrimEnd('\\', '/'))}" : JobName.Trim();
+        var schedule = ParsedSchedule;
+        var id = repo.Add(new SyncJob(0, name, JobSource.Trim(), JobTarget.Trim(), ParsedMode, schedule, CompareByHash,
+            NextRunLocal: schedule is null ? null : Scheduler.NextRun(schedule, DateTime.Now)));
+        SyncMessageIsError = false;
+        SyncMessage = $"Saved “{name}”. Here's what the first run would do:";
+        JobName = JobSource = JobTarget = "";
+        LoadJobs();
+        if (Jobs.FirstOrDefault(r => r.Job.Id == id) is { } row) await PreviewAsync(row);
+    }
+
+    public async Task PreviewAsync(SyncJobRow row)
+    {
+        Previewing = row;
+        PreviewOps.Clear();
+        PreviewText = "Comparing the two folders…";
+        PreviewCanRun = PreviewRefused = false;
+        var p = await _shell.Automation.Sync.PreviewAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job);
+        PreviewText = p.Text;
+        PreviewRefused = p.Problem is null && p.Plan.Refusal is not null;
+        PreviewCanRun = p.CanRun;
+        foreach (var op in p.Plan.Ops.Take(100))
+            PreviewOps.Add(new PreviewOpRow(op.Kind switch
+            {
+                SyncOpKind.Copy => op.From == Side.Source ? "Copy →" : "← Copy",
+                SyncOpKind.Archive => op.From == Side.Source ? "Set aside (source)" : "Set aside (target)",
+                _ => "Keep both",
+            }, op.RelPath, op.Reason + (op.Kind == SyncOpKind.Archive ? "" : $" · {SizeFormatter.Format(op.Bytes)}")));
+        if (p.Plan.Ops.Count > 100) PreviewOps.Add(new PreviewOpRow("", $"…and {p.Plan.Ops.Count - 100} more", ""));
+    }
+
+    [RelayCommand] private Task RunPreview() => RunAsync(false);
+    [RelayCommand] private Task RunAnyway() => RunAsync(true);
+
+    [RelayCommand]
+    private void ClosePreview()
+    {
+        _runCts?.Cancel();
+        Previewing = null;
+    }
+
+    private async Task RunAsync(bool anyway)
+    {
+        if (Previewing is not { } row || IsRunning) return;
+        IsRunning = true;
+        _runCts = new CancellationTokenSource();
+        var progress = new Progress<SyncProgress>(p => ProgressText = p.Total == 0 ? "" : $"{p.Done} of {p.Total} · {SizeFormatter.Format(p.Bytes)} · {p.Current}");
+        try
+        {
+            var outcome = await _shell.Automation.RunSyncAsync(Services.SyncJobs.Get(row.Job.Id) ?? row.Job, anyway, progress, _runCts.Token);
+            SyncMessageIsError = outcome.Status is "failed" or "refused" or "partial";
+            SyncMessage = $"“{row.Name}”: {outcome.Summary}";
+            if (outcome.ActionId > 0) _shell.Activity.Load();
+        }
+        catch (OperationCanceledException) { SyncMessage = "Stopped. Finished files are kept; the rest will be copied next time."; }
+        finally
+        {
+            IsRunning = false;
+            ProgressText = "";
+            Previewing = null;
+            LoadJobs();
+        }
+    }
+
+    public void DeleteJob(SyncJobRow row)
+    {
+        Services.SyncJobs.Delete(row.Job.Id);
+        if (Previewing == row) Previewing = null;
+        LoadJobs();
+    }
+}
+
+public static class CloudNetworkConverters
+{
+    public static readonly Avalonia.Data.Converters.IValueConverter CloseOrStop =
+        new Avalonia.Data.Converters.FuncValueConverter<bool, string>(running => running ? "Stop" : "Close");
+}

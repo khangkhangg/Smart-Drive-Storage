@@ -1,0 +1,232 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             xmlns:p="using:Miu.Platform.Portable"
+             x:Class="Miu.App.Views.CloudNetworkView"
+             x:DataType="vm:CloudNetworkViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="40,32" Spacing="20">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="Cloud &amp; Network" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                   Text="Connect network drives, scan them like any folder, and keep folders in sync. Sync never deletes: files it replaces or removes are set aside in a .miu-sync-trash folder and can be put back from Activity." />
+      </StackPanel>
+
+      <TabControl Name="Tabs">
+        <!-- ===== Network drives ===== -->
+        <TabItem Header="Network drives">
+          <StackPanel Spacing="16" Margin="0,16,0,0">
+            <Border Classes="card" Padding="20">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2">
+                    <TextBlock Classes="h2" Text="Find devices on my network" />
+                    <TextBlock Classes="muted" Text="{Binding DevicesText}" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="secondary" Content="Find devices" Command="{Binding FindDevicesCommand}"
+                          IsEnabled="{Binding !IsSearching}" VerticalAlignment="Center" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Devices}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="10" LineSpacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="p:DiscoveredDevice">
+                      <Button Classes="secondary" Padding="14,8" ToolTip.Tip="{Binding Via}"
+                              Command="{Binding $parent[ItemsControl].((vm:CloudNetworkViewModel)DataContext).PickDeviceCommand}" CommandParameter="{Binding}">
+                        <StackPanel Spacing="1">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Address}" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" Padding="20">
+              <StackPanel Spacing="12">
+                <TextBlock Classes="h2" Text="Map a network drive" />
+                <TextBlock Classes="muted" Text="{Binding UnsupportedReason}" TextWrapping="Wrap" IsVisible="{Binding CannotMap}" />
+                <StackPanel Spacing="12" IsVisible="{Binding CanMap}">
+                  <ItemsControl ItemsSource="{Binding Shares}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="8" LineSpacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <Button Classes="secondary" Content="{Binding}"
+                                Command="{Binding $parent[ItemsControl].((vm:CloudNetworkViewModel)DataContext).PickShareCommand}" CommandParameter="{Binding}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <WrapPanel ItemSpacing="10" LineSpacing="10">
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="Shared folder" />
+                      <TextBox Text="{Binding UncText}" Watermark="\\nas\photos" Width="300" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="Drive letter" />
+                      <ComboBox ItemsSource="{Binding Letters}" SelectedItem="{Binding SelectedLetter}" Width="130" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="User name (optional)" />
+                      <TextBox Text="{Binding UserName}" Width="180" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="caption" Text="Password" />
+                      <TextBox Text="{Binding Password}" PasswordChar="●" Width="180" />
+                    </StackPanel>
+                  </WrapPanel>
+                  <CheckBox IsChecked="{Binding Reconnect}" Content="Reconnect when I sign in (the password is kept in your system's secure store)" />
+                  <Button Classes="primary" Content="Map drive" Command="{Binding MapCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+                <TextBlock Text="{Binding NetworkMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}"
+                           IsVisible="{Binding !NetworkMessageIsError}" />
+                <TextBlock Text="{Binding NetworkMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E"
+                           IsVisible="{Binding NetworkMessageIsError}" />
+              </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="10">
+              <TextBlock Classes="h2" Text="Connected network drives" />
+              <TextBlock Classes="muted" Text="None yet." IsVisible="{Binding !HasMapped}" />
+              <ItemsControl ItemsSource="{Binding Mapped}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MappedRow">
+                    <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Status}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                          <Button Classes="secondary" Content="Scan" Command="{Binding $parent[ItemsControl].((vm:CloudNetworkViewModel)DataContext).ScanMappedCommand}" CommandParameter="{Binding}" />
+                          <Button Classes="secondary" Content="Disconnect" Command="{Binding $parent[ItemsControl].((vm:CloudNetworkViewModel)DataContext).UnmapCommand}" CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <Border Classes="card" Padding="20">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="h2" Text="Scan a network folder" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="Any folder you can open works, including \\server\share paths and shares mounted by your file manager. Network folders are scanned gently, so the NAS and your Wi-Fi stay usable." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBox Text="{Binding ScanPathText}" Watermark="\\nas\photos   or   /mnt/nas" Width="380" />
+                  <Button Classes="secondary" Content="Scan" Command="{Binding ScanPathCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </TabItem>
+
+        <!-- ===== Sync jobs ===== -->
+        <TabItem Header="Sync jobs">
+          <StackPanel Spacing="16" Margin="0,16,0,0">
+            <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}"
+                       IsVisible="{Binding !SyncMessageIsError}" />
+            <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#B3261E"
+                       IsVisible="{Binding SyncMessageIsError}" />
+
+            <!-- Preview sheet -->
+            <Border Classes="card" Padding="20" IsVisible="{Binding HasPreview}" BorderBrush="{DynamicResource MiuSafeFg}" BorderThickness="1">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="h2" Text="{Binding Previewing.Name, StringFormat='Preview: {0}', FallbackValue=''}" />
+                <TextBlock Text="{Binding PreviewText}" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding PreviewOps}" MaxHeight="300">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PreviewOpRow">
+                      <Grid ColumnDefinitions="150,*,Auto" Margin="0,2">
+                        <TextBlock Text="{Binding Action}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="{Binding Path}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Reason}" Margin="12,0,0,0" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="caption" Text="{Binding ProgressText}" IsVisible="{Binding IsRunning}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="primary" Content="Run now" Command="{Binding RunPreviewCommand}" IsVisible="{Binding PreviewCanRun}" IsEnabled="{Binding !IsRunning}" />
+                  <Button Classes="secondary" Content="Run anyway (everything set aside can be put back)" Command="{Binding RunAnywayCommand}"
+                          IsVisible="{Binding PreviewRefused}" IsEnabled="{Binding !IsRunning}" />
+                  <Button Classes="secondary" Content="{Binding IsRunning, Converter={x:Static vm:CloudNetworkConverters.CloseOrStop}}" Command="{Binding ClosePreviewCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Editor -->
+            <Border Classes="card" Padding="20">
+              <StackPanel Spacing="12">
+                <TextBlock Classes="h2" Text="New sync job" />
+                <WrapPanel ItemSpacing="10" LineSpacing="10">
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="caption" Text="From (source)" />
+                    <TextBox Text="{Binding JobSource}" Watermark="C:\Users\you\Pictures" Width="320" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="caption" Text="To (target)" />
+                    <TextBox Text="{Binding JobTarget}" Watermark="\\nas\photos\backup" Width="320" />
+                  </StackPanel>
+                </WrapPanel>
+                <WrapPanel ItemSpacing="8" LineSpacing="10">
+                  <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" />
+                  <ComboBox ItemsSource="{Binding Frequencies}" SelectedItem="{Binding Frequency}" />
+                  <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding ShowsDay}" />
+                  <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding Day}" IsVisible="{Binding ShowsDay}" />
+                  <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                  <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding Hour}" IsVisible="{Binding ShowsTime}" />
+                  <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding ShowsTime}" />
+                </WrapPanel>
+                <TextBlock Classes="muted" Text="{Binding ModeHelp}" TextWrapping="Wrap" />
+                <CheckBox IsChecked="{Binding CompareByHash}" Content="Compare file contents when dates differ (slower, avoids needless copies)" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Name" VerticalAlignment="Center" Classes="muted" />
+                  <TextBox Text="{Binding JobName}" Width="260" Watermark="Photos to NAS" />
+                </StackPanel>
+                <Button Classes="primary" Content="Save and preview" Command="{Binding SaveJobCommand}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="10">
+              <TextBlock Classes="h2" Text="Your sync jobs" />
+              <TextBlock Classes="muted" Text="None yet." IsVisible="{Binding !HasJobs}" />
+              <ItemsControl ItemsSource="{Binding Jobs}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SyncJobRow">
+                    <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="" OffContent="" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Classes="caption" Text="{Binding Route}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="muted" Text="{Binding Details}" />
+                          <TextBlock Classes="caption" Text="{Binding LastText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                          <Button Classes="secondary" Content="Preview / Run" Command="{Binding PreviewCommand}" />
+                          <Button Classes="secondary" Content="Delete" Command="{Binding DeleteCommand}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </TabItem>
+
+        <!-- ===== Cloud backup ===== -->
+        <TabItem Header="Cloud backup">
+          <Border Classes="card" Padding="20" Margin="0,16,0,0">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="h2" Text="Coming in the next milestone" />
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Back up chosen folders to Google Drive, OneDrive, Dropbox or S3-compatible storage, then free the space on this computer once each file is safely uploaded." />
+            </StackPanel>
+          </Border>
+        </TabItem>
+      </TabControl>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
