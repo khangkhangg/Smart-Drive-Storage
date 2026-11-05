@@ -7,7 +7,7 @@ namespace Miu.App.Tests;
 
 public sealed class AppSmokeTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "miu-app-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(AppContext.BaseDirectory, "miu-app-" + Guid.NewGuid().ToString("N"));
 
     public AppSmokeTests()
     {

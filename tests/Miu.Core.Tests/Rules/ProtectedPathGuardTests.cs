@@ -80,7 +80,7 @@ public class ProtectedPathGuardTests
     public void Symlink_into_protected_tree_is_protected()
     {
         if (OperatingSystem.IsWindows()) return;
-        var dir = Path.Combine(Path.GetTempPath(), "miu-guard-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(AppContext.BaseDirectory, "miu-guard-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
