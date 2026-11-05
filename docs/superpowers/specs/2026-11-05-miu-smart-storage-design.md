@@ -721,11 +721,11 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F2.2 Rule engine
 - [ ] F2.3 Built-in rule pack — partial in M1 (dev + system packs)
 - [ ] F2.4 Verdict badges — partial in M1 (list, treemap, details)
-- [ ] F2.5 Cleanup cart
-- [ ] F2.6 Review & Clean sheet
-- [ ] F2.7 Recycle Bin delete
-- [ ] F2.8 Activity & Undo
-- [ ] F2.9 Quick Clean
+- [x] F2.5 Cleanup cart
+- [x] F2.6 Review & Clean sheet
+- [x] F2.7 Recycle Bin delete
+- [x] F2.8 Activity & Undo
+- [x] F2.9 Quick Clean
 - [ ] F2.10 Duplicate finder
 - [ ] F2.11 System file explainer
 - [ ] F2.12 Permanent delete option
@@ -734,9 +734,9 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F2D.1 Project detector
 - [ ] F2D.2 Dev junk catalog — partial in M1 (rules; project-aware conditions)
 - [ ] F2D.3 Git status guard
-- [ ] F2D.4 Dev Projects view — partial in M1 (read-only, no clean actions yet)
+- [x] F2D.4 Dev Projects view
 - [ ] F2D.5 Global dev caches
-- [ ] F2D.6 Docker integration
+- [x] F2D.6 Docker integration
 - [ ] F2D.7 VHDX compaction
 - [ ] F2D.8 Make this a rule
 - [ ] F2D.9 Archive project

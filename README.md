@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 1 (core slice)**. Miu scans drives and folders and explains every item, but **it does not delete anything yet**. Cleaning (to the Recycle Bin, with undo) is the next milestone.
+> Status: **Milestone 2 (Clean)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -16,6 +16,14 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 | Inside a project | Dev Projects |
 |---|---|
 | ![Project](docs/screenshots/analyze-project.png) | ![Dev projects](docs/screenshots/dev-projects.png) |
+
+| Review & Clean | After cleaning (with Undo) |
+|---|---|
+| ![Review](docs/screenshots/review.png) | ![After clean](docs/screenshots/after-clean.png) |
+
+| Cleanup cart | Activity |
+|---|---|
+| ![Cart](docs/screenshots/cart.png) | ![Activity](docs/screenshots/activity.png) |
 
 | Splash | About |
 |---|---|
@@ -32,6 +40,12 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
   - Miu finds each project's last activity and puts it in a bucket: active, cooling, idle or abandoned.
   - It measures how much of each project is *rebuildable* and tells you the rebuild command (`npm install`, `cargo build`, `dotnet build`…).
 - **Built-in rules** for `node_modules`, `.next`, `dist`, `target`, `bin/obj`, venvs, `__pycache__`, the npm/pnpm/yarn/pip/NuGet caches, Playwright browsers, Hugging Face and Ollama models, temp files, crash dumps, browser caches and more. See `rules/builtin/`.
+- **Clean safely:**
+  - Add anything to the **cleanup cart**, or press **Quick Clean** to gather every 🟢 Safe item.
+  - **Review & Clean** shows exactly what will move. Items that aren't Safe start unchecked.
+  - Everything goes to the Recycle Bin / Trash, and each clean can be undone from **Activity**.
+  - Protected locations can't be added, and they are checked again at the moment of deleting.
+- **For developers:** clean one project's rebuildable folders, or every idle project at once. **Docker** shows its disk usage and offers safe prunes: build cache, unused image layers and stopped containers. Volumes are never touched.
 - **Folders that hold cleanable files** are labelled with how much inside is safe, e.g. "4.8 GB to clean".
 
 ## Build and run
@@ -69,8 +83,8 @@ docs/superpowers/plans         implementation plans
 
 ## Roadmap
 Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage-design.md).
-1. **Clean:** cleanup cart, Recycle Bin with undo, Quick Clean, duplicates.
-2. **Developer tools:** Docker cleanup, WSL/Docker disk compaction, "Make this a rule".
+1. ~~**Clean:** cleanup cart, Recycle Bin with undo, Quick Clean~~ ✅ · next: duplicates, Types view.
+2. **Developer tools:** ~~Docker cleanup~~ ✅ · WSL/Docker disk compaction, "Make this a rule".
 3. **Learning rules:** Miu learns from your Keep and Delete choices.
 4. **Background and schedules:** watched folders, scheduled cleanup, notifications.
 5. **Telegram:** alerts with action buttons.
