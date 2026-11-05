@@ -45,6 +45,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
             var bytes = SizeOf(path);
             var bin = BinFolder(path);
             var before = bin is null ? [] : IndexFiles(bin).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var started = DateTime.UtcNow;
 
             var rc = Shell.Recycle(path, out var aborted);
             if (rc != 0 || aborted || File.Exists(path) || Directory.Exists(path))
@@ -53,21 +54,49 @@ public sealed class WindowsRecycleBin : IRecycleBin
                 return;
             }
 
-            var trashLocation = "";
-            if (bin is not null)
-                foreach (var index in IndexFiles(bin).Where(f => !before.Contains(f)))
-                    if (ReadIndex(index) is { } e && string.Equals(e.OriginalPath, path, StringComparison.OrdinalIgnoreCase))
-                    {
-                        trashLocation = Path.Combine(bin, "$R" + Path.GetFileName(index)[2..]);
-                        break;
-                    }
+            var trashLocation = bin is null ? "" : FindRecycledCopy(bin, path, before, started);
             if (trashLocation.Length == 0)
             {
                 // Gone, but there is no Recycle Bin copy: never report that as "moved".
-                failed.Add(new FailedItem(path, "Windows removed it but no Recycle Bin copy was found; it may be deleted permanently."));
+                var seen = bin is null ? "no Recycle Bin folder" : $"{IndexFiles(bin).Count(f => !before.Contains(f))} new entries in {bin}";
+                failed.Add(new FailedItem(path, $"Windows removed it but no Recycle Bin copy was found ({seen}); it may be deleted permanently."));
                 return;
             }
             done.Add(new RecycledItem(path, trashLocation, bytes));
+    }
+
+    /// <summary>
+    /// Finds the $R copy the shell just made. The $I record can appear a moment after the call returns, so look a few
+    /// times; match by original path, accepting entries that are new or were written since the delete started.
+    /// </summary>
+    private static string FindRecycledCopy(string bin, string path, HashSet<string> before, DateTime started)
+    {
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            foreach (var index in IndexFiles(bin))
+            {
+                var isNew = !before.Contains(index);
+                if (!isNew && SafeWriteTime(index) < started.AddSeconds(-2)) continue;
+                if (ReadIndex(index) is { } e && SamePath(e.OriginalPath, path))
+                    return Path.Combine(bin, "$R" + Path.GetFileName(index)[2..]);
+            }
+            Thread.Sleep(100);
+        }
+        return "";
+    }
+
+    private static bool SamePath(string a, string b)
+    {
+        static string N(string p)
+        {
+            try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)); } catch (ArgumentException) { return p; }
+        }
+        return string.Equals(N(a), N(b), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static DateTime SafeWriteTime(string file)
+    {
+        try { return File.GetLastWriteTimeUtc(file); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DateTime.MinValue; }
     }
 
     /// <summary>True only for local fixed drives whose Recycle Bin Windows reports as available.</summary>
@@ -140,7 +169,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
 
     private static IEnumerable<string> IndexFiles(string bin)
     {
-        try { return Directory.Exists(bin) ? Directory.GetFiles(bin, "$I*") : []; }
+        // $I files are hidden + system: enumerate without skipping those attributes.
+        var opts = new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = true };
+        try { return Directory.Exists(bin) ? Directory.GetFiles(bin, "$I*", opts) : []; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
     }
 
