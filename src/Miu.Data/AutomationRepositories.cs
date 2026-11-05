@@ -107,6 +107,34 @@ public sealed class JobRunsRepository(MiuDatabase db)
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>A backup plan run (stored with plan_id).</summary>
+    public void AddBackup(long planId, DateTime startedUtc, DateTime finishedUtc, string status, long bytes, string summary)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO job_runs(plan_id, started, finished, status, freed_bytes, summary_json) VALUES ($w, $s, $f, $st, $b, $sum);" +
+                          "DELETE FROM job_runs WHERE plan_id = $w AND id NOT IN (SELECT id FROM job_runs WHERE plan_id = $w ORDER BY id DESC LIMIT 50)";
+        cmd.Parameters.AddWithValue("$w", planId);
+        cmd.Parameters.AddWithValue("$s", Iso.Of(startedUtc));
+        cmd.Parameters.AddWithValue("$f", Iso.Of(finishedUtc));
+        cmd.Parameters.AddWithValue("$st", status);
+        cmd.Parameters.AddWithValue("$b", bytes);
+        cmd.Parameters.AddWithValue("$sum", summary);
+        cmd.ExecuteNonQuery();
+    }
+
+    public IReadOnlyList<JobRun> RecentBackup(long planId, int n)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "SELECT plan_id, started, finished, status, freed_bytes, summary_json FROM job_runs WHERE plan_id = $w ORDER BY id DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$w", planId);
+        cmd.Parameters.AddWithValue("$n", n);
+        using var r = cmd.ExecuteReader();
+        var list = new List<JobRun>();
+        while (r.Read())
+            list.Add(new JobRun(r.GetInt64(0), Iso.Parse(r.GetString(1)), Iso.Parse(r.GetString(2)), r.GetString(3), r.GetInt64(4), r.IsDBNull(5) ? "" : r.GetString(5)));
+        return list;
+    }
+
     public IReadOnlyList<JobRun> RecentSync(long syncId, int n)
     {
         using var cmd = db.Connection.CreateCommand();

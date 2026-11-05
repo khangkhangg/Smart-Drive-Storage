@@ -40,7 +40,7 @@ public class MigrationTests
             using (var db = new MiuDatabase(file))
             {
                 db.Migrate();
-                db.SchemaVersion.Should().Be(5);
+                db.SchemaVersion.Should().Be(6);
                 TableNames(db).Should().Contain(Tables);
             }
         }

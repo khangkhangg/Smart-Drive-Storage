@@ -8,6 +8,7 @@ public sealed class InMemoryCloudStorage(string name = "Test cloud") : ICloudSto
     private readonly Dictionary<string, (byte[] Data, DateTime Modified)> _files = new(StringComparer.Ordinal);
 
     public string ProviderName => name;
+    public string? ExpectedHashKind(long size) => NoHash ? null : CloudHashes.Md5;
     public IReadOnlyDictionary<string, (byte[] Data, DateTime Modified)> Files => _files;
     public List<string> Removed { get; } = [];
 

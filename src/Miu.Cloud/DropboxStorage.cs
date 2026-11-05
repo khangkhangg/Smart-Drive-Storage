@@ -18,6 +18,7 @@ public sealed class DropboxStorage(OAuthSession session) : ICloudStorage
     private static readonly JsonSerializerOptions Snake = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public string ProviderName => "Dropbox";
+    public string? ExpectedHashKind(long size) => CloudHashes.Dropbox;
 
     private sealed record Entry([property: JsonPropertyName(".tag")] string Tag, string Name, string PathDisplay, string? Id, long Size, string? ContentHash, DateTime? ServerModified);
     private sealed record ListResult(List<Entry> Entries, string Cursor, bool HasMore);

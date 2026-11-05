@@ -15,6 +15,9 @@ public sealed class AppServices : IDisposable
         IStartupRegistration startup, IPowerState power, ISecretStore secrets, INetworkDrives networkDrives)
     {
         NetworkDrives = networkDrives;
+        CloudAccounts = new CloudAccountsRepository(db);
+        BackupPlans = new BackupPlansRepository(db);
+        BackupManifest = new BackupManifestRepository(db);
         NetworkShares = new NetworkSharesRepository(db);
         SyncJobs = new SyncJobsRepository(db);
         SyncBaseline = new SyncBaselineRepository(db);
@@ -47,6 +50,12 @@ public sealed class AppServices : IDisposable
     public IPowerState Power { get; }
     public ISecretStore Secrets { get; }
     public INetworkDrives NetworkDrives { get; }
+    public CloudAccountsRepository CloudAccounts { get; }
+    public BackupPlansRepository BackupPlans { get; }
+    public BackupManifestRepository BackupManifest { get; }
+
+    /// <summary>Tests and demos: use this cloud instead of real providers.</summary>
+    public Func<CloudAccount, Miu.Cloud.ICloudStorage>? CloudStorageOverride { get; set; }
     public NetworkSharesRepository NetworkShares { get; }
     public SyncJobsRepository SyncJobs { get; }
     public SyncBaselineRepository SyncBaseline { get; }

@@ -20,6 +20,7 @@ public sealed class GoogleDriveStorage(OAuthSession session) : ICloudStorage
     private readonly Dictionary<string, string> _folders = new(StringComparer.Ordinal) { [""] = "root" };
 
     public string ProviderName => "Google Drive";
+    public string? ExpectedHashKind(long size) => CloudHashes.Md5;
 
     private sealed record DriveFile(string Id, string Name, string MimeType, string? Size, string? Md5Checksum, DateTime? ModifiedTime);
     private sealed record DriveList(List<DriveFile> Files, string? NextPageToken);

@@ -22,6 +22,9 @@ public interface ICloudStorage
 {
     string ProviderName { get; }
 
+    /// <summary>The checksum kind this provider will report for a file of this size (computed locally while uploading), or null.</summary>
+    string? ExpectedHashKind(long size);
+
     /// <summary>The item at this path, or null when there is none.</summary>
     Task<CloudItem?> GetAsync(string path, CancellationToken ct);
 

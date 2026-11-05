@@ -18,6 +18,7 @@ public sealed class OneDriveStorage(OAuthSession session) : ICloudStorage
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     public string ProviderName => "OneDrive";
+    public string? ExpectedHashKind(long size) => CloudHashes.QuickXor;
 
     private sealed record Hashes(string? QuickXorHash);
     private sealed record FileFacet(Hashes? Hashes);

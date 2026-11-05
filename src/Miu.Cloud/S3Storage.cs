@@ -24,6 +24,7 @@ public sealed class S3Storage(HttpClient http, S3Config config, Func<DateTime>? 
     private readonly Uri _endpoint = new(config.Endpoint.TrimEnd('/'));
 
     public string ProviderName => "S3";
+    public string? ExpectedHashKind(long size) => HashKindFor(size);
 
     /// <summary>AWS uses bucket.host addressing; other services use path addressing.</summary>
     private bool VirtualHost => _endpoint.Host.EndsWith("amazonaws.com", StringComparison.OrdinalIgnoreCase);

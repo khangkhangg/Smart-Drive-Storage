@@ -24,6 +24,9 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
     private readonly SemaphoreSlim _gate = new(1, 1); // one run at a time: ticks, Run now and sign-in runs
 
     public SyncService Sync { get; } = new(services, nowLocal);
+    public CloudAccountsService Accounts { get; } = new(services);
+    private BackupService? _backup;
+    public BackupService Backup => _backup ??= new BackupService(services, Accounts, nowLocal);
 
     public bool IsPaused => PausedUntil is { } p && p > nowLocal();
 
@@ -82,6 +85,7 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
                 services.Watches.Patch(w.Id, x => x with { NextRunLocal = Scheduler.NextRun(x.Schedule, now) });
             }
             await TickSyncJobsAsync(now, guarded, ct);
+            await TickBackupPlansAsync(now, guarded, ct);
         }
         finally { _gate.Release(); }
     }
@@ -108,6 +112,52 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
             try { await RunSyncUnlockedAsync(j, ct); }
             finally { services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null }); }
         }
+    }
+
+    /// <summary>Scheduled backups. Like sync jobs, a refused run is never forced from a schedule.</summary>
+    private async Task TickBackupPlansAsync(DateTime now, bool guarded, CancellationToken ct)
+    {
+        foreach (var listed in services.BackupPlans.All())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (services.BackupPlans.Get(listed.Id) is not { Enabled: true, Schedule: { } schedule } p) continue;
+            if (schedule.Kind is ScheduleKind.AtSignIn or ScheduleKind.LowSpace) continue;
+            if (p.NextRunLocal is null)
+            {
+                services.BackupPlans.Patch(p.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null });
+                continue;
+            }
+            if (!Scheduler.IsDue(p.NextRunLocal, now)) continue;
+            if (guarded)
+            {
+                services.BackupPlans.Patch(p.Id, x => x with { NextRunLocal = now + Postpone });
+                continue;
+            }
+            try { await RunBackupUnlockedAsync(p, ct); }
+            finally { services.BackupPlans.Patch(p.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null }); }
+        }
+    }
+
+    /// <summary>Runs one backup now (from the app). Waits for any run in progress first.</summary>
+    public async Task<BackupOutcome> RunBackupAsync(Miu.Core.Backup.BackupPlan plan, string? overrideRefusal, IProgress<BackupProgress>? progress, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try { return await Backup.RunAsync(plan, "app", overrideRefusal, progress, ct); }
+        finally { _gate.Release(); }
+    }
+
+    private async Task RunBackupUnlockedAsync(Miu.Core.Backup.BackupPlan p, CancellationToken ct)
+    {
+        BackupOutcome outcome;
+        try { outcome = await Backup.RunAsync(p, "auto", null, null, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            outcome = new BackupOutcome("failed", ex.Message);
+            services.BackupPlans.Patch(p.Id, x => x with { LastRunUtc = DateTime.UtcNow, LastResult = "Failed: " + ex.Message });
+        }
+        if (outcome.Status == "nothing") return;
+        var body = outcome.Status == "refused" ? outcome.Summary + " Open Miu › Cloud & Network › Cloud backup to preview it." : outcome.Summary;
+        notifier.Show(new MiuNotification($"Backup “{p.Name}”" + (outcome.Status is "failed" or "refused" ? " didn't run" : ""), body, []));
     }
 
     /// <summary>Runs one sync job now (from the app). Waits for any run in progress first.</summary>
@@ -144,6 +194,8 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
                 await RunUnlockedAsync(w, null, ct);
             foreach (var j in services.SyncJobs.All().Where(j => j.Enabled && j.Schedule?.Kind == ScheduleKind.AtSignIn))
                 await RunSyncUnlockedAsync(j, ct);
+            foreach (var p in services.BackupPlans.All().Where(p => p.Enabled && p.Schedule?.Kind == ScheduleKind.AtSignIn))
+                await RunBackupUnlockedAsync(p, ct);
         }
         finally { _gate.Release(); }
     }
