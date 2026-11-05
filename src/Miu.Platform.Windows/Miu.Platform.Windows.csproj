@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plain net10.0 so the solution builds everywhere; Windows-only code is marked [SupportedOSPlatform("windows")]. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Miu.Platform.Abstractions/Miu.Platform.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
