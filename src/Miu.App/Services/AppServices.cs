@@ -19,6 +19,10 @@ public sealed class AppServices : IDisposable
         Decisions = new DecisionsRepository(db);
         RulesStore = new RulesRepository(db);
         Suggestions = new SuggestionsRepository(db);
+        Watches = new WatchesRepository(db);
+        JobRuns = new JobRunsRepository(db);
+        Snapshots = new SnapshotsRepository(db);
+        SpaceSamples = new SpaceSamplesRepository(db);
         Scanner = scanner;
         Rules = rules;
         Guard = guard;
@@ -37,6 +41,10 @@ public sealed class AppServices : IDisposable
     /// <summary>Rules you made or accepted. Built-in rules are in <see cref="Rules"/>.</summary>
     public RulesRepository RulesStore { get; }
     public SuggestionsRepository Suggestions { get; }
+    public WatchesRepository Watches { get; }
+    public JobRunsRepository JobRuns { get; }
+    public SnapshotsRepository Snapshots { get; }
+    public SpaceSamplesRepository SpaceSamples { get; }
 
     /// <summary>Built-in rules plus your own and learned ones (the guard still comes first).</summary>
     public IReadOnlyList<Rule> AllRules() => [.. Rules, .. RulesStore.All()];

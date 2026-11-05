@@ -6,6 +6,11 @@ public static class SettingKeys
     public const string RunInBackground = "agent.runInBackground";
     public const string Theme = "ui.theme";
     public const string LastScanPath = "ui.lastScanPath";
+    public const string PausedUntil = "automation.pausedUntil";
+    public const string QuietStartHour = "automation.quietStart";
+    public const string QuietEndHour = "automation.quietEnd";
+    public const string PauseOnBattery = "automation.pauseOnBattery";
+    public const string LastDigest = "automation.lastDigest";
 }
 
 public sealed class SettingsRepository(MiuDatabase db)
