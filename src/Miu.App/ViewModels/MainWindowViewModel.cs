@@ -10,9 +10,11 @@ public sealed record NavItem(string Title, string Icon, object Page);
 
 public partial class MainWindowViewModel : ObservableObject
 {
-    public MainWindowViewModel(AppServices services, INotifier? notifier = null, Func<string, Miu.Notify.ITelegramApi>? telegramApi = null)
+    public MainWindowViewModel(AppServices services, INotifier? notifier = null, Func<string, Miu.Notify.ITelegramApi>? telegramApi = null,
+        UpdateService? updates = null)
     {
         Services = services;
+        Updates = updates ?? new UpdateService(new HttpClient { Timeout = TimeSpan.FromSeconds(20) });
         var composite = new CompositeNotifier(notifier ?? new ToastNotifier());
         Notifier = composite;
         Automation = new AutomationService(services, Notifier, services.Power, () => DateTime.Now,
@@ -82,6 +84,61 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsReviewOpen => Review is not null;
     public bool HasNotice => Notice is not null;
+
+    /// <summary>Shown when something unexpected went wrong on screen (it was logged; Miu keeps running).</summary>
+    public void ShowProblem(Exception ex) =>
+        Notice = new NoticeViewModel(this, "Something went wrong, but Miu kept running.", ex.Message, 0, "Open reports folder",
+            () => ShellIntegration.Open(CrashReporter.Folder(Path.GetDirectoryName(MiuDatabasePath)!)));
+
+    private static string MiuDatabasePath => Miu.Data.MiuDatabase.DefaultPath;
+
+    // ---------- Updates ----------
+    public UpdateService Updates { get; }
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasUpdate), nameof(UpdateText))] private UpdateInfo? availableUpdate;
+    public bool HasUpdate => AvailableUpdate is not null;
+    public string UpdateText => AvailableUpdate is { } u ? $"Miu {u.Version} is available (you have {AppInfo.Version})." : "";
+
+    /// <summary>
+    /// Checks GitHub for a newer release: when asked, or once a day if automatic checks are on.
+    /// Returns a short status for Settings. Never throws: being offline is fine.
+    /// </summary>
+    public async Task<string> CheckForUpdatesAsync(bool force, CancellationToken ct = default)
+    {
+        var s = Services.Settings;
+        if (!force)
+        {
+            if (!s.GetBool(Miu.Data.SettingKeys.AutoUpdateCheck, true)) return "";
+            if (s.Get(Miu.Data.SettingKeys.LastUpdateCheck) is { } last &&
+                DateTime.TryParse(last, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t) &&
+                DateTime.UtcNow - t < TimeSpan.FromHours(20)) return "";
+        }
+        try
+        {
+            var u = await Updates.CheckAsync(AppInfo.Version, ct);
+            s.Set(Miu.Data.SettingKeys.LastUpdateCheck, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+            if (u is null) { AvailableUpdate = null; return $"You have the newest version ({AppInfo.Version})."; }
+            if (!force && s.Get(Miu.Data.SettingKeys.SkippedVersion) == u.Version) return "";
+            AvailableUpdate = u;
+            return $"Miu {u.Version} is available.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return "Couldn't check for updates right now. Are you online?";
+        }
+    }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void DownloadUpdate()
+    {
+        if (AvailableUpdate is { } u) ShellIntegration.Open(u.DownloadUrl ?? u.PageUrl);
+    }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void SkipUpdate()
+    {
+        if (AvailableUpdate is { } u) Services.Settings.Set(Miu.Data.SettingKeys.SkippedVersion, u.Version);
+        AvailableUpdate = null;
+    }
 
     partial void OnSelectedNavChanged(NavItem value)
     {

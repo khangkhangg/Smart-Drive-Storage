@@ -11,6 +11,11 @@ public static class SettingKeys
     public const string QuietEndHour = "automation.quietEnd";
     public const string PauseOnBattery = "automation.pauseOnBattery";
     public const string LastDigest = "automation.lastDigest";
+    public const string AutoUpdateCheck = "updates.autoCheck";
+    public const string LastUpdateCheck = "updates.lastCheck";
+    public const string SkippedVersion = "updates.skipped";
+    public const string OnboardingDone = "ui.onboardingDone";
+    public const string ExplorerMenu = "ui.explorerMenu";
 }
 
 public sealed class SettingsRepository(MiuDatabase db)

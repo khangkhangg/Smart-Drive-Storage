@@ -30,6 +30,7 @@ public partial class App : Application
         {
             // Closing the window may only hide it (background mode), so the app quits explicitly.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            CrashReporter.Install(DataDir, ex => _vm?.ShowProblem(ex));
             var background = desktop.Args?.Contains("--background") == true;
             // One Miu at a time: a second start asks the running one to show its window, then quits.
             _instanceLock = SingleInstance.TryAcquire(DataDir);
@@ -83,6 +84,16 @@ public partial class App : Application
         }
         await minimum;
         _vm = new MainWindowViewModel(services);
+        if (services.RecoveredFrom is { } from)
+            _vm.Notice = new NoticeViewModel(_vm, "Miu's database was damaged, so it was restored from its most recent backup.",
+                $"Backup used: {from}. The damaged file was kept next to it.", 0);
+        else if (CrashReporter.Pending(DataDir) is { } report)
+        {
+            CrashReporter.MarkSeen(report);
+            _vm.Notice = new NoticeViewModel(_vm, "Miu closed unexpectedly last time. Sorry about that.",
+                "A report was saved on this computer (nothing was sent). You can share it to help fix the problem.", 0, "Open report", () => ShellIntegration.Open(report));
+        }
+        try { services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { }
         _main = new MainWindow { DataContext = _vm };
         _vm.ShowWindow = ShowMain;
         _main.Closing += (_, e) =>
@@ -105,6 +116,7 @@ public partial class App : Application
         _timer.Tick += async (_, _) => await SafeTick();
         _timer.Start();
         await ReconnectSharesAsync(); // before sign-in syncs, which may use them
+        _ = _vm.CheckForUpdatesAsync(force: false);
         if (!showWindow) await _vm.Automation.RunAtSignInAsync();
         await SafeTick();
     }
@@ -130,7 +142,13 @@ public partial class App : Application
 
     private async Task SafeTick()
     {
-        try { if (_vm is not null) await _vm.Automation.TickAsync(); }
+        try
+        {
+            if (_vm is null) return;
+            await _vm.Automation.TickAsync();
+            await _vm.CheckForUpdatesAsync(force: false); // at most once a day
+            try { _vm.Services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { }
+        }
         catch (Exception ex) { System.Diagnostics.Trace.WriteLine("Automation tick failed: " + ex); }
     }
 

@@ -32,17 +32,29 @@
     </DockPanel>
     <Border Grid.Column="1" Background="{DynamicResource MiuContentBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0" ClipToBounds="True">
       <DockPanel>
+        <!-- New version -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdate}" Background="{DynamicResource MiuCardBg}" Padding="20,10"
+                BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Text="{Binding UpdateText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="primary" Content="Download" Command="{Binding DownloadUpdateCommand}" Margin="12,0,0,0" />
+            <Button Grid.Column="2" Classes="secondary" Content="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="8,0,0,0" />
+          </Grid>
+        </Border>
+
         <!-- Result banner with Undo -->
         <Border DockPanel.Dock="Top" IsVisible="{Binding HasNotice}" Background="{DynamicResource MiuSafeBg}" Padding="20,12"
                 BorderBrush="{DynamicResource MiuBorder}" BorderThickness="0,0,0,1">
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto" DataContext="{Binding Notice}" x:DataType="vm:NoticeViewModel">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" DataContext="{Binding Notice}" x:DataType="vm:NoticeViewModel">
             <Path Data="M5,12 L9,16 L19,6" Stroke="{DynamicResource MiuSafeFg}" StrokeThickness="2.4" Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0" StrokeLineCap="Round" />
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock Text="{Binding Message}" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Text="{Binding Details}" Classes="caption" IsVisible="{Binding HasDetails}" TextWrapping="Wrap" />
             </StackPanel>
             <Button Grid.Column="2" Classes="secondary" Content="Undo" Command="{Binding UndoCommand}" IsVisible="{Binding CanUndo}" Margin="12,0,0,0" />
-            <Button Grid.Column="3" Content="✕" Command="{Binding DismissCommand}" Background="Transparent" Margin="8,0,0,0" ToolTip.Tip="Dismiss" />
+            <Button Grid.Column="3" Classes="secondary" Content="{Binding ActionLabel}" Command="{Binding RunActionCommand}" IsVisible="{Binding HasAction}" Margin="12,0,0,0" />
+            <Button Grid.Column="4" Content="✕" Command="{Binding DismissCommand}" Background="Transparent" Margin="8,0,0,0" ToolTip.Tip="Dismiss"
+                    AutomationProperties.Name="Dismiss" />
           </Grid>
         </Border>
 

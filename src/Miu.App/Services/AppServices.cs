@@ -91,14 +91,30 @@ public sealed class AppServices : IDisposable
     public bool CanClean => Recycler.IsSupported;
     public string RecycleBinName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
+    /// <summary>The database file (null for an in-memory database).</summary>
+    public string? DatabasePath { get; private set; }
+
+    /// <summary>Set when the database was damaged at start and restored from a backup.</summary>
+    public string? RecoveredFrom { get; private set; }
+
+    /// <summary>Copies the database once a day (newest 3 kept).</summary>
+    public void BackupDatabaseIfDue()
+    {
+        if (DatabasePath is { } p) DatabaseCare.BackupIfDue(Database, p, DateTime.Now);
+    }
+
     public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null, IStartupRegistration? startup = null, IPowerState? power = null,
         ISecretStore? secrets = null, INetworkDrives? networkDrives = null)
     {
-        var db = new MiuDatabase(databasePath);
+        var (db, recovered) = databasePath == ":memory:" ? (new MiuDatabase(databasePath), null) : DatabaseCare.OpenWithRecovery(databasePath);
         db.Migrate();
         var rules = RuleLoader.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "builtin"));
         return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin(),
-            startup ?? DefaultStartup(), power ?? DefaultPower(), secrets ?? DefaultSecrets(), networkDrives ?? DefaultNetworkDrives());
+            startup ?? DefaultStartup(), power ?? DefaultPower(), secrets ?? DefaultSecrets(), networkDrives ?? DefaultNetworkDrives())
+        {
+            DatabasePath = databasePath == ":memory:" ? null : databasePath,
+            RecoveredFrom = recovered,
+        };
     }
 
     private static ISecretStore DefaultSecrets() =>
