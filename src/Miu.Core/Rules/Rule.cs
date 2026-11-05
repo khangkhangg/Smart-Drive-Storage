@@ -5,7 +5,10 @@ public enum Verdict { Safe, Review, Keep, Protected }
 public enum RuleSource { Protected, User, Learned, Builtin }
 
 /// <summary>What a rule applies to. All non-null parts must match.</summary>
-public sealed record RuleMatch(string? Path = null, string[]? Names = null, string[]? Ext = null, bool? IsDir = null);
+/// <param name="Under">An exact folder: matches that folder itself and everything inside it.</param>
+/// <param name="Inside">An exact folder: matches only what is inside it, never the folder itself.</param>
+public sealed record RuleMatch(string? Path = null, string[]? Names = null, string[]? Ext = null, bool? IsDir = null,
+    string? Under = null, string? Inside = null);
 
 /// <summary>Extra conditions. All non-null parts must hold.</summary>
 public sealed record RuleConditions(

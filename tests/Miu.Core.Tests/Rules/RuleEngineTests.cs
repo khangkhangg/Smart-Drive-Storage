@@ -95,4 +95,28 @@ public class RuleEngineTests
         e.Evaluate(Facts("/home/u/p/build", gitIgnored: true)).RuleId.Should().Be("gi");
         e.Evaluate(Facts("/home/u/p/build", gitIgnored: false)).RuleId.Should().BeNull();
     }
+
+    [Fact]
+    public void Under_matches_self_and_children()
+    {
+        var rule = new Rule("u", new RuleMatch(Under: "/home/u/Clients"), new RuleConditions(), Verdict.Keep, "Work files", RuleSource.User);
+        var e = new RuleEngine([rule], Guard, false);
+        e.Evaluate(Facts("/home/u/Clients")).RuleId.Should().Be("u");
+        e.Evaluate(Facts("/home/u/Clients/acme/brief.pdf", isDir: false)).RuleId.Should().Be("u");
+    }
+
+    [Fact]
+    public void Under_does_not_match_sibling_prefix()
+    {
+        var rule = new Rule("u", new RuleMatch(Under: "/home/u/Clients"), new RuleConditions(), Verdict.Keep, "Work files", RuleSource.User);
+        new RuleEngine([rule], Guard, false).Evaluate(Facts("/home/u/Clients2/x")).RuleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Under_is_case_insensitive_when_engine_is()
+    {
+        var rule = new Rule("u", new RuleMatch(Under: @"C:\Users\k\Clients"), new RuleConditions(), Verdict.Keep, "r", RuleSource.User);
+        var guard = new ProtectedPathGuard([], [], PathStyle.Windows);
+        new RuleEngine([rule], guard, true).Evaluate(Facts(@"c:\users\K\clients\a")).RuleId.Should().Be("u");
+    }
 }
