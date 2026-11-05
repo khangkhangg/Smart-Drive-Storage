@@ -50,6 +50,9 @@ public sealed class AppServices : IDisposable
     public IPowerState Power { get; }
     public ISecretStore Secrets { get; }
     public INetworkDrives NetworkDrives { get; }
+
+    /// <summary>A git helper with its own small cache (make one per operation so answers are fresh).</summary>
+    public Miu.Dev.Git.GitService NewGit() => new(new ProcessRunner(TimeSpan.FromSeconds(20)));
     public CloudAccountsRepository CloudAccounts { get; }
     public BackupPlansRepository BackupPlans { get; }
     public BackupManifestRepository BackupManifest { get; }

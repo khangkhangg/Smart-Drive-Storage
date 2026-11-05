@@ -22,6 +22,16 @@ public sealed class CleanupService(AppServices services)
                 else allowed.Add(i);
             items = allowed;
         }
+        // Never throw away work git doesn't have yet: uncommitted or new files inside the item, or (for a whole
+        // repository) commits that were never pushed.
+        var git = services.NewGit();
+        var allowedByGit = new List<CartItem>();
+        foreach (var i in items)
+        {
+            if (await GitConflictAsync(git, i.Path, ct) is { } why) blocked.Add(new FailedItem(i.Path, why));
+            else allowedByGit.Add(i);
+        }
+        items = allowedByGit;
         var dirs = items.Where(i => session?.FindNode(i.Path) is { } id ? session.Tree.IsDir(id) : Directory.Exists(i.Path))
             .Select(i => i.Path).ToHashSet();
         var recycleResult = await services.Recycler.RecycleAsync(items.Select(i => i.Path).ToList(), progress, ct);
@@ -45,6 +55,18 @@ public sealed class CleanupService(AppServices services)
             session?.RemoveAndRefresh(gone);
         }
         return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed);
+    }
+
+    private static async Task<string?> GitConflictAsync(Miu.Dev.Git.GitService git, string path, CancellationToken ct)
+    {
+        if (Miu.Dev.Git.GitStatus.FindRoot(path) is not { } root) return null;
+        if (await git.StatusAsync(root, ct) is not { } state) return null; // git isn't installed: nothing to compare with
+        var rel = Path.GetRelativePath(root, path).Replace('\\', '/');
+        if (rel == ".") rel = "";
+        var work = state.WorkInside(rel);
+        if (work.Count > 0) return $"It holds work you haven't committed in git ({work.Count} {(work.Count == 1 ? "file" : "files")}, e.g. {work[0]}).";
+        if (rel.Length == 0 && state.HasUnpushed) return $"This repository has {state.Ahead} commits you haven't pushed.";
+        return null;
     }
 
     /// <summary>Puts everything from one clean back where it was. Each action can be undone once.</summary>

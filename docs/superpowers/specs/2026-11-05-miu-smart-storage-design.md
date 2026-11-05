@@ -733,7 +733,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 ### Phase 2D — Developer junk
 - [x] F2D.1 Project detector
 - [ ] F2D.2 Dev junk catalog — partial in M1 (rules; project-aware conditions)
-- [ ] F2D.3 Git status guard
+- [x] F2D.3 Git status guard
 - [x] F2D.4 Dev Projects view
 - [ ] F2D.5 Global dev caches
 - [x] F2D.6 Docker integration
