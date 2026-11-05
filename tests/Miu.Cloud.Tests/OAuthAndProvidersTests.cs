@@ -23,7 +23,7 @@ public class OAuthTests
         {
             opened = url;
             var q = HttpUtility.ParseQueryString(url.Query);
-            using var browser = new HttpClient();
+            var browser = new HttpClient(); // not disposed: the last request is fire-and-forget, like a real browser tab
             (await browser.GetAsync($"{q["redirect_uri"]}favicon.ico")).StatusCode.Should().Be(HttpStatusCode.NotFound); // ignored
             _ = browser.GetAsync($"{q["redirect_uri"]}?code=CODE1&state={q["state"]}");
         });

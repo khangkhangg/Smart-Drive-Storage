@@ -123,10 +123,17 @@ public sealed class LoopbackOAuth(HttpClient http, Func<Uri, Task> openBrowser)
     private static void Respond(HttpListenerContext ctx, int status, string text)
     {
         var html = Encoding.UTF8.GetBytes($"<!doctype html><meta charset=utf-8><title>Miu Smart Storage</title><body style=\"font-family:sans-serif;padding:40px\"><h2>Miu Smart Storage</h2><p>{WebUtility.HtmlEncode(text)}</p>");
-        ctx.Response.StatusCode = status;
-        ctx.Response.ContentType = "text/html; charset=utf-8";
-        ctx.Response.OutputStream.Write(html);
-        ctx.Response.Close();
+        try
+        {
+            ctx.Response.StatusCode = status;
+            ctx.Response.ContentType = "text/html; charset=utf-8";
+            ctx.Response.OutputStream.Write(html);
+            ctx.Response.Close();
+        }
+        catch (Exception ex) when (ex is HttpListenerException or IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The browser closed the connection early: the sign-in itself can still go on.
+        }
     }
 
     private static int FreePort()
