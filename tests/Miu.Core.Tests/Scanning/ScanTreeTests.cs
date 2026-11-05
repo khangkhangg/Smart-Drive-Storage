@@ -64,4 +64,34 @@ public class ScanTreeTests
         t.FileCount(t.Root).Should().Be(100_000);
         t.Size(t.Root).Should().Be(100_000);
     }
+
+    [Fact]
+    public void Remove_updates_ancestor_sizes()
+    {
+        var (t, a) = Sample();
+        var f1 = t.FindChild(a, "f1")!.Value;
+        t.Remove(f1);
+        t.Size(a).Should().Be(50);
+        t.FileCount(a).Should().Be(1);
+        t.Size(t.Root).Should().Be(60);
+        t.IsRemoved(f1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Removed_node_not_in_children()
+    {
+        var (t, a) = Sample();
+        t.Remove(a);
+        t.Children(t.Root).Select(t.Name).Should().Equal("f3");
+        t.FindChild(t.Root, "a").Should().BeNull();
+        t.FileCount(t.Root).Should().Be(1);
+    }
+
+    [Fact]
+    public void Remove_root_throws()
+    {
+        var (t, _) = Sample();
+        var act = () => t.Remove(t.Root);
+        act.Should().Throw<InvalidOperationException>();
+    }
 }

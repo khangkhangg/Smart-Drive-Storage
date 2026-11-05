@@ -15,6 +15,7 @@ public sealed class ScanTree
         public string Name;
         public bool IsDir;
         public bool IsLink;
+        public bool IsRemoved;
         public long Size;
         public int FileCount;
         public long ModifiedTicks;
@@ -100,6 +101,34 @@ public sealed class ScanTree
             _sortedChildren = sorted;
         }
     }
+
+    /// <summary>
+    /// Takes an item out of the tree after it was deleted: its size and file count are subtracted from every
+    /// ancestor and it no longer appears among its parent's children.
+    /// </summary>
+    public void Remove(int id)
+    {
+        lock (_gate)
+        {
+            if (id == Root) throw new InvalidOperationException("The scanned folder itself can't be removed.");
+            ref var n = ref _nodes[id];
+            if (n.IsRemoved) return;
+            n.IsRemoved = true;
+            for (var p = n.Parent; p >= 0; p = _nodes[p].Parent)
+            {
+                _nodes[p].Size -= n.Size;
+                _nodes[p].FileCount -= n.FileCount;
+            }
+            var parent = n.Parent;
+            if (_nodes[parent].FirstChild == id) _nodes[parent].FirstChild = n.NextSibling;
+            else
+                for (var c = _nodes[parent].FirstChild; c >= 0; c = _nodes[c].NextSibling)
+                    if (_nodes[c].NextSibling == id) { _nodes[c].NextSibling = n.NextSibling; break; }
+            if (_sortedChildren is { } sorted) sorted[parent] = sorted[parent].Where(c => c != id).ToArray();
+        }
+    }
+
+    public bool IsRemoved(int id) => _nodes[id].IsRemoved;
 
     public string Name(int id) => _nodes[id].Name;
     public bool IsDir(int id) => _nodes[id].IsDir;
