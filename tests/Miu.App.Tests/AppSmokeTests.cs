@@ -137,4 +137,36 @@ public sealed class AppSmokeTests : IDisposable
         vm.Analyze.Session!.Tree.RootPath.Should().Be(other);
         vm.Analyze.Items.Single().Name.Should().Be("trip.mp4");
     }
+
+    [AvaloniaFact]
+    public async Task Home_groups_safe_items_into_categories_and_keeps_dev_section()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, "miu-home-" + Guid.NewGuid().ToString("N"));
+        void F(string rel, int size, int age)
+        {
+            var p = Path.Combine(root, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+            File.WriteAllBytes(p, new byte[size]);
+            File.SetLastWriteTimeUtc(p, DateTime.UtcNow.AddDays(-age));
+        }
+        F("code/app/package.json", 10, 60);
+        F("code/app/package-lock.json", 10, 60);
+        F("code/app/node_modules/x.js", 5000, 60);
+        F(".npm/_cacache/blob", 3000, 5);
+        F("crash/app.dmp", 2000, 30);
+        try
+        {
+            var vm = new MainWindowViewModel(AppServices.Create(":memory:"));
+            vm.Home.HasScan.Should().BeFalse();
+            await vm.Analyze.ScanPathAsync(root);
+            var home = vm.Home;
+            home.Categories.Select(c => c.Name).Should().Equal("Dev build files", "Package caches", "Crash dumps");
+            home.CategoriesText.Should().Be("across 3 categories");
+            home.LastScanText.Should().StartWith("Last scan just now");
+            home.BuiltInRuleCount.Should().BeGreaterThan(20);
+            home.DevProjectCount.Should().Be(1);
+            home.TopProjects.Single().Name.Should().Be("app");
+        }
+        finally { Directory.Delete(root, true); }
+    }
 }

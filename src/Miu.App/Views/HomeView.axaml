@@ -5,28 +5,57 @@
              x:DataType="vm:HomeViewModel">
   <ScrollViewer>
     <StackPanel Margin="40,32" Spacing="26">
+      <!-- Header -->
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-          <Button Classes="primary" Content="Scan a folder…" Click="OnScanFolder" />
+          <Button Classes="secondary" Content="Add location…" Click="OnScanFolder" ToolTip.Tip="Scan any folder or drive" />
+          <Button Classes="primary" Content="Scan my files" Command="{Binding ScanHomeCommand}" ToolTip.Tip="{Binding HomeFolder}" />
         </StackPanel>
         <StackPanel Spacing="4">
           <TextBlock Classes="h1" Text="Storage overview" />
-          <TextBlock Classes="muted" Text="Pick a drive to see where your space went, and what is safe to clean." />
+          <TextBlock Classes="muted" Text="{Binding LastScanText}" />
         </StackPanel>
       </DockPanel>
 
-      <Border Classes="card" Padding="24" IsVisible="{Binding HasScan}">
-        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-          <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource MiuSafeBg}" VerticalAlignment="Top" Margin="0,0,20,0">
-            <Path Data="M5,12 L9,16 L19,6" Stroke="{DynamicResource MiuSafeFg}" StrokeThickness="2.4" Width="26" Height="26" Stretch="Uniform" StrokeLineCap="Round" StrokeJoin="Round" />
-          </Border>
-          <StackPanel Grid.Column="1" Spacing="4">
-            <TextBlock Text="SAFE TO REMOVE" Foreground="{DynamicResource MiuSafeFg}" FontSize="12" FontWeight="SemiBold" LetterSpacing="0.6" />
-            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding SafeTotalText}" />
-            <TextBlock Classes="muted" Text="{Binding SafeSummary}" TextWrapping="Wrap" />
-            <TextBlock Classes="caption" Text="{Binding ScannedPath, StringFormat='In {0}'}" />
-          </StackPanel>
-          <ItemsControl Grid.Row="1" Grid.Column="1" ItemsSource="{Binding TopSafe}" Margin="0,14,0,0">
+      <!-- Safe to remove -->
+      <Border Classes="card" Padding="24,22">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource MiuSafeBg}" VerticalAlignment="Center" Margin="0,0,20,0">
+              <Path Data="M5,12 L9,16 L19,6" Stroke="{DynamicResource MiuSafeFg}" StrokeThickness="2.4" Width="24" Height="24" Stretch="Uniform" StrokeLineCap="Round" StrokeJoin="Round" />
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+              <TextBlock Text="SAFE TO REMOVE" Foreground="{DynamicResource MiuSafeFg}" FontSize="12" FontWeight="SemiBold" LetterSpacing="0.6" />
+              <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasScan}">
+                <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding SafeTotalText}" />
+                <TextBlock Classes="muted" FontSize="15" Text="{Binding CategoriesText}" VerticalAlignment="Bottom" Margin="0,0,0,6" />
+              </StackPanel>
+              <TextBlock FontSize="22" FontWeight="SemiBold" Text="Scan to find what's safe" IsVisible="{Binding HasNoScan}" />
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Temp files, caches, crash dumps, old installers and rebuildable dev folders. Everything goes to the Recycle Bin first." />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0" IsVisible="{Binding HasScan}">
+              <Button Classes="secondary" Content="Review items" Command="{Binding ToggleSafeItemsCommand}" />
+              <Button Classes="primary" Content="Quick Clean" IsEnabled="False" Background="{StaticResource MiuSafeSolid}"
+                      ToolTip.Tip="Cleaning arrives in the next update. For now Miu shows what is safe." ToolTip.ShowOnDisabled="True" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="primary" Content="Scan my files" Command="{Binding ScanHomeCommand}" VerticalAlignment="Center"
+                    Margin="16,0,0,0" IsVisible="{Binding HasNoScan}" />
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Categories}" IsVisible="{Binding HasScan}" Margin="76,0,0,0">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="8" LineSpacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CategoryChip">
+                <Border Background="{DynamicResource MiuSubtle}" CornerRadius="14" Padding="12,5">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Name}" FontSize="13" />
+                    <TextBlock Text="{Binding SizeText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding TopSafe}" IsVisible="{Binding ShowSafeItems}" Margin="76,0,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:SafeRow">
                 <Button Background="Transparent" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
@@ -42,9 +71,10 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-        </Grid>
+        </StackPanel>
       </Border>
 
+      <!-- Locations -->
       <StackPanel Spacing="14">
         <TextBlock Classes="h2" Text="Locations" />
         <ItemsControl ItemsSource="{Binding Drives}">
@@ -53,16 +83,19 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:DriveCard">
-              <Button Width="280" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+              <Button Width="250" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
                       Command="{Binding $parent[ItemsControl].((vm:HomeViewModel)DataContext).ScanDriveCommand}" CommandParameter="{Binding}">
-                <Border Classes="card">
+                <Border Classes="card" Padding="18">
                   <StackPanel Spacing="14">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="36" Height="36" CornerRadius="8" Background="#EEF4FB" Margin="0,0,10,0">
+                        <TextBlock Text="{Binding Badge}" Foreground="{StaticResource MiuAccent}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Classes="caption" Text="{Binding Subtitle}" />
+                        <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
-                      <Border Grid.Column="1" Background="{Binding StatusBg}" CornerRadius="10" Padding="8,3" VerticalAlignment="Top">
+                      <Border Grid.Column="2" Background="{Binding StatusBg}" CornerRadius="10" Padding="8,3" VerticalAlignment="Top">
                         <TextBlock Text="{Binding Status}" Foreground="{Binding StatusFg}" FontSize="12" FontWeight="SemiBold" />
                       </Border>
                     </Grid>
@@ -79,15 +112,95 @@
         </ItemsControl>
       </StackPanel>
 
-      <Border Classes="card" IsVisible="{Binding HasScan}">
-        <DockPanel>
-          <Button DockPanel.Dock="Right" Classes="secondary" Content="Open Dev Projects" Command="{Binding OpenDevProjectsCommand}" VerticalAlignment="Center" />
-          <StackPanel Spacing="4">
-            <TextBlock Classes="h2" Text="Dev projects" />
-            <TextBlock Classes="muted" Text="{Binding DevSummary}" TextWrapping="Wrap" />
+      <!-- What grew + Rules engine -->
+      <Grid ColumnDefinitions="*,14,*">
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="h2" Text="What grew this week" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Miu compares your scans over time to show which folders are growing. Scan again in a few days to see it here." />
           </StackPanel>
-        </DockPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="card">
+          <StackPanel Spacing="10">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Manage rules" Command="{Binding OpenRulesCommand}" Background="Transparent"
+                      Foreground="{StaticResource MiuAccent}" Padding="0" FontSize="13" />
+              <TextBlock Classes="h2" Text="Rules engine" />
+            </DockPanel>
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Every verdict comes from a rule you can read. Soon Miu will also learn from your Keep and Delete choices." />
+            <StackPanel Orientation="Horizontal" Spacing="20">
+              <TextBlock FontSize="13" Foreground="{DynamicResource MiuTextSecondary}">
+                <Run Text="{Binding BuiltInRuleCount}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource MiuText}" />
+                <Run Text=" built-in" />
+              </TextBlock>
+              <TextBlock FontSize="13" Foreground="{DynamicResource MiuTextSecondary}">
+                <Run Text="0" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource MiuText}" />
+                <Run Text=" learned" />
+              </TextBlock>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Developer section: added for coders and vibe coders, on top of the overview above -->
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="secondary" Content="Open Dev Projects" Command="{Binding OpenDevProjectsCommand}" VerticalAlignment="Center" />
+            <StackPanel Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Data="M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20" Stroke="{DynamicResource MiuText}" StrokeThickness="1.8"
+                      Width="18" Height="18" Stretch="Uniform" StrokeLineCap="Round" VerticalAlignment="Center" />
+                <TextBlock Classes="h2" Text="For developers" />
+              </StackPanel>
+              <TextBlock Classes="muted" Text="{Binding DevSummary}" TextWrapping="Wrap" IsVisible="{Binding HasScan}" />
+              <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasNoScan}"
+                         Text="If you code, Miu finds node_modules, build output, virtual envs and caches in your projects, and tells you how to rebuild them." />
+            </StackPanel>
+          </DockPanel>
+          <Grid ColumnDefinitions="*,*,*" IsVisible="{Binding HasScan}">
+            <StackPanel>
+              <TextBlock Text="{Binding DevProjectCount}" FontSize="22" FontWeight="SemiBold" />
+              <TextBlock Classes="caption" Text="projects found" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="{Binding DevRebuildableText}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" />
+              <TextBlock Classes="caption" Text="rebuildable" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <TextBlock Text="{Binding DevIdleCount}" FontSize="22" FontWeight="SemiBold" />
+              <TextBlock Classes="caption" Text="idle for 90+ days" />
+            </StackPanel>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding TopProjects}" IsVisible="{Binding HasScan}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ProjectChip">
+                <Button Background="Transparent" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                        Command="{Binding $parent[ItemsControl].((vm:HomeViewModel)DataContext).OpenProjectCommand}" CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                      <TextBlock Classes="caption" Text="{Binding Detail}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding RebuildableText}" FontWeight="SemiBold" Foreground="{DynamicResource MiuSafeFg}" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
       </Border>
+
+      <!-- Footer -->
+      <Button Background="Transparent" Padding="0" HorizontalAlignment="Center" Margin="0,8,0,0" Command="{Binding OpenAboutCommand}" ToolTip.Tip="About Miu">
+        <TextBlock Classes="caption" FontSize="11">
+          <Run Text="{Binding VersionText}" />
+          <Run Text="  ·  " />
+          <Run Text="{Binding MadeByText}" />
+        </TextBlock>
+      </Button>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

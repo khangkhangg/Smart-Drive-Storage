@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Miu.App.ViewModels"
+             xmlns:c="using:Miu.App.Controls"
+             x:Class="Miu.App.Views.AboutView"
+             x:DataType="vm:AboutViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="40,48" Spacing="28" MaxWidth="640" HorizontalAlignment="Left">
+      <StackPanel Orientation="Horizontal" Spacing="20">
+        <c:MiuLogo Width="96" Height="96" />
+        <StackPanel VerticalAlignment="Center" Spacing="4">
+          <TextBlock Classes="h1" Text="{Binding Name}" />
+          <TextBlock Classes="muted" Text="{Binding VersionText}" />
+          <TextBlock Text="Free for everyone" Foreground="{DynamicResource MiuSafeFg}" FontWeight="SemiBold" FontSize="13" />
+        </StackPanel>
+      </StackPanel>
+      <TextBlock Text="{Binding Tagline}" TextWrapping="Wrap" FontSize="15" />
+
+      <Border Classes="card" Padding="24">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Data="M12,21 C12,21 3,14.5 3,8.5 C3,5.5 5.4,3.5 8,3.5 C9.8,3.5 11.2,4.5 12,5.8 C12.8,4.5 14.2,3.5 16,3.5 C18.6,3.5 21,5.5 21,8.5 C21,14.5 12,21 12,21 Z"
+                  Fill="#E5484D" Width="20" Height="20" Stretch="Uniform" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding MadeBy}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Links}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="10" LineSpacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:LinkItem">
+                <HyperlinkButton NavigateUri="{Binding Url}" Padding="14,8" CornerRadius="16"
+                                 Background="{DynamicResource MiuSubtle}" ToolTip.Tip="{Binding Url}">
+                  <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource MiuAccent}" />
+                </HyperlinkButton>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="6">
+        <TextBlock Classes="h2" Text="Your files stay yours" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Miu works on your computer. It never uploads your files anywhere, and nothing is deleted without your say — removed items go to the Recycle Bin first." />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -30,7 +30,8 @@
 **Decisions (rev 2, from the owner)**
 - **Free**, distributed as a **direct download** (Velopack installer and auto-update). No Microsoft Store and no paid tier.
 - **AutoCleanSafe automations are off until the user turns them on once** in Settings › Automations ("Allow automatic cleaning of 🟢 Safe items").
-- **Primary audience: indie hackers and "vibe coders".** Their disks fill up with `node_modules`, framework build output, Docker images and volumes, Python venvs, and local AI models. Developer junk detection is a first-class feature (§5.11), not an add-on.
+- **Audience: everyone, with special care for developers.** Miu is a storage cleaner for any Windows user first. It also does more for indie hackers and "vibe coders", whose disks fill up with `node_modules`, framework build output, Docker images and volumes, Python venvs and local AI models. Developer features (§5.11) are **added on top of** the general screens: a "For developers" section on Home, a Dev Projects page, and dev rules. They never replace the general overview.
+- **Brand:** the app is named "Miu Smart Storage" and its logo is a round, Pixar-style kitten with a mint sparkle. A splash screen shows the logo, "Made with love by Khang", vietnamcos.com and duykhang.com. The About page adds threads.com/@dkhang. The version number appears small at the bottom of Home.
 - **Cross-platform-ready:** the UI is **Avalonia** (C#/XAML, Fluent theme) and all logic sits in OS-independent libraries. Windows ships first; macOS and Linux come in Phase 9 by adding platform adapters, without rewriting the UI.
 
 **Success criteria**

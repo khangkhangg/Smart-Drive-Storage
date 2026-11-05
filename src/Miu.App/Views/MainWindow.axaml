@@ -2,18 +2,18 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Miu.App.ViewModels"
         xmlns:v="using:Miu.App.Views"
+        xmlns:c="using:Miu.App.Controls"
         x:Class="Miu.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Miu Smart Storage"
+        Icon="avares://Miu/Assets/miu-256.png"
         Width="1360" Height="860" MinWidth="900" MinHeight="600"
         Background="{DynamicResource MiuShellBg}"
         TransparencyLevelHint="Mica, AcrylicBlur, None">
   <Grid ColumnDefinitions="232,*">
     <DockPanel Grid.Column="0" Margin="12,18,12,16">
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="10,0,0,20">
-        <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource MiuAccent}">
-          <TextBlock Text="M" Foreground="White" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        </Border>
+        <c:MiuLogo Width="34" Height="34" />
         <StackPanel VerticalAlignment="Center">
           <TextBlock Text="Miu" FontSize="16" FontWeight="SemiBold" />
           <TextBlock Text="Smart Storage" Classes="caption" />
@@ -36,6 +36,7 @@
           <DataTemplate x:DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
           <DataTemplate x:DataType="vm:AnalyzeViewModel"><v:AnalyzeView /></DataTemplate>
           <DataTemplate x:DataType="vm:DevProjectsViewModel"><v:DevProjectsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
           <DataTemplate x:DataType="vm:PlaceholderViewModel">
             <StackPanel Margin="40,32" Spacing="8">
               <TextBlock Classes="h1" Text="{Binding Title}" />

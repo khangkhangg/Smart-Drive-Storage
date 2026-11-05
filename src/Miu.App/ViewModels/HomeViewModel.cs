@@ -4,33 +4,60 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Miu.App.Services;
 using Miu.Core.Formatting;
+using Miu.Dev;
 
 namespace Miu.App.ViewModels;
 
 public sealed record DriveCard(string Title, string Subtitle, string Root, double UsedFraction, string UsedText, string FreeText,
-    string Status, IBrush StatusBg, IBrush StatusFg, IBrush Bar);
+    string Status, IBrush StatusBg, IBrush StatusFg, IBrush Bar, string Badge);
 
 public sealed record SafeRow(int NodeId, string Name, string Path, string SizeText, string Reason);
 
+public sealed record CategoryChip(string Name, long Bytes, string SizeText);
+
+public sealed record ProjectChip(int NodeId, string Name, string Detail, string RebuildableText);
+
+/// <summary>
+/// Storage overview for everyone (safe-to-remove, locations, what grew, rules), plus a developer section.
+/// </summary>
 public partial class HomeViewModel : ObservableObject
 {
     private readonly MainWindowViewModel _shell;
+    private DateTime? _scannedAtUtc;
 
     public HomeViewModel(MainWindowViewModel shell)
     {
         _shell = shell;
         foreach (var d in DiscoverDrives()) Drives.Add(d);
+        BuiltInRuleCount = shell.Services.Rules.Count;
     }
 
     public ObservableCollection<DriveCard> Drives { get; } = [];
     public ObservableCollection<SafeRow> TopSafe { get; } = [];
+    public ObservableCollection<CategoryChip> Categories { get; } = [];
+    public ObservableCollection<ProjectChip> TopProjects { get; } = [];
 
-    [ObservableProperty] private bool hasScan;
+    public string VersionText => $"{AppInfo.Name} v{AppInfo.Version}";
+    public string MadeByText => $"Made with love by {AppInfo.Author}";
+    public int BuiltInRuleCount { get; }
+    public string HomeFolder { get; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoScan))] private bool hasScan;
     [ObservableProperty] private long safeTotalBytes;
     [ObservableProperty] private string safeTotalText = "";
-    [ObservableProperty] private string safeSummary = "";
-    [ObservableProperty] private string devSummary = "";
+    [ObservableProperty] private string categoriesText = "";
     [ObservableProperty] private string scannedPath = "";
+    [ObservableProperty] private bool showSafeItems;
+    [ObservableProperty] private int devProjectCount;
+    [ObservableProperty] private string devRebuildableText = "";
+    [ObservableProperty] private int devIdleCount;
+    [ObservableProperty] private string devSummary = "";
+
+    public bool HasNoScan => !HasScan;
+    public string LocationsText => $"{Drives.Count} {(Drives.Count == 1 ? "location" : "locations")} connected";
+    public string LastScanText => _scannedAtUtc is { } at
+        ? $"Last scan {HumanTime.Ago(at, DateTime.UtcNow)} · {LocationsText}"
+        : $"Not scanned yet · {LocationsText}";
 
     [RelayCommand]
     private async Task ScanDrive(DriveCard? card)
@@ -41,38 +68,87 @@ public partial class HomeViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenSafeItem(SafeRow? row)
+    private async Task ScanHome()
     {
-        if (row is null || _shell.Analyze.Session is null) return;
-        var parent = _shell.Analyze.Session.Tree.Parent(row.NodeId);
-        _shell.Analyze.ShowNode(parent < 0 ? row.NodeId : parent);
-        _shell.Analyze.Selected = _shell.Analyze.Items.FirstOrDefault(i => i.Id == row.NodeId) ?? _shell.Analyze.Selected;
+        _shell.Navigate(_shell.Analyze);
+        await _shell.Analyze.ScanPathAsync(HomeFolder);
+    }
+
+    [RelayCommand]
+    private void ToggleSafeItems() => ShowSafeItems = !ShowSafeItems;
+
+    [RelayCommand]
+    private void OpenSafeItem(SafeRow? row) => Reveal(row?.NodeId);
+
+    [RelayCommand]
+    private void OpenProject(ProjectChip? project)
+    {
+        if (project is null) return;
+        _shell.Analyze.ShowNode(project.NodeId);
         _shell.Navigate(_shell.Analyze);
     }
 
     [RelayCommand]
     private void OpenDevProjects() => _shell.Navigate(_shell.DevProjects);
 
+    [RelayCommand]
+    private void OpenRules() => _shell.Navigate(_shell.Rules);
+
+    [RelayCommand]
+    private void OpenAbout() => _shell.Navigate(_shell.About);
+
+    private void Reveal(int? nodeId)
+    {
+        if (nodeId is not { } id || _shell.Analyze.Session is null) return;
+        var parent = _shell.Analyze.Session.Tree.Parent(id);
+        _shell.Analyze.ShowNode(parent < 0 ? id : parent);
+        _shell.Analyze.Selected = _shell.Analyze.Items.FirstOrDefault(i => i.Id == id) ?? _shell.Analyze.Selected;
+        _shell.Navigate(_shell.Analyze);
+    }
+
     public void Update(ScanSession s)
     {
         var t = s.Tree;
+        _scannedAtUtc = DateTime.UtcNow;
         HasScan = true;
         ScannedPath = t.RootPath;
         SafeTotalBytes = s.SafeTotalBytes;
         SafeTotalText = SizeFormatter.Format(s.SafeTotalBytes);
-        SafeSummary = s.SafeItems.Count == 0
-            ? "Nothing is clearly safe to remove here yet. Busy projects and personal files are left for you to decide."
-            : $"{s.SafeItems.Count:N0} {(s.SafeItems.Count == 1 ? "item" : "items")} Miu is confident can be removed and rebuilt or re-downloaded.";
+
+        Categories.Clear();
+        foreach (var g in s.SafeItems.GroupBy(i => SafeCategories.For(i.Verdict.RuleId))
+                     .Select(g => (Name: g.Key, Bytes: g.Sum(i => t.Size(i.NodeId))))
+                     .OrderByDescending(g => g.Bytes))
+            Categories.Add(new CategoryChip(g.Name, g.Bytes, SizeFormatter.Format(g.Bytes)));
+        CategoriesText = Categories.Count switch
+        {
+            0 => "nothing clearly safe yet",
+            1 => "in 1 category",
+            var n => $"across {n} categories",
+        };
+
         TopSafe.Clear();
-        foreach (var (id, v) in s.SafeItems.Take(6))
-            TopSafe.Add(new SafeRow(id, t.Parent(id) is var p && p > t.Root ? $"{t.Name(p)} › {t.Name(id)}" : t.Name(id), t.GetFullPath(id), SizeFormatter.Format(t.Size(id)), v.Reason));
+        foreach (var (id, v) in s.SafeItems.Take(8))
+        {
+            var p = t.Parent(id);
+            TopSafe.Add(new SafeRow(id, p > t.Root ? $"{t.Name(p)} › {t.Name(id)}" : t.Name(id), t.GetFullPath(id),
+                SizeFormatter.Format(t.Size(id)), v.Reason));
+        }
 
         var projects = s.Projects;
-        var rebuildable = projects.Sum(p => p.RebuildableBytes);
-        var idle = projects.Count(p => p.IdleDays > 90);
+        DevProjectCount = projects.Count;
+        DevRebuildableText = SizeFormatter.Format(projects.Sum(p => p.RebuildableBytes));
+        DevIdleCount = projects.Count(p => p.Bucket >= IdleBucket.Idle);
         DevSummary = projects.Count == 0
-            ? "No code projects found in this scan."
-            : $"{projects.Count} projects hold {SizeFormatter.Format(rebuildable)} of rebuildable files · {idle} idle for more than 90 days";
+            ? "No code projects in this scan. Scan your code folder to find node_modules, build output and caches."
+            : $"{projects.Count} projects hold {DevRebuildableText} of rebuildable files · {DevIdleCount} idle for more than 90 days";
+        TopProjects.Clear();
+        foreach (var p in projects.Where(p => p.RebuildableBytes > 0).Take(3))
+            TopProjects.Add(new ProjectChip(p.NodeId, p.Name,
+                $"{string.Join(" · ", p.Stacks)} · last activity {HumanTime.Ago(p.LastActivityUtc, s.NowUtc)}",
+                SizeFormatter.Format(p.RebuildableBytes)));
+
+        OnPropertyChanged(nameof(LastScanText));
     }
 
     private static IEnumerable<DriveCard> DiscoverDrives()
@@ -95,12 +171,16 @@ public partial class HomeViewModel : ObservableObject
                 var used = d.TotalSize - d.TotalFreeSpace;
                 var frac = (double)used / d.TotalSize;
                 var low = frac > 0.85;
-                var title = OperatingSystem.IsWindows() ? root.TrimEnd('\\') + (string.IsNullOrEmpty(d.VolumeLabel) ? "" : " " + d.VolumeLabel) : root;
+                var windows = OperatingSystem.IsWindows();
+                var title = windows
+                    ? (string.IsNullOrEmpty(d.VolumeLabel) ? "Local Disk" : d.VolumeLabel)
+                    : root == "/" ? "System" : Path.GetFileName(root.TrimEnd('/'));
+                var badge = windows ? root.TrimEnd('\\') : root == "/" ? "/" : title[..Math.Min(2, title.Length)].ToUpperInvariant();
                 var kind = d.DriveType switch { DriveType.Network => "Network drive", DriveType.Removable => "Removable drive", _ => "Local drive" } + " · " + d.DriveFormat;
                 card = new DriveCard(title, kind, root, frac, SizeFormatter.Format(used) + " used", SizeFormatter.Format(d.AvailableFreeSpace) + " free",
                     low ? "Low space" : "Healthy",
                     new SolidColorBrush(Color.Parse(low ? "#FDF0E1" : "#E6F2E6")), new SolidColorBrush(Color.Parse(low ? "#8A4600" : "#0E700E")),
-                    new SolidColorBrush(Color.Parse(low ? "#C25700" : "#005FB8")));
+                    new SolidColorBrush(Color.Parse(low ? "#C25700" : "#005FB8")), badge);
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

@@ -28,7 +28,9 @@ public class ScreenshotTests
             await vm.Analyze.ScanPathAsync(root);
 
             vm.Navigate(vm.Home);
+            window.Height = 1240;
             Save(window, Path.Combine(outDir, "home.png"));
+            window.Height = 860;
 
             vm.Navigate(vm.Analyze);
             vm.Analyze.OpenCommand.Execute(vm.Analyze.Items.Single(i => i.Name == "Code"));
@@ -41,6 +43,26 @@ public class ScreenshotTests
 
             vm.Navigate(vm.DevProjects);
             Save(window, Path.Combine(outDir, "dev-projects.png"));
+
+            vm.Navigate(vm.About);
+            Save(window, Path.Combine(outDir, "about.png"));
+
+            var splash = new SplashWindow();
+            splash.Show();
+            Dispatcher.UIThread.RunJobs();
+            splash.CaptureRenderedFrame()!.Save(Path.Combine(outDir, "splash.png"));
+            splash.Close();
+
+            // Logo at icon sizes (used for the app icon and README).
+            var logoWindow = new Avalonia.Controls.Window
+            {
+                Width = 512, Height = 512, SystemDecorations = Avalonia.Controls.SystemDecorations.None,
+                Background = Avalonia.Media.Brushes.Transparent, Content = new Miu.App.Controls.MiuLogo(),
+            };
+            logoWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+            logoWindow.CaptureRenderedFrame()!.Save(Path.Combine(outDir, "logo-512.png"));
+            logoWindow.Close();
         }
         finally { Directory.Delete(Path.GetDirectoryName(root)!, true); }
     }

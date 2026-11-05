@@ -1,7 +1,11 @@
+<p align="center"><img src="docs/brand/miu-logo-256.png" width="128" alt="Miu logo"></p>
+
 # Miu Smart Storage
 
 **See where your disk space went, find out what's safe to delete (and why), and keep your drives clean on their own.**
-Free and built for indie hackers and vibe coders, whose disks fill up with `node_modules`, build folders, Python venvs, Docker images and AI models.
+Free and for everyone, with extra help for developers and vibe coders, whose disks fill up with `node_modules`, build folders, Python venvs, Docker images and AI models.
+
+Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
 > Status: **Milestone 1 (core slice)**. Miu scans drives and folders and explains every item, but **it does not delete anything yet**. Cleaning (to the Recycle Bin, with undo) is the next milestone.
 
@@ -13,7 +17,12 @@ Free and built for indie hackers and vibe coders, whose disks fill up with `node
 |---|---|
 | ![Project](docs/screenshots/analyze-project.png) | ![Dev projects](docs/screenshots/dev-projects.png) |
 
+| Splash | About |
+|---|---|
+| ![Splash](docs/screenshots/splash.png) | ![About](docs/screenshots/about.png) |
+
 ## What works today
+- **Home:** a storage overview with the "safe to remove" total grouped into categories, location cards, a rules summary, and a **For developers** section.
 - **Fast parallel scan** of any drive or folder. Symlinks and junctions are never followed, and folders you can't read are skipped.
 - **Analyze:** a drill-down list with size bars, a **treemap**, breadcrumbs and a details pane.
 - **A safety verdict on every item:** 🟢 Safe to delete · 🟡 Review first · 🔴 Keep / Do not delete, always with a plain-language *why* and the rule that decided it.

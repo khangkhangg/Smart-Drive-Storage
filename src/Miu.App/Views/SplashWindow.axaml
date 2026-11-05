@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Miu.App.Controls"
+        x:Class="Miu.App.Views.SplashWindow"
+        Title="Miu Smart Storage"
+        Icon="avares://Miu/Assets/miu-256.png"
+        Width="480" Height="320" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        SystemDecorations="None" ShowInTaskbar="True"
+        Background="Transparent" TransparencyLevelHint="Transparent">
+  <Border CornerRadius="16" BorderBrush="#22000000" BorderThickness="1" ClipToBounds="True">
+    <Border.Background>
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#FFFFFF" />
+        <GradientStop Offset="1" Color="#EEF4FB" />
+      </LinearGradientBrush>
+    </Border.Background>
+    <Grid RowDefinitions="*,Auto" Margin="32,32,32,22">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
+        <c:MiuLogo Width="96" Height="96" HorizontalAlignment="Center" />
+        <TextBlock Text="Miu Smart Storage" FontSize="24" FontWeight="SemiBold" Foreground="#1B1B1B" HorizontalAlignment="Center" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+          <TextBlock Text="Made with" Foreground="#3D3D3D" FontSize="14" />
+          <Path Data="M12,21 C12,21 3,14.5 3,8.5 C3,5.5 5.4,3.5 8,3.5 C9.8,3.5 11.2,4.5 12,5.8 C12.8,4.5 14.2,3.5 16,3.5 C18.6,3.5 21,5.5 21,8.5 C21,14.5 12,21 12,21 Z"
+                Fill="#E5484D" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+          <TextBlock Text="by Khang" Foreground="#3D3D3D" FontSize="14" />
+        </StackPanel>
+        <TextBlock Text="vietnamcos.com  ·  duykhang.com" Foreground="#005FB8" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" />
+      </StackPanel>
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ProgressBar IsIndeterminate="True" Width="90" Height="4" MinHeight="4" VerticalAlignment="Center" Foreground="#005FB8" />
+          <TextBlock x:Name="StatusText" Text="Getting things ready…" Foreground="#5D5D5D" FontSize="12" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" x:Name="VersionText" Foreground="#5D5D5D" FontSize="12" VerticalAlignment="Center" />
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
