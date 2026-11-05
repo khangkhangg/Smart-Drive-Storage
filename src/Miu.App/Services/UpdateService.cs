@@ -31,7 +31,7 @@ public sealed class UpdateService(HttpClient http, string repository = "khangkha
         var assets = root.TryGetProperty("assets", out var a) && a.ValueKind == JsonValueKind.Array
             ? a.EnumerateArray().Select(x => (Name: x.GetProperty("name").GetString() ?? "", Url: x.GetProperty("browser_download_url").GetString() ?? "")).ToList()
             : [];
-        var pick = AssetFor(assets.Select(x => x.Name).ToList(), CurrentOs(), RuntimeInformation.OSArchitecture);
+        var pick = AssetFor(assets.Select(x => x.Name).ToList(), CurrentOs(), RuntimeInformation.OSArchitecture, LinuxInstallKind());
         var url = pick is null ? null : assets.First(x => x.Name == pick).Url;
         var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
         return new UpdateInfo(version, root.GetProperty("html_url").GetString() ?? "", url, pick, notes.Length > 600 ? notes[..600] + "…" : notes);
@@ -40,7 +40,12 @@ public sealed class UpdateService(HttpClient http, string repository = "khangkha
     public static string CurrentOs() => OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "macos" : "linux";
 
     /// <summary>Picks the release file for this system: installer on Windows, .dmg on macOS, AppImage (else .deb/.tar.gz) on Linux.</summary>
-    public static string? AssetFor(IReadOnlyList<string> names, string os, Architecture arch)
+    /// <summary>How Miu was installed on Linux: "appimage", "deb" or "tar".</summary>
+    public static string LinuxInstallKind() =>
+        Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 } ? "appimage"
+        : (Environment.ProcessPath ?? "").StartsWith("/opt/miu-smart-storage/", StringComparison.Ordinal) ? "deb" : "tar";
+
+    public static string? AssetFor(IReadOnlyList<string> names, string os, Architecture arch, string linuxKind = "appimage")
     {
         string? First(params string[] suffixes) =>
             suffixes.Select(s => names.FirstOrDefault(n => n.EndsWith(s, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(n => n is not null);
@@ -48,7 +53,12 @@ public sealed class UpdateService(HttpClient http, string repository = "khangkha
         {
             "windows" => First("-windows-x64-setup.exe", "-windows-x64-portable.zip"),
             "macos" => arch == Architecture.Arm64 ? First("-macos-arm64.dmg", "-macos-arm64.zip") : First("-macos-x64.dmg", "-macos-x64.zip"),
-            _ => First("-x86_64.AppImage", "_amd64.deb", "-linux-x64.tar.gz"),
+            _ => linuxKind switch
+            {
+                "deb" => First("_amd64.deb", "-x86_64.AppImage", "-linux-x64.tar.gz"),
+                "tar" => First("-linux-x64.tar.gz", "-x86_64.AppImage", "_amd64.deb"),
+                _ => First("-x86_64.AppImage", "_amd64.deb", "-linux-x64.tar.gz"),
+            },
         };
     }
 

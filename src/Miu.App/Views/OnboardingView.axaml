@@ -17,16 +17,16 @@
       <!-- Step 1 -->
       <StackPanel Spacing="10" IsVisible="{Binding IsStep1}">
         <TextBlock Classes="h2" Text="What should Miu look at first?" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Miu only looks. Nothing is cleaned unless you choose it, and everything goes to the Recycle Bin or Trash first, so you can undo it." />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Pick one to start with; you can scan more any time. Miu only looks. Nothing is cleaned unless you choose it, and everything goes to the Recycle Bin or Trash first, so you can undo it." />
         <ItemsControl ItemsSource="{Binding Locations}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:OnboardingLocation">
-              <CheckBox IsChecked="{Binding IsChecked}" Margin="0,4">
+              <RadioButton GroupName="FirstScan" IsChecked="{Binding IsChecked}" Margin="0,4">
                 <StackPanel>
                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                   <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap" />
                 </StackPanel>
-              </CheckBox>
+              </RadioButton>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

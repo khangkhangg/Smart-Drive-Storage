@@ -57,16 +57,60 @@ public sealed class CleanupService(AppServices services)
         return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed);
     }
 
+    /// <summary>
+    /// Why this item can't be cleaned without losing work git doesn't have, or null. Checks the repository the item is
+    /// in, and (for folders) repositories inside it.
+    /// </summary>
     private static async Task<string?> GitConflictAsync(Miu.Dev.Git.GitService git, string path, CancellationToken ct)
     {
-        if (Miu.Dev.Git.GitStatus.FindRoot(path) is not { } root) return null;
-        if (await git.StatusAsync(root, ct) is not { } state) return null; // git isn't installed: nothing to compare with
+        if (Miu.Dev.Git.GitStatus.FindRoot(path) is { } root && await RepoConflictAsync(git, root, path, ct) is { } why) return why;
+        // Rebuildable folders (node_modules, build output, caches) don't hold repositories worth looking for.
+        if (!Directory.Exists(path) || Rebuildable.Contains(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)))) return null;
+        foreach (var inner in NestedRepos(path))
+            if (await RepoConflictAsync(git, inner, inner, ct) is { } why2) return $"{Path.GetFileName(inner)} inside it: {why2}";
+        return null;
+    }
+
+    private static async Task<string?> RepoConflictAsync(Miu.Dev.Git.GitService git, string root, string path, CancellationToken ct)
+    {
         var rel = Path.GetRelativePath(root, path).Replace('\\', '/');
         if (rel == ".") rel = "";
+        var check = await git.CheckAsync(root, ct);
+        if (check.Problem is { } problem) return problem + " Clean it yourself if you're sure.";
+        if (check.State is not { } state)
+            return rel.Length == 0 ? "It's a git repository and git isn't installed, so Miu can't tell whether its work is saved anywhere else." : null;
         var work = state.WorkInside(rel);
         if (work.Count > 0) return $"It holds work you haven't committed in git ({work.Count} {(work.Count == 1 ? "file" : "files")}, e.g. {work[0]}).";
         if (rel.Length == 0 && state.HasUnpushed) return $"This repository has {state.Ahead} commits you haven't pushed.";
+        if (rel.Length == 0 && state.HasNoUpstream) return "This repository's branch isn't pushed anywhere, so its history may exist only here.";
         return null;
+    }
+
+    private static readonly HashSet<string> Rebuildable = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "node_modules", ".venv", "venv", "__pycache__", "build", "dist", "target", "bin", "obj", ".gradle", ".next", ".nuxt", ".cache", ".turbo", ".parcel-cache", "out", "coverage",
+    };
+
+    /// <summary>Git repositories inside a folder (a few levels deep; stops early in huge trees).</summary>
+    private static IEnumerable<string> NestedRepos(string folder)
+    {
+        var queue = new Queue<(string Dir, int Depth)>([(folder, 0)]);
+        var seen = 0;
+        while (queue.Count > 0 && seen < 5000)
+        {
+            var (dir, depth) = queue.Dequeue();
+            string[] children;
+            try { children = Directory.GetDirectories(dir); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            foreach (var c in children)
+            {
+                seen++;
+                var name = Path.GetFileName(c);
+                if (name == ".git") { if (dir != folder) yield return dir; continue; }
+                if (depth < 4 && name is not ("node_modules" or ".venv" or "venv" or "target" or "build" or "dist")) queue.Enqueue((c, depth + 1));
+            }
+            if (dir != folder && File.Exists(Path.Combine(dir, ".git"))) yield return dir; // worktrees and submodules
+        }
     }
 
     /// <summary>Puts everything from one clean back where it was. Each action can be undone once.</summary>

@@ -41,7 +41,7 @@ ln -s "/opt/$NAME/Miu" "$DEB/usr/bin/miu"
 cp "$DESKTOP" "$DEB/usr/share/applications/$NAME.desktop"
 cp "$ICON" "$DEB/usr/share/icons/hicolor/256x256/apps/$NAME.png"
 SIZE_KB=$(du -sk "$DEB/opt" | cut -f1)
-DEB_VERSION="${VERSION//-/\~}" # 0.8.0-beta.1 -> 0.8.0~beta.1 sorts before 0.8.0
+DEB_VERSION="${VERSION%%+*}"; DEB_VERSION="${DEB_VERSION//-/\~}" # 0.8.0-beta.1 -> 0.8.0~beta.1 sorts before 0.8.0
 cat > "$DEB/DEBIAN/control" <<CTRL
 Package: $NAME
 Version: $DEB_VERSION
@@ -49,7 +49,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Installed-Size: $SIZE_KB
-Depends: libc6, libfontconfig1, libx11-6, libice6, libsm6, libicu74 | libicu72 | libicu70 | libicu67 | libicu66
+Depends: libc6, libfontconfig1, libx11-6, libice6, libsm6, libicu78 | libicu77 | libicu76 | libicu74 | libicu72 | libicu70 | libicu67 | libicu66, libssl3 | libssl3t64 | libssl1.1
 Maintainer: Khang <https://duykhang.com>
 Homepage: https://github.com/khangkhangg/Smart-Drive-Storage
 Description: See what fills your drive and clean it up safely

@@ -27,5 +27,11 @@ public sealed class CrashReporterTests : IDisposable
         CrashReporter.Pending(_dir).Should().Be(last);
         CrashReporter.MarkSeen(last!);
         CrashReporter.Pending(_dir).Should().NotBe(last);
+
+        // An error Miu recovered from is never announced as "Miu closed unexpectedly".
+        var dir2 = _dir + "-2";
+        CrashReporter.Write(dir2, new InvalidOperationException("recovered"), "screen", fatal: false);
+        CrashReporter.Pending(dir2).Should().BeNull();
+        Directory.Delete(dir2, true);
     }
 }

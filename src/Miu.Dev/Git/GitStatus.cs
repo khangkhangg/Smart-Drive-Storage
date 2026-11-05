@@ -11,6 +11,9 @@ public sealed record GitState(string Root, string? Branch, IReadOnlyList<string>
     public bool HasUncommitted => Changed.Count > 0 || Untracked.Count > 0;
     public bool HasUnpushed => Ahead > 0;
 
+    /// <summary>No upstream branch: commits here may exist nowhere else.</summary>
+    public bool HasNoUpstream => Ahead < 0;
+
     public string Describe()
     {
         var parts = new List<string>();
@@ -25,7 +28,10 @@ public sealed record GitState(string Root, string? Branch, IReadOnlyList<string>
     {
         var f = relFolder.Replace('\\', '/').Trim('/');
         if (f.Length == 0) return [.. Changed, .. Untracked];
-        return Changed.Concat(Untracked).Where(p => p.TrimEnd('/') == f || p.StartsWith(f + "/", StringComparison.Ordinal)).ToList();
+        return Changed.Concat(Untracked).Where(p =>
+            p.TrimEnd('/') == f || p.StartsWith(f + "/", StringComparison.Ordinal) ||
+            (p.EndsWith('/') && (f + "/").StartsWith(p, StringComparison.Ordinal))) // the item is inside a folder git doesn't know
+            .ToList();
     }
 }
 
@@ -54,7 +60,6 @@ public static class GitStatus
             else if (r[0] == 'u') changed.Add(Field(r, 10));
             else if (r[0] == '?') untracked.Add(r[2..]);
         }
-        if (branch is not null && ahead < 0 && branch != "(detached)") ahead = -1;
         return new GitState(root, branch, changed, untracked, ahead);
     }
 
@@ -79,18 +84,66 @@ public static class GitStatus
     }
 }
 
-/// <summary>Asks git about a repository. Returns null when git isn't installed or the folder isn't a repository.</summary>
+/// <param name="State">What git says, when it could be asked.</param>
+/// <param name="Problem">Why Miu couldn't check this repository safely (then nothing in it should be cleaned).</param>
+/// <param name="GitMissing">git isn't installed, so nothing could be checked.</param>
+public sealed record GitCheck(GitState? State, string? Problem = null, bool GitMissing = false);
+
+/// <summary>
+/// Asks git about a repository, without letting the repository run anything: settings that make git start programs
+/// (fsmonitor, filters, textconv, includes) are refused, fsmonitor is forced off, and no lock files are taken.
+/// </summary>
 public sealed class GitService(IProcessRunner runner)
 {
-    private readonly Dictionary<string, GitState?> _cache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GitCheck> _cache = new(StringComparer.Ordinal);
 
-    public async Task<GitState?> StatusAsync(string repoRoot, CancellationToken ct = default)
+    public async Task<GitState?> StatusAsync(string repoRoot, CancellationToken ct = default) => (await CheckAsync(repoRoot, ct)).State;
+
+    public async Task<GitCheck> CheckAsync(string repoRoot, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(repoRoot, out var known)) return known;
-        var r = await runner.RunAsync("git", ["-C", repoRoot, "-c", "core.quotepath=off", "status", "--porcelain=v2", "--branch", "-z"], ct);
-        var state = r.ExitCode == 0 ? GitStatus.Parse(repoRoot, r.Output) : null;
-        _cache[repoRoot] = state;
-        return state;
+        GitCheck result;
+        if (RiskyConfig(repoRoot) is { } why)
+            result = new GitCheck(null, $"This repository's git settings start other programs ({why}), so Miu didn't run git on it.");
+        else
+        {
+            try
+            {
+                var r = await runner.RunAsync("git",
+                    ["--no-optional-locks", "-C", repoRoot, "-c", "core.fsmonitor=false", "-c", "core.quotepath=off", "status", "--porcelain=v2", "--branch", "-z"], ct);
+                result = r.ExitCode switch
+                {
+                    0 => new GitCheck(GitStatus.Parse(repoRoot, r.Output)),
+                    127 => new GitCheck(null, GitMissing: true),
+                    _ => new GitCheck(null, "git couldn't read this repository" + (r.Error.Length > 0 ? ": " + r.Error.Split('\n')[0].Trim() : ".")),
+                };
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                result = new GitCheck(null, "git took too long to check this repository.");
+            }
+        }
+        _cache[repoRoot] = result;
+        return result;
+    }
+
+    /// <summary>Settings in the repository's own config that make "git status" run a program.</summary>
+    public static string? RiskyConfig(string repoRoot)
+    {
+        try
+        {
+            var dotGit = Path.Combine(repoRoot, ".git");
+            var gitDir = dotGit;
+            if (File.Exists(dotGit) && File.ReadAllText(dotGit).Trim() is var link && link.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase))
+                gitDir = Path.GetFullPath(Path.Combine(repoRoot, link[7..].Trim()));
+            var config = Path.Combine(gitDir, "config");
+            if (!File.Exists(config)) return null;
+            var text = File.ReadAllText(config).ToLowerInvariant();
+            foreach (var (needle, name) in new[] { ("fsmonitor", "fsmonitor"), ("[filter", "a file filter"), ("textconv", "textconv"), ("[include", "an include"), ("[includeif", "an include") })
+                if (text.Contains(needle, StringComparison.Ordinal)) return name;
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return "unreadable settings"; }
     }
 
     public void Forget() => _cache.Clear();

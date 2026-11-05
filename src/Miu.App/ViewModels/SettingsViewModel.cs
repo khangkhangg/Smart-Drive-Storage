@@ -121,7 +121,9 @@ public partial class SettingsViewModel : ObservableObject
         {
             if (value)
             {
-                var (exe, args) = Services.StartupCommand.For(Environment.ProcessPath ?? "Miu", System.Reflection.Assembly.GetEntryAssembly()?.Location);
+                // Inside an AppImage the process lives in a temporary mount: start the AppImage file itself instead.
+                var process = Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 } appImage ? appImage : Environment.ProcessPath ?? "Miu";
+                var (exe, args) = Services.StartupCommand.For(process, System.Reflection.Assembly.GetEntryAssembly()?.Location);
                 _shell.Services.Startup.Enable(exe, args);
             }
             else _shell.Services.Startup.Disable();

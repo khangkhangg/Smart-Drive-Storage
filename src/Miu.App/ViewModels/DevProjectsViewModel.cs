@@ -75,13 +75,18 @@ public partial class DevProjectsViewModel(MainWindowViewModel shell) : Observabl
         var git = shell.Services.NewGit();
         foreach (var p in s.Projects.Where(p => p.Stacks.Contains("Git")).ToList())
         {
-            Miu.Dev.Git.GitState? state;
-            try { state = await git.StatusAsync(p.Path); }
+            Miu.Dev.Git.GitCheck check;
+            try { check = await git.CheckAsync(p.Path); }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException) { continue; }
             if (generation != _gitGeneration) return; // a newer scan replaced this list
-            if (state is null) continue;
-            _git[p.NodeId] = state;
             var i = Projects.ToList().FindIndex(r => r.NodeId == p.NodeId);
+            if (check.Problem is { } problem)
+            {
+                if (i >= 0) Projects[i] = Projects[i] with { GitText = "⚠ " + problem, GitWarning = true };
+                continue;
+            }
+            if (check.State is not { } state) continue;
+            _git[p.NodeId] = state;
             var warn = state.HasUncommitted || state.HasUnpushed;
             if (i >= 0) Projects[i] = Projects[i] with { GitText = (warn ? "⚠ " : "") + state.Describe(), GitWarning = warn };
         }

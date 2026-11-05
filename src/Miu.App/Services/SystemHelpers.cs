@@ -65,7 +65,15 @@ public static class SingleInstance
     /// <summary>Asks the running Miu to analyze a folder (from "Analyze with Miu" or "Open with").</summary>
     public static void SignalAnalyze(string dir, string path)
     {
-        try { File.WriteAllText(Path.Combine(dir, AnalyzeSignal), path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        try
+        {
+            // Written next to it, then renamed: the running Miu never reads a half-written file.
+            var temp = Path.Combine(dir, AnalyzeSignal + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp");
+            File.WriteAllText(temp, path);
+            File.Move(temp, Path.Combine(dir, AnalyzeSignal), overwrite: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     public static string? ReadAnalyzeSignal(string dir)

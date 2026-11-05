@@ -13,7 +13,7 @@ public static class ExportService
     public static string Export(AppServices s, string folder, DateTime nowLocal)
     {
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"Miu-export-{nowLocal:yyyy-MM-dd-HHmm}.json");
+        var path = Path.Combine(folder, $"Miu-export-{nowLocal:yyyy-MM-dd-HHmmss}.json");
         var data = new Dictionary<string, object?>
         {
             ["app"] = $"{AppInfo.Name} {AppInfo.Version}",

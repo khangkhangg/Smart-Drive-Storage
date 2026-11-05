@@ -88,15 +88,18 @@ public partial class App : Application
         _vm = new MainWindowViewModel(services);
         SettingsViewModel.ApplyTheme(services.Settings.Get(SettingKeys.Theme));
         if (services.RecoveredFrom is { } from)
-            _vm.Notice = new NoticeViewModel(_vm, "Miu's database was damaged, so it was restored from its most recent backup.",
-                $"Backup used: {from}. The damaged file was kept next to it.", 0);
+            _vm.Notice = from == Miu.Data.DatabaseCare.NoBackup
+                ? new NoticeViewModel(_vm, "Miu's database was damaged and there was no backup yet, so Miu started fresh.",
+                    "Your files weren't touched. Your rules and settings need setting up again. The damaged file was kept next to the new one.", 0)
+                : new NoticeViewModel(_vm, "Miu's database was damaged, so it was restored from its most recent backup.",
+                    $"Backup used: {from}. The damaged file was kept next to it.", 0);
         else if (CrashReporter.Pending(DataDir) is { } report)
         {
             CrashReporter.MarkSeen(report);
             _vm.Notice = new NoticeViewModel(_vm, "Miu closed unexpectedly last time. Sorry about that.",
                 "A report was saved on this computer (nothing was sent). You can share it to help fix the problem.", 0, "Open report", () => ShellIntegration.Open(report));
         }
-        try { services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { }
+        _ = Task.Run(() => { try { services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { } });
         _main = new MainWindow { DataContext = _vm };
         _vm.ShowWindow = ShowMain;
         _main.Closing += (_, e) =>
@@ -151,7 +154,8 @@ public partial class App : Application
             if (_vm is null) return;
             await _vm.Automation.TickAsync();
             await _vm.CheckForUpdatesAsync(force: false); // at most once a day
-            try { _vm.Services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { }
+            var services = _vm.Services;
+            _ = Task.Run(() => { try { services.BackupDatabaseIfDue(); } catch (Exception ex) when (ex is IOException or Microsoft.Data.Sqlite.SqliteException) { } });
         }
         catch (Exception ex) { System.Diagnostics.Trace.WriteLine("Automation tick failed: " + ex); }
     }
@@ -230,6 +234,7 @@ public partial class App : Application
             });
             _analyzeWatcher.Changed += (_, _) => OnAnalyze();
             _analyzeWatcher.Created += (_, _) => OnAnalyze();
+            _analyzeWatcher.Renamed += (_, _) => OnAnalyze();
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException) { }
     }
@@ -247,6 +252,7 @@ public partial class App : Application
         _exiting = true;
         _timer?.Stop();
         _stopping.Cancel();
+        _analyzeWatcher?.Dispose();
         _signalWatcher?.Dispose();
         _instanceLock?.Dispose();
         desktop.Shutdown();

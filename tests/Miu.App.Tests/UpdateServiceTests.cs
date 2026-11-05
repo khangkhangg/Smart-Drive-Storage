@@ -49,6 +49,10 @@ public class UpdateServiceTests
         UpdateService.AssetFor(names, "macos", Architecture.X64).Should().EndWith("x64.dmg");
         UpdateService.AssetFor(names, "linux", Architecture.X64).Should().EndWith(".deb"); // no AppImage in this list
         UpdateService.AssetFor([], "linux", Architecture.X64).Should().BeNull();
+        var linux = new[] { "Miu-Smart-Storage-0.9.0-x86_64.AppImage", "miu-smart-storage_0.9.0_amd64.deb", "miu-smart-storage-0.9.0-linux-x64.tar.gz" };
+        UpdateService.AssetFor(linux, "linux", Architecture.X64, "deb").Should().EndWith(".deb");     // installed with apt
+        UpdateService.AssetFor(linux, "linux", Architecture.X64, "tar").Should().EndWith(".tar.gz");
+        UpdateService.AssetFor(linux, "linux", Architecture.X64, "appimage").Should().EndWith(".AppImage");
     }
 
     [Fact]
@@ -85,5 +89,6 @@ public class UpdateServiceTests
         var offline = new MainWindowViewModel(AppServices.Create(":memory:", new CleanupServiceTests.FakeBin(), secrets: new TelegramServiceTests.MemorySecrets()),
             new AutomationTests.FakeNotifier(), _ => new TelegramServiceTests.FakeTelegram(), new UpdateService(new HttpClient(new Stub(HttpStatusCode.BadGateway, ""))));
         (await offline.CheckForUpdatesAsync(force: true)).Should().Contain("Couldn't check");
+        (await offline.CheckForUpdatesAsync(force: false)).Should().BeEmpty(); // offline: no retry every minute
     }
 }

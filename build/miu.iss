@@ -19,7 +19,6 @@ DefaultDirName={localappdata}\Programs\Miu Smart Storage
 DefaultGroupName=Miu Smart Storage
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 OutputDir={#OutputDir}
 OutputBaseFilename=Miu-Smart-Storage-{#AppVersion}-windows-x64-setup
 SetupIconFile={#RootDir}\src\Miu.App\Assets\miu.ico
@@ -47,6 +46,7 @@ Name: "{userdesktop}\Miu Smart Storage"; Filename: "{app}\Miu.exe"; Tasks: deskt
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "MiuSmartStorage"; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\MiuAnalyze"; Flags: uninsdeletekey dontcreatekey
 Root: HKCU; Subkey: "Software\Classes\Drive\shell\MiuAnalyze"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\MiuAnalyze"; Flags: uninsdeletekey dontcreatekey
 
 [Run]
 Filename: "{app}\Miu.exe"; Description: "Start Miu Smart Storage"; Flags: nowait postinstall skipifsilent

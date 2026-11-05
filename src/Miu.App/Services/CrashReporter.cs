@@ -10,6 +10,7 @@ namespace Miu.App.Services;
 public static class CrashReporter
 {
     private const string Prefix = "crash-";
+    private const string ProblemPrefix = "problem-"; // errors Miu recovered from (never reported as a crash)
     public static string Folder(string dataDir) => Path.Combine(dataDir, "crashes");
 
     public static void Install(string dataDir, Action<Exception>? onUiThreadError = null)
@@ -17,37 +18,42 @@ public static class CrashReporter
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) Write(dataDir, ex, "fatal"); };
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
-            Write(dataDir, e.Exception, "background task");
+            Write(dataDir, e.Exception, "background task", fatal: false);
             e.SetObserved(); // a forgotten background task must not take Miu down
         };
         if (onUiThreadError is not null)
             Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
             {
-                Write(dataDir, e.Exception, "screen");
+                Write(dataDir, e.Exception, "screen", fatal: false);
                 e.Handled = true; // keep running; the user sees what happened
                 onUiThreadError(e.Exception);
             };
     }
 
-    public static string? Write(string dataDir, Exception ex, string kind)
+    public static string? Write(string dataDir, Exception ex, string kind, bool fatal = true)
     {
         try
         {
             var dir = Folder(dataDir);
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{Prefix}{DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture)}.txt");
+            var path = Path.Combine(dir, $"{(fatal ? Prefix : ProblemPrefix)}{DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture)}.txt");
             File.WriteAllText(path,
                 $"Miu Smart Storage {AppInfo.Version} ({kind})\n" +
                 $"Time: {DateTime.Now:O}\n" +
                 $"System: {RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}, .NET {Environment.Version}\n\n" +
                 ex);
-            foreach (var old in Directory.GetFiles(dir, Prefix + "*.txt").OrderByDescending(f => f, StringComparer.Ordinal).Skip(10)) File.Delete(old);
+            foreach (var prefix in new[] { Prefix, ProblemPrefix })
+                foreach (var old in Directory.GetFiles(dir, prefix + "*.txt").OrderByDescending(f => f, StringComparer.Ordinal).Skip(10))
+                {
+                    File.Delete(old);
+                    if (File.Exists(old + ".seen")) File.Delete(old + ".seen");
+                }
             return path;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    /// <summary>The newest report from a previous run that hasn't been shown yet.</summary>
+    /// <summary>The newest crash (Miu closed) from a previous run that hasn't been shown yet. Recovered problems don't count.</summary>
     public static string? Pending(string dataDir)
     {
         var dir = Folder(dataDir);

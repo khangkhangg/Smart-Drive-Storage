@@ -7,6 +7,5 @@ Exec=miu %F
 Icon=miu-smart-storage
 Terminal=false
 Categories=Utility;System;Filesystem;
-MimeType=inode/directory;
 Keywords=disk;storage;cleanup;space;duplicates;node_modules;docker;
 StartupWMClass=Miu

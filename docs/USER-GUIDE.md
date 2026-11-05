@@ -8,7 +8,7 @@ Download the file for your system from the [latest release](https://github.com/k
 | System | File | Notes |
 |---|---|---|
 | **Windows 10/11** | `…-windows-x64-setup.exe` | Installs for your user only, without admin rights. You can also use `…-portable.zip`. |
-| **macOS 12+ (Apple silicon)** | `…-macos-arm64.dmg` | Drag Miu to Applications. The first time, right-click › **Open** (the app isn't notarized yet). |
+| **macOS 12+ (Apple silicon)** | `…-macos-arm64.dmg` | Drag Miu to Applications. The app isn't notarized yet, so the first time macOS blocks it. Open **System Settings › Privacy & Security** and click **Open Anyway**. Or run `xattr -dr com.apple.quarantine "/Applications/Miu Smart Storage.app"`. |
 | **macOS 12+ (Intel)** | `…-macos-x64.dmg` | Same as above. |
 | **Linux (x64)** | `…-x86_64.AppImage` | Make it executable, then run it. |
 | | `…_amd64.deb` | For Debian and Ubuntu: `sudo apt install ./miu-smart-storage_*.deb` |

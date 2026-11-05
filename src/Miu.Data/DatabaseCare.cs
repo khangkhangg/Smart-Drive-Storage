@@ -10,6 +10,7 @@ namespace Miu.Data;
 public static class DatabaseCare
 {
     public const int Keep = 3;
+    public const string NoBackup = "(no backup: starting fresh)";
 
     public static string BackupDir(string dbPath) => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dbPath))!, "backups");
 
@@ -22,7 +23,7 @@ public static class DatabaseCare
             if (File.Exists(dbPath + suffix)) File.Move(dbPath + suffix, $"{dbPath}.damaged-{stamp}{suffix}");
         var good = Backups(dbPath).FirstOrDefault(IsHealthy);
         if (good is not null) File.Copy(good, dbPath);
-        return (new MiuDatabase(dbPath), good is null ? "(no backup: starting fresh)" : Path.GetFileName(good));
+        return (new MiuDatabase(dbPath), good is null ? NoBackup : Path.GetFileName(good));
     }
 
     /// <summary>Makes today's copy if the newest one is older than 20 hours. Returns the new file, or null.</summary>
@@ -33,7 +34,10 @@ public static class DatabaseCare
         if (newest is not null && nowLocal - File.GetLastWriteTime(newest) < TimeSpan.FromHours(20)) return null;
         Directory.CreateDirectory(dir);
         var target = Path.Combine(dir, $"miu-{nowLocal.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.db");
-        using (var cmd = db.Connection.CreateCommand())
+        // Its own connection: the copy can run off the UI thread while Miu keeps using the database.
+        using var own = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = dbPath, Pooling = false }.ToString());
+        own.Open();
+        using (var cmd = own.CreateCommand())
         {
             cmd.CommandText = "VACUUM INTO $t"; // a consistent copy, even while Miu is writing
             cmd.Parameters.AddWithValue("$t", target);
@@ -57,7 +61,7 @@ public static class DatabaseCare
             using var c = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
             c.Open();
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "PRAGMA integrity_check";
+            cmd.CommandText = "PRAGMA quick_check"; // finds a damaged file in a fraction of integrity_check's time
             return cmd.ExecuteScalar() as string == "ok";
         }
         catch (SqliteException) { return false; }

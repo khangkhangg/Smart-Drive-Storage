@@ -25,6 +25,7 @@ public class GitStatusTests
         s.WorkInside("scratch").Should().Equal("scratch/");
         s.WorkInside("node_modules").Should().BeEmpty();
         s.WorkInside("src/ap").Should().BeEmpty(); // a prefix of a name is not a folder
+        s.WorkInside("scratch/sub/deeper").Should().Equal("scratch/"); // inside a folder git doesn't know
     }
 
     [Fact]
@@ -32,6 +33,25 @@ public class GitStatusTests
     {
         GitStatus.Parse("/r", "# branch.head feature\0").Ahead.Should().Be(-1);
         GitStatus.Parse("/r", "# branch.head main\0# branch.ab +0 -3\0").Describe().Should().Be("All committed");
+    }
+
+    [Fact]
+    public void Risky_repository_settings_are_detected()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "miu-gitcfg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, ".git"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, ".git", "config"), "[core]\n\tbare = false\n");
+            GitService.RiskyConfig(dir).Should().BeNull();
+            File.WriteAllText(Path.Combine(dir, ".git", "config"), "[core]\n\tfsmonitor = /tmp/x.sh\n");
+            GitService.RiskyConfig(dir).Should().Be("fsmonitor");
+            File.WriteAllText(Path.Combine(dir, ".git", "config"), "[filter \"lfs\"]\n\tclean = run-me\n");
+            GitService.RiskyConfig(dir).Should().Be("a file filter");
+            File.WriteAllText(Path.Combine(dir, ".git", "config"), "[include]\n\tpath = ../evil\n");
+            GitService.RiskyConfig(dir).Should().Be("an include");
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Fact]

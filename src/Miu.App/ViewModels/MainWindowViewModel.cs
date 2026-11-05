@@ -116,10 +116,11 @@ public partial class MainWindowViewModel : ObservableObject
                 DateTime.TryParse(last, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t) &&
                 DateTime.UtcNow - t < TimeSpan.FromHours(20)) return "";
         }
+        // Recorded before asking: offline or rate-limited, the next automatic try is tomorrow, not in a minute.
+        s.Set(Miu.Data.SettingKeys.LastUpdateCheck, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         try
         {
             var u = await Updates.CheckAsync(AppInfo.Version, ct);
-            s.Set(Miu.Data.SettingKeys.LastUpdateCheck, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
             if (u is null) { AvailableUpdate = null; return $"You have the newest version ({AppInfo.Version})."; }
             if (!force && s.Get(Miu.Data.SettingKeys.SkippedVersion) == u.Version) return "";
             AvailableUpdate = u;

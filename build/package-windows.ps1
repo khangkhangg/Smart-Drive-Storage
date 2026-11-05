@@ -22,7 +22,7 @@ Compress-Archive -Path (Join-Path $Publish "*") -DestinationPath (Join-Path $Out
 Write-Host "== installer"
 $Iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Iscc) { throw "Inno Setup 6 (ISCC.exe) not found. Install it with: choco install innosetup" }
-$Numeric = ($Version -split '-')[0]
+$Numeric = (($Version -split '\+')[0] -split '-')[0]
 & $Iscc "/DAppVersion=$Version" "/DAppNumericVersion=$Numeric" "/DSourceDir=$Publish" "/DOutputDir=$Out" "/DRootDir=$Root" (Join-Path $Root "build/miu.iss")
 if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
 

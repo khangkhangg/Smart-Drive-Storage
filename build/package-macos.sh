@@ -7,7 +7,7 @@ VERSION="${1:?version, e.g. 0.8.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$(mkdir -p "${2:-$ROOT/artifacts}" && cd "${2:-$ROOT/artifacts}" && pwd)"
 APP_NAME="Miu Smart Storage"
-SHORT_VERSION="${VERSION%%-*}" # CFBundleShortVersionString must be numbers only
+SHORT_VERSION="${VERSION%%+*}"; SHORT_VERSION="${SHORT_VERSION%%-*}" # CFBundleShortVersionString must be numbers only
 
 echo "== icon"
 ICONSET="$OUT/miu.iconset"
