@@ -46,6 +46,8 @@ public sealed class AppServices : IDisposable
     }
 
     public DockerService Docker { get; }
+    /// <summary>Containers, images and volumes (the Docker page). Tests swap in a fake runner.</summary>
+    public Miu.Dev.Docker.DockerManager DockerManager { get; set; } = new(new ProcessRunner(TimeSpan.FromMinutes(2)));
     public IStartupRegistration Startup { get; }
     public IPowerState Power { get; }
     public ISecretStore Secrets { get; }

@@ -44,11 +44,13 @@ public partial class MainWindowViewModel : ObservableObject
         CloudNetwork = new CloudNetworkViewModel(this);
         Automations = new AutomationsViewModel(this);
         Settings = new SettingsViewModel(this);
+        DockerPage = new DockerPageViewModel(this);
         NavItems =
         [
             new("Home", "M3,11 L12,4 L21,11 L21,20 L3,20 Z", Home),
             new("Analyze", "M3,3 L13,3 L13,21 L3,21 Z M13,3 L21,3 L21,11 L13,11 Z M13,11 L21,11 L21,21 L13,21 Z", Analyze),
             new("Dev Projects", "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20", DevProjects),
+            new("Docker", "M3,12 L21,12 C21,17 17,20 12,20 C7,20 3,17 3,12 Z M5,12 L5,9 L8,9 L8,12 M9,12 L9,9 L12,9 L12,12 M13,12 L13,9 L16,9 L16,12 M9,9 L9,6 L12,6 L12,9", DockerPage),
             new("Rules", "M12,3 L20,7 L20,12 C20,17 16.5,20 12,21 C7.5,20 4,17 4,12 L4,7 Z", Rules),
             new("Activity", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 L12,12 L15.5,14", Activity),
             new("Automations", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 L12,12 L16,12 M4,4 L7,7", Automations),
@@ -65,6 +67,7 @@ public partial class MainWindowViewModel : ObservableObject
     public CleanupService Cleanup { get; }
     public CartViewModel Cart { get; }
     public ActivityViewModel Activity { get; }
+    public DockerPageViewModel DockerPage { get; }
     private readonly Avalonia.Threading.DispatcherTimer _driveTimer;
     public HomeViewModel Home { get; }
     public AnalyzeViewModel Analyze { get; }
@@ -155,6 +158,7 @@ public partial class MainWindowViewModel : ObservableObject
         CurrentPage = value.Page;
         if (value.Page == Home) Home.RefreshDrives();
         if (value.Page == CloudNetwork) CloudNetwork.OnShown();
+        if (value.Page == DockerPage) _ = DockerPage.RefreshCommand.ExecuteAsync(null);
         if (value.Page == Activity) Activity.Load();
         if (value.Page == Rules) Rules.Load();
         if (value.Page == Automations) Automations.Load();

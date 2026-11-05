@@ -109,6 +109,7 @@
           <DataTemplate x:DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
           <DataTemplate x:DataType="vm:AnalyzeViewModel"><v:AnalyzeView /></DataTemplate>
           <DataTemplate x:DataType="vm:DevProjectsViewModel"><v:DevProjectsView /></DataTemplate>
+          <DataTemplate x:DataType="vm:DockerPageViewModel"><v:DockerPageView /></DataTemplate>
           <DataTemplate x:DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
           <DataTemplate x:DataType="vm:ActivityViewModel"><v:ActivityView /></DataTemplate>
           <DataTemplate x:DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
