@@ -24,6 +24,13 @@
 
     <!-- Breadcrumb -->
     <Border DockPanel.Dock="Top" Padding="16,8" IsVisible="{Binding HasResult}">
+      <DockPanel>
+      <ListBox DockPanel.Dock="Right" Classes="segmented" ItemsSource="{Binding Views}" SelectedItem="{Binding ViewMode}">
+        <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" FontSize="13" /></DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
       <StackPanel Orientation="Horizontal" Spacing="4">
         <Button Command="{Binding GoUpCommand}" ToolTip.Tip="Up one level" Background="Transparent" Padding="8,4">
           <Path Data="M15,6 L9,12 L15,18" Stroke="{DynamicResource MiuText}" StrokeThickness="2" Width="14" Height="14" Stretch="Uniform" />
@@ -41,6 +48,7 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </StackPanel>
+      </DockPanel>
     </Border>
 
     <!-- Empty state -->
@@ -53,7 +61,7 @@
     <!-- Results -->
     <Grid ColumnDefinitions="2*,3*,320" IsVisible="{Binding HasResult}">
       <ListBox Classes="rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent"
-               DoubleTapped="OnRowDoubleTapped" Margin="8,0,0,8">
+               DoubleTapped="OnRowDoubleTapped" Margin="8,0,0,8" IsVisible="{Binding IsFoldersView}">
         <ListBox.ContextMenu>
           <ContextMenu>
             <MenuItem Header="Add to cleanup cart" Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" />
@@ -78,11 +86,100 @@
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <Border Grid.Column="1" Margin="8,0,8,12" CornerRadius="8" ClipToBounds="True">
+      <Border Grid.Column="1" Margin="8,0,8,12" CornerRadius="8" ClipToBounds="True" IsVisible="{Binding IsFoldersView}">
         <c:TreemapControl Items="{Binding Items}" SelectedItem="{Binding Selected}" OpenCommand="{Binding OpenCommand}" />
       </Border>
 
-      <Border Grid.Column="2" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,0,0,0" Padding="20">
+      <!-- Types -->
+      <ScrollViewer Grid.ColumnSpan="2" IsVisible="{Binding IsTypesView}" Margin="24,8,24,12">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="muted" Text="What kind of files take the space in this folder." />
+          <ItemsControl ItemsSource="{Binding TypeRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TypeRow">
+                <Grid ColumnDefinitions="180,*,110,110" Margin="0,6">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Brush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <ProgressBar Grid.Column="1" Classes="size" Value="{Binding Fraction}" Foreground="{Binding Brush}" Height="10" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Classes="muted" Text="{Binding FilesText}" TextAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Largest files -->
+      <ListBox Grid.ColumnSpan="2" Classes="rows" ItemsSource="{Binding LargestRows}" SelectedItem="{Binding Selected}" Background="Transparent"
+               Margin="8,0,8,8" IsVisible="{Binding IsLargestView}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:NodeItemViewModel">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <StackPanel>
+                <TextBlock Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" Text="{Binding FullPath}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <Border Grid.Column="1" Background="{Binding BadgeBg}" CornerRadius="9" Padding="7,1" IsVisible="{Binding ShowsBadge}" VerticalAlignment="Center" Margin="8,0">
+                <TextBlock Text="{Binding BadgeText}" Foreground="{Binding BadgeFg}" FontSize="11" FontWeight="SemiBold" />
+              </Border>
+              <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="13" MinWidth="70" TextAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <!-- Duplicates -->
+      <DockPanel Grid.ColumnSpan="2" IsVisible="{Binding IsDuplicatesView}" Margin="24,8,24,12">
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="primary" Content="Find duplicates" Command="{Binding FindDuplicatesCommand}" />
+            <Button Classes="secondary" Content="Stop" Command="{Binding CancelDuplicatesCommand}" IsVisible="{Binding IsFindingDuplicates}" />
+            <Button Classes="secondary" Content="Add all copies to cart" Command="{Binding AddAllDuplicatesToCartCommand}" />
+            <ProgressBar IsIndeterminate="True" Width="100" IsVisible="{Binding IsFindingDuplicates}" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="{Binding DuplicatesTotalText}" FontWeight="SemiBold" FontSize="14" />
+          <TextBlock Classes="muted" Text="{Binding DuplicatesStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding DuplicateGroups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DuplicateGroupRow">
+                <Border Classes="card" Padding="16,12" Margin="0,0,0,10">
+                  <StackPanel Spacing="6">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Classes="secondary" Content="Add copies to cart"
+                              Command="{Binding $parent[ItemsControl].((vm:AnalyzeViewModel)DataContext).AddGroupToCartCommand}" CommandParameter="{Binding}" />
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding WastedText}" Foreground="{DynamicResource MiuSafeFg}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Files}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DuplicateFileRow">
+                          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                            <Border Background="#E6F2E6" CornerRadius="8" Padding="6,1" Margin="0,0,8,0" IsVisible="{Binding IsKeep}">
+                              <TextBlock Text="Keep" Foreground="#0E700E" FontSize="11" FontWeight="SemiBold" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding Path}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ModifiedText}" Margin="12,0,0,0" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+
+      <Border Grid.Column="2" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,0,0,0">
+        <ScrollViewer Padding="20" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="16" IsVisible="{Binding HasSelection}">
           <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Selected.FullPath}" TextWrapping="Wrap" />
@@ -104,6 +201,21 @@
               <TextBlock Text="{Binding Selected.RuleText}" Foreground="#5D5D5D" FontSize="11" />
             </StackPanel>
           </Border>
+          <!-- Teach Miu -->
+          <StackPanel Spacing="8">
+            <TextBlock Text="Teach Miu" FontWeight="SemiBold" FontSize="13" />
+            <StackPanel Spacing="6">
+              <Button Classes="secondary" Content="Keep — never suggest" Command="{Binding TeachKeepCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+              <Button Classes="secondary" Content="Always OK to delete" Command="{Binding TeachOkCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            </StackPanel>
+            <TextBlock Classes="caption" Text="Why? (optional)" />
+            <ListBox Classes="chips" ItemsSource="{Binding Reasons}" SelectedItem="{Binding SelectedReason}">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="6" LineSpacing="6" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" FontSize="12" /></DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
           <Button Classes="primary" Content="Add to cleanup cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                   Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding !SelectedInCart}" />
           <Button Classes="secondary" Content="Remove from cart" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
@@ -114,6 +226,7 @@
           </StackPanel>
           <Button Classes="secondary" Content="Open folder" Command="{Binding OpenCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding Selected.IsDir}" />
         </StackPanel>
+        </ScrollViewer>
       </Border>
     </Grid>
   </DockPanel>

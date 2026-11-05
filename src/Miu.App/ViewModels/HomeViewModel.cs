@@ -30,6 +30,7 @@ public partial class HomeViewModel : ObservableObject
         _shell = shell;
         foreach (var d in DiscoverDrives()) Drives.Add(d);
         BuiltInRuleCount = shell.Services.Rules.Count;
+        RefreshRuleCounts();
     }
 
     public ObservableCollection<DriveCard> Drives { get; } = [];
@@ -40,6 +41,18 @@ public partial class HomeViewModel : ObservableObject
     public string VersionText => $"{AppInfo.Name} v{AppInfo.Version}";
     public string MadeByText => $"Made with love by {AppInfo.Author}";
     public int BuiltInRuleCount { get; }
+
+    [ObservableProperty] private int learnedRuleCount;
+    [ObservableProperty] private string rulesSummary = "Every verdict comes from a rule you can read. Mark things Keep or OK to delete and Miu learns from you.";
+
+    public void RefreshRuleCounts()
+    {
+        LearnedRuleCount = _shell.Services.RulesStore.All().Count;
+        var pending = _shell.Services.Suggestions.Pending().Count;
+        RulesSummary = pending > 0
+            ? $"Miu noticed {pending} {(pending == 1 ? "pattern" : "patterns")} in your choices. Open Rules to turn {(pending == 1 ? "it" : "them")} on."
+            : "Every verdict comes from a rule you can read. Mark things Keep or OK to delete and Miu learns from you.";
+    }
     public string HomeFolder { get; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoScan))] private bool hasScan;

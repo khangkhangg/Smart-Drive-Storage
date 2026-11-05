@@ -127,16 +127,15 @@
                       Foreground="{StaticResource MiuAccent}" Padding="0" FontSize="13" />
               <TextBlock Classes="h2" Text="Rules engine" />
             </DockPanel>
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Every verdict comes from a rule you can read. Soon Miu will also learn from your Keep and Delete choices." />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding RulesSummary}" />
             <StackPanel Orientation="Horizontal" Spacing="20">
               <TextBlock FontSize="13" Foreground="{DynamicResource MiuTextSecondary}">
                 <Run Text="{Binding BuiltInRuleCount}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource MiuText}" />
                 <Run Text=" built-in" />
               </TextBlock>
               <TextBlock FontSize="13" Foreground="{DynamicResource MiuTextSecondary}">
-                <Run Text="0" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource MiuText}" />
-                <Run Text=" learned" />
+                <Run Text="{Binding LearnedRuleCount}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource MiuText}" />
+                <Run Text=" yours &amp; learned" />
               </TextBlock>
             </StackPanel>
           </StackPanel>

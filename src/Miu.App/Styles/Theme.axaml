@@ -95,6 +95,31 @@
   <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource MiuNavSelected}" />
   </Style>
+  <Style Selector="ListBox.segmented">
+    <Setter Property="Background" Value="{DynamicResource MiuSubtle}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem">
+    <Setter Property="Padding" Value="14,5" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MiuCardBg}" />
+  </Style>
+  <Style Selector="ListBox.chips">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MiuBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="#EEF4FB" />
+    <Setter Property="BorderBrush" Value="{StaticResource MiuAccent}" />
+  </Style>
   <Style Selector="ListBox.rows ListBoxItem">
     <Setter Property="Padding" Value="10,8" />
     <Setter Property="CornerRadius" Value="6" />

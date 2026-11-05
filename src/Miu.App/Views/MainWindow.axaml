@@ -71,6 +71,7 @@
           <DataTemplate x:DataType="vm:DevProjectsViewModel"><v:DevProjectsView /></DataTemplate>
           <DataTemplate x:DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
           <DataTemplate x:DataType="vm:ActivityViewModel"><v:ActivityView /></DataTemplate>
+          <DataTemplate x:DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
           <DataTemplate x:DataType="vm:PlaceholderViewModel">
             <StackPanel Margin="40,32" Spacing="8">
               <TextBlock Classes="h1" Text="{Binding Title}" />

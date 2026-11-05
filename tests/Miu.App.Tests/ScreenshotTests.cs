@@ -59,6 +59,30 @@ public class ScreenshotTests
             vm.Navigate(vm.Activity);
             Save(window, Path.Combine(outDir, "activity.png"));
 
+            // Milestone 3: Types / Largest / Duplicates, Teach Miu, Rules with a suggestion.
+            vm.Notice = null;
+            vm.Navigate(vm.Analyze);
+            vm.Analyze.GoToCrumbCommand.Execute(vm.Analyze.Breadcrumbs.First());
+            vm.Analyze.SetViewCommand.Execute("Types");
+            Save(window, Path.Combine(outDir, "types.png"));
+            vm.Analyze.SetViewCommand.Execute("Largest");
+            Save(window, Path.Combine(outDir, "largest.png"));
+            vm.Analyze.SetViewCommand.Execute("Duplicates");
+            await vm.Analyze.FindDuplicatesCommand.ExecuteAsync(null);
+            Save(window, Path.Combine(outDir, "duplicates.png"));
+            vm.Analyze.SetViewCommand.Execute("Folders");
+            vm.Analyze.Selected = vm.Analyze.Items.First(i => i.Name == "Documents");
+            vm.Analyze.SelectedReason = "Work files";
+            Save(window, Path.Combine(outDir, "teach.png"));
+            vm.Analyze.TeachKeepCommand.Execute(null);
+            foreach (var n in new[] { "ubuntu-22.04.iso", "debian-12.iso", "win11.iso" })
+                vm.Services.Decisions.Add(Miu.Core.Learning.Decision.For(Path.Combine(root, "Downloads", n), false,
+                    Miu.Core.Learning.DecisionAction.Delete, "Never used", DateTime.UtcNow, Miu.Core.Rules.PathNormalizer.Current), "auto");
+            vm.Learning.Mine();
+            vm.Notice = null;
+            vm.Navigate(vm.Rules);
+            Save(window, Path.Combine(outDir, "rules.png"));
+
             vm.Navigate(vm.About);
             Save(window, Path.Combine(outDir, "about.png"));
 
@@ -125,6 +149,10 @@ internal static class DemoData
         F(root, "Downloads/setup-photoeditor.exe", 320 * MB, 120);
         F(root, "Downloads/ubuntu-24.04.iso", 5 * GB, 200);
         F(root, "Downloads/invoice.pdf", 2 * MB, 10);
+        R(root, "Pictures/Wedding/IMG_2041.jpg", 6 * (int)MB, 400, seed: 41);
+        R(root, "Downloads/IMG_2041 (1).jpg", 6 * (int)MB, 20, seed: 41);
+        R(root, "Pictures/Japan/DSC_0193.jpg", 4 * (int)MB, 300, seed: 7);
+        R(root, "Desktop/DSC_0193 copy.jpg", 4 * (int)MB, 30, seed: 7);
         F(root, ".cache/huggingface/hub/llama-3-8b.safetensors", 9 * GB, 90);
         F(root, ".npm/_cacache/content-v2/blob", 1_800 * MB, 20);
         F(root, "Documents/Taxes/2025.pdf", 40 * MB, 100);
@@ -142,6 +170,16 @@ internal static class DemoData
         F(root, project + "/src/index.tsx", 30_000, ageDays);
         F(root, project + "/node_modules/.pnpm/react/index.js", nodeModules, Math.Max(ageDays, 1));
         if (build > 0) F(root, project + "/.next/cache/webpack.pack", build, ageDays);
+    }
+
+    private static void R(string root, string rel, int size, int ageDays, int seed)
+    {
+        var path = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var data = new byte[size];
+        new Random(seed).NextBytes(data);
+        File.WriteAllBytes(path, data);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-ageDays));
     }
 
     private static void T(string root, string rel, string text, int ageDays)

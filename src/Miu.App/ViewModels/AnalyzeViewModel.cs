@@ -11,6 +11,12 @@ namespace Miu.App.ViewModels;
 
 public sealed record Crumb(string Name, int NodeId);
 
+public sealed record TypeRow(string Name, string SizeText, double Fraction, string FilesText, Avalonia.Media.IBrush Brush);
+
+public sealed record DuplicateFileRow(int NodeId, string Path, bool IsKeep, string ModifiedText);
+
+public sealed record DuplicateGroupRow(string SizeText, string WastedText, IReadOnlyList<DuplicateFileRow> Files, long WastedBytes);
+
 public partial class AnalyzeViewModel : ObservableObject
 {
     private readonly AppServices _services;
@@ -83,6 +89,132 @@ public partial class AnalyzeViewModel : ObservableObject
     [ObservableProperty] private bool hasResult;
 
     public bool IsIdle => !IsScanning;
+
+    // ---------- View switch (Folders | Types | Largest | Duplicates) ----------
+
+    public ObservableCollection<TypeRow> TypeRows { get; } = [];
+    public ObservableCollection<NodeItemViewModel> LargestRows { get; } = [];
+    public ObservableCollection<DuplicateGroupRow> DuplicateGroups { get; } = [];
+    public IReadOnlyList<string> Views { get; } = ["Folders", "Types", "Largest", "Duplicates"];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFoldersView), nameof(IsTypesView), nameof(IsLargestView), nameof(IsDuplicatesView))]
+    private string viewMode = "Folders";
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(FindDuplicatesCommand))] private bool isFindingDuplicates;
+    [ObservableProperty] private string duplicatesStatus = "Find files that are exact copies of each other. Miu keeps the oldest copy and offers the rest.";
+    [ObservableProperty] private string duplicatesTotalText = "";
+
+    public long DuplicateMinBytes { get; set; } = 1 << 20;
+    public bool IsFoldersView => ViewMode == "Folders";
+    public bool IsTypesView => ViewMode == "Types";
+    public bool IsLargestView => ViewMode == "Largest";
+    public bool IsDuplicatesView => ViewMode == "Duplicates";
+
+    partial void OnViewModeChanged(string value) => RefreshInsights();
+
+    [RelayCommand]
+    private void SetView(string? view)
+    {
+        if (view is null || !Views.Contains(view)) return;
+        ViewMode = view;
+    }
+
+    private void RefreshInsights()
+    {
+        if (Session is null) return;
+        var t = Session.Tree;
+        var node = _current < 0 ? t.Root : _current;
+        if (IsTypesView)
+        {
+            TypeRows.Clear();
+            var rows = Miu.Core.Insights.TypeBreakdown.Compute(t, node);
+            var max = Math.Max(1, rows.Count == 0 ? 1 : rows.Max(r => r.Bytes));
+            foreach (var (cat, bytes, files) in rows)
+                TypeRows.Add(new TypeRow(cat == Miu.Core.Scanning.FileCategory.AppDataCache ? "Caches & temp" : cat.ToString(),
+                    SizeFormatter.Format(bytes), (double)bytes / max, $"{files:N0} {(files == 1 ? "file" : "files")}",
+                    Palette.ForTile(cat, false, Miu.Core.Rules.Verdict.Review).Fill));
+        }
+        else if (IsLargestView)
+        {
+            LargestRows.Clear();
+            var size = t.Size(node);
+            foreach (var id in Miu.Core.Insights.LargestFiles.Find(t, node, 100)) LargestRows.Add(new NodeItemViewModel(Session, id, size));
+        }
+    }
+
+    private CancellationTokenSource? _dupCts;
+
+    private bool CanFindDuplicates() => Session is not null && !IsFindingDuplicates;
+
+    [RelayCommand(CanExecute = nameof(CanFindDuplicates))]
+    private async Task FindDuplicates()
+    {
+        if (Session is not { } s) return;
+        IsFindingDuplicates = true;
+        DuplicatesStatus = "Comparing files…";
+        _dupCts = new CancellationTokenSource();
+        try
+        {
+            var node = _current < 0 ? s.Tree.Root : _current;
+            var groups = await Miu.Platform.Portable.DuplicateFinder.FindAsync(s.Tree, node, DuplicateMinBytes, null, _dupCts.Token);
+            DuplicateGroups.Clear();
+            foreach (var g in groups.Take(300))
+                DuplicateGroups.Add(new DuplicateGroupRow(
+                    $"{g.Nodes.Count} copies of {SizeFormatter.Format(g.Size)}", SizeFormatter.Format(g.WastedBytes) + " wasted",
+                    g.Nodes.OrderByDescending(n => n == g.KeepNode).Select(n => new DuplicateFileRow(n, s.Tree.GetFullPath(n), n == g.KeepNode,
+                        "changed " + HumanTime.Ago(s.Tree.ModifiedUtc(n), s.NowUtc))).ToList(), g.WastedBytes));
+            var wasted = groups.Sum(g => g.WastedBytes);
+            DuplicatesTotalText = groups.Count == 0 ? "" : $"{groups.Count:N0} groups · {SizeFormatter.Format(wasted)} could be freed";
+            DuplicatesStatus = groups.Count == 0 ? "No duplicates found (files of 1 MB or more)." : "Miu keeps the oldest copy of each. Copies go to the cart as Review.";
+        }
+        catch (OperationCanceledException) { DuplicatesStatus = "Stopped."; }
+        finally { IsFindingDuplicates = false; }
+    }
+
+    [RelayCommand]
+    private void CancelDuplicates() => _dupCts?.Cancel();
+
+    [RelayCommand]
+    private void AddGroupToCart(DuplicateGroupRow? group)
+    {
+        if (group is null) return;
+        var keep = group.Files.First(f => f.IsKeep);
+        foreach (var f in group.Files.Where(f => !f.IsKeep))
+            _services.Cart.Add(new Miu.Core.Cleanup.CartItem(f.Path, Path.GetFileName(f.Path), Session!.Tree.Size(f.NodeId),
+                Miu.Core.Rules.Verdict.Review, $"Duplicate of {keep.Path}"));
+    }
+
+    [RelayCommand]
+    private void AddAllDuplicatesToCart()
+    {
+        foreach (var g in DuplicateGroups) AddGroupToCart(g);
+    }
+
+    // ---------- Teach Miu ----------
+
+    public IReadOnlyList<string> Reasons => LearningService.Reasons;
+
+    [ObservableProperty] private string? selectedReason;
+
+    [RelayCommand]
+    private void TeachKeep() => Teach(Miu.Core.Learning.DecisionAction.Keep);
+
+    [RelayCommand]
+    private void TeachOk() => Teach(Miu.Core.Learning.DecisionAction.Delete);
+
+    private void Teach(Miu.Core.Learning.DecisionAction action)
+    {
+        if (Selected is not { } item || Session is null) return;
+        if (item.Verdict.Verdict == Miu.Core.Rules.Verdict.Protected) return;
+        _shell.Learning.Teach(item.FullPath, item.IsDir, action, SelectedReason, Session);
+        SelectedReason = null;
+        RefreshCurrent();
+        _shell.OnScanCompleted(Session);
+        _shell.Rules.Load();
+        _shell.Notice = new NoticeViewModel(_shell, action == Miu.Core.Learning.DecisionAction.Keep
+            ? $"Got it. Miu will keep {item.Name} and never suggest it."
+            : $"Got it. Miu will treat {item.Name} as safe to delete.", "", 0);
+    }
     public bool HasSelection => Selected is not null;
 
     [RelayCommand]
@@ -184,5 +316,6 @@ public partial class AnalyzeViewModel : ObservableObject
         chain.Reverse();
         foreach (var n in chain) Breadcrumbs.Add(new Crumb(n == t.Root ? t.RootPath : t.Name(n), n));
         Selected = Items.FirstOrDefault();
+        RefreshInsights();
     }
 }

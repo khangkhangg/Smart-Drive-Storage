@@ -14,12 +14,13 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Services = services;
         Cleanup = new CleanupService(services);
+        Learning = new LearningService(services);
         Cart = new CartViewModel(this, services.Cart);
         Activity = new ActivityViewModel(this);
         Home = new HomeViewModel(this);
         Analyze = new AnalyzeViewModel(services, this);
         DevProjects = new DevProjectsViewModel(this);
-        Rules = new PlaceholderViewModel("Rules", "Your rules and the ones Miu learns from your choices will live here. Coming in the next milestone.");
+        Rules = new RulesViewModel(this);
         About = new AboutViewModel();
         CloudNetwork = new PlaceholderViewModel("Cloud & Network", "Back up chosen folders to Google Drive, OneDrive, Dropbox or S3, then free the space locally. Map, scan and sync network drives. Coming in a later milestone.");
         Settings = new PlaceholderViewModel("Settings", "Background mode, automation, Telegram and theme settings are coming soon.");
@@ -45,7 +46,8 @@ public partial class MainWindowViewModel : ObservableObject
     public HomeViewModel Home { get; }
     public AnalyzeViewModel Analyze { get; }
     public DevProjectsViewModel DevProjects { get; }
-    public PlaceholderViewModel Rules { get; }
+    public RulesViewModel Rules { get; }
+    public LearningService Learning { get; }
     public PlaceholderViewModel Settings { get; }
     public AboutViewModel About { get; }
     public PlaceholderViewModel CloudNetwork { get; }
@@ -63,7 +65,17 @@ public partial class MainWindowViewModel : ObservableObject
     {
         CurrentPage = value.Page;
         if (value.Page == Activity) Activity.Load();
+        if (value.Page == Rules) Rules.Load();
         if (value.Page == DevProjects) _ = DevProjects.Docker.Refresh();
+    }
+
+    /// <summary>After any rule change: re-judge the current scan and refresh every screen that shows verdicts.</summary>
+    public void ApplyRuleChanges()
+    {
+        if (Analyze.Session is not { } session) return;
+        session.ReplaceRules(Services.AllRules());
+        Analyze.RefreshCurrent();
+        OnScanCompleted(session);
     }
 
     public void OpenReview(IReadOnlyList<CartItem> items, string title, string origin)
@@ -94,6 +106,7 @@ public partial class MainWindowViewModel : ObservableObject
             $"{outcome.Failed.Count} could not be moved: " + string.Join("; ", outcome.Failed.Take(3).Select(f => $"{Path.GetFileName(f.Path)} — {f.Reason}"));
         Notice = new NoticeViewModel(this, message, details, outcome.ActionId);
         if (CurrentPage == Activity) Activity.Load();
+        Home.RefreshRuleCounts();
     }
 
     /// <summary>Puts a clean back and rescans so the screens show the restored items.</summary>
