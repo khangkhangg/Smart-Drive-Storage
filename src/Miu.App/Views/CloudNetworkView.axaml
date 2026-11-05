@@ -232,7 +232,24 @@
                       <TextBlock Classes="caption" Text="Save the image on (another drive)" />
                       <ComboBox ItemsSource="{Binding ImageDrives}" SelectedItem="{Binding ImageTarget}" Width="240" />
                     </StackPanel>
+                    <StackPanel Spacing="4" IsVisible="{Binding CanUseNetworkTarget}">
+                      <TextBlock Classes="caption" Text="…or a network folder (optional)" />
+                      <TextBox Text="{Binding ImageNetworkTarget}" Watermark="\\nas\backups" Width="240" />
+                    </StackPanel>
                   </WrapPanel>
+                  <WrapPanel ItemSpacing="8" LineSpacing="8">
+                    <TextBlock Text="Repeat" VerticalAlignment="Center" Classes="muted" />
+                    <ComboBox ItemsSource="{Binding ImageRepeats}" SelectedItem="{Binding ImageRepeat}" />
+                    <TextBlock Text="on" VerticalAlignment="Center" IsVisible="{Binding IsImageWeekly}" />
+                    <ComboBox ItemsSource="{Binding Days}" SelectedItem="{Binding ImageDay}" IsVisible="{Binding IsImageWeekly}" />
+                    <TextBlock Text="on day" VerticalAlignment="Center" IsVisible="{Binding IsImageMonthly}" />
+                    <ComboBox ItemsSource="{Binding DaysOfMonth}" SelectedItem="{Binding ImageDayOfMonth}" IsVisible="{Binding IsImageMonthly}" />
+                    <TextBlock Text="at" VerticalAlignment="Center" IsVisible="{Binding IsImageScheduled}" />
+                    <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding ImageHour}" IsVisible="{Binding IsImageScheduled}" />
+                    <TextBlock Text=":00" VerticalAlignment="Center" IsVisible="{Binding IsImageScheduled}" />
+                  </WrapPanel>
+                  <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding IsImageScheduled}"
+                             Text="Miu hands the schedule to your system (Task Scheduler on Windows, a systemd timer on Linux): one admin prompt now, none later, and it runs even when Miu is closed. Leave the computer on (or asleep) at that time. Windows keeps older images on the drive and removes the oldest when space runs low." />
                   <TextBlock Text="{Binding ImageMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource MiuDangerFg}" IsVisible="{Binding ImageMessageIsError}" />
                   <TextBlock Text="{Binding ImageMessage}" TextWrapping="Wrap" IsVisible="{Binding !ImageMessageIsError}" />
                   <Border Background="{DynamicResource MiuContentBg}" CornerRadius="6" Padding="12" IsVisible="{Binding HasImagePlan}">
@@ -246,7 +263,27 @@
                   <TextBlock Classes="caption" Text="{Binding ImageProgress}" IsVisible="{Binding IsImaging}" TextWrapping="Wrap" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Classes="secondary" Content="Check" Command="{Binding CheckImageCommand}" />
-                    <Button Classes="primary" Content="Make the image now" Command="{Binding MakeImageCommand}" />
+                    <Button Classes="primary" Content="Make the image now" Command="{Binding MakeImageCommand}" IsVisible="{Binding IsImageOnce}" />
+                    <Button Classes="primary" Content="Save schedule" Command="{Binding SaveImageScheduleCommand}" IsVisible="{Binding IsImageScheduled}" IsEnabled="{Binding !IsImaging}" />
+                  </StackPanel>
+                  <StackPanel Spacing="6" IsVisible="{Binding HasImageSchedules}">
+                    <TextBlock Text="Scheduled disk images" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding ImageSchedules}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ImageScheduleRow">
+                          <Border BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="*,Auto">
+                              <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                <TextBlock Classes="caption" Text="{Binding When}" />
+                                <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" />
+                              </StackPanel>
+                              <Button Grid.Column="1" Classes="secondary" Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </StackPanel>
                 </StackPanel>
                 <StackPanel Spacing="12" IsVisible="{Binding IsSyncKind}">
