@@ -12,8 +12,12 @@ namespace Miu.App.Services;
 public sealed class AppServices : IDisposable
 {
     private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard, IRecycleBin recycleBin,
-        IStartupRegistration startup, IPowerState power, ISecretStore secrets)
+        IStartupRegistration startup, IPowerState power, ISecretStore secrets, INetworkDrives networkDrives)
     {
+        NetworkDrives = networkDrives;
+        NetworkShares = new NetworkSharesRepository(db);
+        SyncJobs = new SyncJobsRepository(db);
+        SyncBaseline = new SyncBaselineRepository(db);
         Secrets = secrets;
         Telegram = new TelegramRepository(db);
         RemoteActions = new RemoteActionsRepository(db);
@@ -42,6 +46,13 @@ public sealed class AppServices : IDisposable
     public IStartupRegistration Startup { get; }
     public IPowerState Power { get; }
     public ISecretStore Secrets { get; }
+    public INetworkDrives NetworkDrives { get; }
+    public NetworkSharesRepository NetworkShares { get; }
+    public SyncJobsRepository SyncJobs { get; }
+    public SyncBaselineRepository SyncBaseline { get; }
+
+    /// <summary>Network folders get a gentler scanner (4 threads) so the NAS and the Wi-Fi aren't flooded.</summary>
+    public IScanner ScannerFor(string path) => NetworkService.IsNetworkPath(path) ? new ManagedScanner(4) : Scanner;
     public TelegramRepository Telegram { get; }
     public RemoteActionsRepository RemoteActions { get; }
 
@@ -69,19 +80,24 @@ public sealed class AppServices : IDisposable
     public string RecycleBinName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
     public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null, IStartupRegistration? startup = null, IPowerState? power = null,
-        ISecretStore? secrets = null)
+        ISecretStore? secrets = null, INetworkDrives? networkDrives = null)
     {
         var db = new MiuDatabase(databasePath);
         db.Migrate();
         var rules = RuleLoader.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "builtin"));
         return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin(),
-            startup ?? DefaultStartup(), power ?? DefaultPower(), secrets ?? DefaultSecrets());
+            startup ?? DefaultStartup(), power ?? DefaultPower(), secrets ?? DefaultSecrets(), networkDrives ?? DefaultNetworkDrives());
     }
 
     private static ISecretStore DefaultSecrets() =>
         OperatingSystem.IsWindows()
             ? new WindowsCredentialStore()
             : new FileSecretStore(Path.GetDirectoryName(MiuDatabase.DefaultPath)!);
+
+    private static INetworkDrives DefaultNetworkDrives() =>
+        OperatingSystem.IsWindows()
+            ? new WindowsNetworkDrives()
+            : new UnsupportedNetworkDrives("On this system, connect shares with your file manager (for example smb://nas/photos). Miu can then scan and sync them like any folder.");
 
     private static IStartupRegistration DefaultStartup()
     {

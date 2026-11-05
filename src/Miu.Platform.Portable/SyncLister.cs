@@ -13,6 +13,19 @@ public static class SyncLister
     public const string PartialSuffix = ".miu-partial";
     private static readonly HashSet<string> Junk = new(StringComparer.OrdinalIgnoreCase) { ".DS_Store", "Thumbs.db", "desktop.ini" };
 
+    /// <summary>XxHash128 of a file's content, or null if it can't be read.</summary>
+    public static async Task<UInt128?> HashAsync(string path, CancellationToken ct)
+    {
+        try
+        {
+            await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true);
+            var h = new System.IO.Hashing.XxHash128();
+            await h.AppendAsync(fs, ct);
+            return h.GetCurrentHashAsUInt128();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
     public static Task<SyncListing> ListAsync(string root, CancellationToken ct) => Task.Run(() => List(root, ct), ct);
 
     public static SyncListing List(string root, CancellationToken ct)

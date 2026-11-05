@@ -37,7 +37,7 @@ public sealed class ScanSession
     {
         // Read the rules here (the database connection is not shared with background threads).
         var rules = services.AllRules();
-        var tree = await services.Scanner.ScanAsync(path, progress, ct);
+        var tree = await services.ScannerFor(path).ScanAsync(path, progress, ct);
         return await Task.Run(() =>
         {
             var now = DateTime.UtcNow;

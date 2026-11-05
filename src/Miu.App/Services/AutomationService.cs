@@ -23,6 +23,8 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
     private readonly Dictionary<long, DateTime> _lowSpaceChecked = new();
     private readonly SemaphoreSlim _gate = new(1, 1); // one run at a time: ticks, Run now and sign-in runs
 
+    public SyncService Sync { get; } = new(services, nowLocal);
+
     public bool IsPaused => PausedUntil is { } p && p > nowLocal();
 
     public DateTime? PausedUntil =>
@@ -79,8 +81,55 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
                 await RunUnlockedAsync(w, null, ct);
                 services.Watches.Patch(w.Id, x => x with { NextRunLocal = Scheduler.NextRun(x.Schedule, now) });
             }
+            await TickSyncJobsAsync(now, guarded, ct);
         }
         finally { _gate.Release(); }
+    }
+
+    /// <summary>Scheduled sync jobs. A refused run (it looked like a disconnected drive) is never forced from a schedule.</summary>
+    private async Task TickSyncJobsAsync(DateTime now, bool guarded, CancellationToken ct)
+    {
+        foreach (var listed in services.SyncJobs.All())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (services.SyncJobs.Get(listed.Id) is not { Enabled: true, Schedule: { } schedule } j) continue;
+            if (schedule.Kind is ScheduleKind.AtSignIn or ScheduleKind.LowSpace) continue;
+            if (j.NextRunLocal is null)
+            {
+                services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null });
+                continue;
+            }
+            if (!Scheduler.IsDue(j.NextRunLocal, now)) continue;
+            if (guarded)
+            {
+                services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = now + Postpone });
+                continue;
+            }
+            await RunSyncUnlockedAsync(j, false, null, ct);
+            services.SyncJobs.Patch(j.Id, x => x with { NextRunLocal = x.Schedule is { } sc ? Scheduler.NextRun(sc, now) : null });
+        }
+    }
+
+    /// <summary>Runs one sync job now (from the app). Waits for any run in progress first.</summary>
+    public async Task<SyncOutcome> RunSyncAsync(Miu.Core.Sync.SyncJob job, bool runAnyway, IProgress<Miu.Platform.Portable.SyncProgress>? progress, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try { return await Sync.RunAsync(job, "app", runAnyway, progress, ct); }
+        finally { _gate.Release(); }
+    }
+
+    private async Task RunSyncUnlockedAsync(Miu.Core.Sync.SyncJob j, bool runAnyway, IProgress<Miu.Platform.Portable.SyncProgress>? progress, CancellationToken ct)
+    {
+        SyncOutcome outcome;
+        try { outcome = await Sync.RunAsync(j, "auto", runAnyway, progress, ct); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            outcome = new SyncOutcome("failed", ex.Message);
+            services.SyncJobs.Patch(j.Id, x => x with { LastRunUtc = DateTime.UtcNow, LastResult = "Failed: " + ex.Message });
+        }
+        if (outcome.Status == "nothing") return;
+        var body = outcome.Status == "refused" ? outcome.Summary + " Open Miu › Cloud & Network › Sync jobs to preview it." : outcome.Summary;
+        notifier.Show(new MiuNotification($"Sync “{j.Name}”" + (outcome.Status is "failed" or "refused" ? " didn't run" : ""), body, []));
     }
 
     /// <summary>"Every time you sign in" watches. Skipped while paused, in quiet hours or on battery.</summary>
@@ -92,6 +141,8 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
             if (Guarded()) return;
             foreach (var w in services.Watches.All().Where(w => w.Enabled && w.Schedule.Kind == ScheduleKind.AtSignIn))
                 await RunUnlockedAsync(w, null, ct);
+            foreach (var j in services.SyncJobs.All().Where(j => j.Enabled && j.Schedule?.Kind == ScheduleKind.AtSignIn))
+                await RunSyncUnlockedAsync(j, false, null, ct);
         }
         finally { _gate.Release(); }
     }

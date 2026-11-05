@@ -137,6 +137,14 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Puts a clean back and rescans so the screens show the restored items.</summary>
     public async Task UndoAsync(long actionId)
     {
+        if (Services.Actions.Get(actionId) is { Kind: "sync" })
+        {
+            var (restored, skipped) = Automation.Sync.Undo(actionId);
+            Notice = new NoticeViewModel(this, $"Put back {restored} {(restored == 1 ? "file" : "files")}.",
+                skipped.Count == 0 ? "" : $"{skipped.Count} not restored: " + string.Join("; ", skipped.Take(3)), 0);
+            Activity.Load();
+            return;
+        }
         var result = await Cleanup.UndoAsync(actionId);
         var details = result.Failed.Count == 0 ? "" :
             $"{result.Failed.Count} could not be restored: " + string.Join("; ", result.Failed.Take(3).Select(f => $"{Path.GetFileName(f.Path)} — {f.Reason}"));
