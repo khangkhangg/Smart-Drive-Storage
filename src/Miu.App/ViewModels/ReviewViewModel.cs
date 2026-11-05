@@ -65,6 +65,58 @@ public partial class ReviewViewModel : ObservableObject
         ? $"Back up to {a.DisplayName} first (Miu cleans only after every file is uploaded and checked)"
         : "Back up first: connect a cloud account in Cloud & Network to use this";
 
+    // ---------- Progress while cleaning ----------
+    private CancellationTokenSource? _stop;
+    private DateTime _currentSince;
+    private string _currentName = "";
+    private readonly Avalonia.Threading.DispatcherTimer _slowTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+
+    /// <summary>After this long on one item, say that Windows may be waiting for an answer (a "delete permanently?" dialog).</summary>
+    public static TimeSpan SlowAfter { get; set; } = TimeSpan.FromSeconds(20);
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsIdle))] private bool isWorking;
+    [ObservableProperty] private double progressValue;
+    [ObservableProperty] private string progressText = "";
+    [ObservableProperty] private string slowText = "";
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StopCommand))] private bool isStopping;
+    public bool IsIdle => !IsWorking;
+
+    private bool CanStop() => IsWorking && !IsStopping;
+
+    /// <summary>"Stop after this item": the item being moved finishes; the rest are left as they are.</summary>
+    [RelayCommand(CanExecute = nameof(CanStop))]
+    private void Stop()
+    {
+        IsStopping = true;
+        _stop?.Cancel();
+        ProgressText = $"Stopping after {_currentName}…";
+    }
+
+    /// <summary>Shows one progress update (called on the UI thread).</summary>
+    public void Show(CleanProgress p)
+    {
+        if (p.Current != _currentName) { _currentName = p.Current; _currentSince = DateTime.UtcNow; SlowText = ""; }
+        if (p.Phase == "checking")
+        {
+            ProgressValue = 0;
+            ProgressText = $"Checking {p.Done + 1} of {p.Total} with your Keep rules and git · {p.Current}";
+            return;
+        }
+        ProgressValue = p.TotalBytes > 0 ? 100.0 * p.BytesDone / p.TotalBytes : 100.0 * p.Done / Math.Max(1, p.Total);
+        if (IsStopping) return;
+        ProgressText = p.Current.Length == 0
+            ? $"Done · {SizeFormatter.Format(p.BytesDone)} moved"
+            : $"Moving {p.Done + 1} of {p.Total} · {p.Current} ({SizeFormatter.Format(p.CurrentBytes)}) · {SizeFormatter.Format(p.BytesDone)} of {SizeFormatter.Format(p.TotalBytes)} done";
+    }
+
+    public void CheckSlow()
+    {
+        if (!IsWorking || _currentName.Length == 0 || DateTime.UtcNow - _currentSince < SlowAfter) return;
+        SlowText = OperatingSystem.IsWindows()
+            ? $"Still working on {_currentName}. If it's too big for the {BinName}, Windows asks whether to delete it permanently: that window may be behind Miu."
+            : $"Still working on {_currentName}. Big folders can take a while.";
+    }
+
     [ObservableProperty] private bool backUpFirst;
     [ObservableProperty] private string backupStatus = "";
     [ObservableProperty] private string buttonText = "";
@@ -89,10 +141,24 @@ public partial class ReviewViewModel : ObservableObject
                 if (problem is not null) { BackupStatus = problem; return; }
                 BackupStatus = "Backed up and checked.";
             }
-            await _shell.CleanAsync(items, _origin);
+            _stop = new CancellationTokenSource();
+            IsStopping = false;
+            IsWorking = true;
+            _currentName = "";
+            _slowTimer.Tick -= OnSlowTick;
+            _slowTimer.Tick += OnSlowTick;
+            _slowTimer.Start();
+            await _shell.CleanAsync(items, _origin, new Progress<CleanProgress>(Show), _stop.Token);
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            _slowTimer.Stop();
+            IsWorking = false;
+            IsBusy = false;
+        }
     }
+
+    private void OnSlowTick(object? sender, EventArgs e) => CheckSlow();
 
     [RelayCommand]
     private void Cancel() => _shell.CloseReview();

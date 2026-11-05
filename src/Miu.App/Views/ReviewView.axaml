@@ -13,17 +13,27 @@
                      Text="Some items aren't marked Safe, so they are unchecked. Tick them only if you are sure you don't need them." />
         </Border>
       </StackPanel>
-      <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+      <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0" IsVisible="{Binding IsIdle}">
         <TextBlock Classes="muted" Text="{Binding TotalText}" VerticalAlignment="Center" />
         <Button Grid.Column="1" Classes="secondary" Content="Cancel" Command="{Binding CancelCommand}" Margin="0,0,8,0" />
         <Button Grid.Column="2" Classes="primary" Content="{Binding ButtonText}" Command="{Binding CleanCommand}" Background="{StaticResource MiuSafeSolid}" />
       </Grid>
+      <!-- While cleaning -->
+      <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0" IsVisible="{Binding IsWorking}">
+        <ProgressBar Value="{Binding ProgressValue}" Minimum="0" Maximum="100" Height="8" Foreground="{StaticResource MiuSafeSolid}" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" />
+          <Button Grid.Column="1" Classes="secondary" Content="Stop after this item" Command="{Binding StopCommand}" Margin="12,0,0,0" />
+        </Grid>
+        <TextBlock Classes="caption" Text="{Binding SlowText}" TextWrapping="Wrap" Foreground="{DynamicResource MiuWarnFg}"
+                   IsVisible="{Binding SlowText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
       <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,12,0,0">
-        <CheckBox IsChecked="{Binding BackUpFirst}" IsEnabled="{Binding CanBackUpFirst}" Content="{Binding BackUpFirstText}" />
+        <CheckBox IsChecked="{Binding BackUpFirst}" IsEnabled="{Binding CanBackUpFirst}" Content="{Binding BackUpFirstText}" IsVisible="{Binding IsIdle}" />
         <TextBlock Classes="caption" Text="{Binding BackupStatus}" TextWrapping="Wrap"
                    IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       </StackPanel>
-      <ScrollViewer>
+      <ScrollViewer IsEnabled="{Binding IsIdle}">
         <ItemsControl ItemsSource="{Binding Rows}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:ReviewRow">

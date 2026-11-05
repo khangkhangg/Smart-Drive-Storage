@@ -4,14 +4,24 @@ using Miu.Platform.Abstractions;
 
 namespace Miu.App.Services;
 
-public sealed record CleanupOutcome(long ActionId, long FreedBytes, int Count, IReadOnlyList<FailedItem> Failed);
+/// <param name="Stopped">You pressed "Stop after this item": the rest were left as they were.</param>
+public sealed record CleanupOutcome(long ActionId, long FreedBytes, int Count, IReadOnlyList<FailedItem> Failed, bool Stopped = false, int NotStarted = 0);
+
+/// <param name="Phase">"checking" (Keep rules and git) or "moving".</param>
+/// <param name="Current">The item being checked or moved now ("" when finished).</param>
+public sealed record CleanProgress(string Phase, int Done, int Total, string Current, long CurrentBytes, long BytesDone, long TotalBytes);
 
 /// <summary>Cleans a list of items through the guarded Recycle Bin, logs the action for undo, and updates the scan.</summary>
 public sealed class CleanupService(AppServices services)
 {
+    /// <summary>
+    /// Moves items to the Recycle Bin one at a time, reporting each. Cancelling (<paramref name="ct"/>) means "stop after
+    /// this item": the item being moved always finishes, everything already moved is logged for Undo, the rest is left.
+    /// </summary>
     public async Task<CleanupOutcome> CleanAsync(IReadOnlyList<CartItem> items, ScanSession? session, string origin,
-        IProgress<int>? progress = null, CancellationToken ct = default)
+        IProgress<CleanProgress>? progress = null, CancellationToken ct = default)
     {
+        var totalBytes = items.Sum(i => i.Bytes);
         // Rules can change after an item went into the cart: never clean something you now keep.
         var blocked = new List<FailedItem>();
         if (session is not null)
@@ -26,15 +36,35 @@ public sealed class CleanupService(AppServices services)
         // repository) commits that were never pushed.
         var git = services.NewGit();
         var allowedByGit = new List<CartItem>();
+        var checkedCount = 0;
         foreach (var i in items)
         {
-            if (await GitConflictAsync(git, i.Path, ct) is { } why) blocked.Add(new FailedItem(i.Path, why));
+            progress?.Report(new CleanProgress("checking", checkedCount++, items.Count, i.Name, i.Bytes, 0, totalBytes));
+            if (await GitConflictAsync(git, i.Path, CancellationToken.None) is { } why) blocked.Add(new FailedItem(i.Path, why));
             else allowedByGit.Add(i);
         }
         items = allowedByGit;
         var dirs = items.Where(i => session?.FindNode(i.Path) is { } id ? session.Tree.IsDir(id) : Directory.Exists(i.Path))
             .Select(i => i.Path).ToHashSet();
-        var recycleResult = await services.Recycler.RecycleAsync(items.Select(i => i.Path).ToList(), progress, ct);
+        // One at a time, so you can see what is happening and stop between items (never half-way through one).
+        var movedItems = new List<RecycledItem>();
+        var failed = new List<FailedItem>();
+        long bytesDone = 0;
+        var moved = 0;
+        var stopped = false;
+        foreach (var i in items)
+        {
+            if (ct.IsCancellationRequested) { stopped = true; break; }
+            progress?.Report(new CleanProgress("moving", moved, items.Count, i.Name, i.Bytes, bytesDone, items.Sum(x => x.Bytes)));
+            var r = await services.Recycler.RecycleAsync([i.Path], null, CancellationToken.None);
+            movedItems.AddRange(r.Recycled);
+            failed.AddRange(r.Failed);
+            bytesDone += i.Bytes;
+            moved++;
+        }
+        progress?.Report(new CleanProgress("moving", moved, items.Count, "", 0, bytesDone, items.Sum(x => x.Bytes)));
+        var recycleResult = new RecycleResult(movedItems, failed);
+        var notStarted = items.Count - moved;
         var result = new RecycleResult(recycleResult.Recycled, [.. blocked, .. recycleResult.Failed]);
         long actionId = 0;
         if (result.Recycled.Count > 0)
@@ -54,7 +84,7 @@ public sealed class CleanupService(AppServices services)
             services.Cart.RemoveWithin(gone);
             session?.RemoveAndRefresh(gone);
         }
-        return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed);
+        return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed, stopped, notStarted);
     }
 
     /// <summary>

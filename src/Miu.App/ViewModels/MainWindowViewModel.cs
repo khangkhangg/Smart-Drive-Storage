@@ -177,18 +177,19 @@ public partial class MainWindowViewModel : ObservableObject
     public void CloseReview() => Review = null;
 
     /// <summary>Cleans through the guarded Recycle Bin, then refreshes every screen and shows the result with Undo.</summary>
-    public async Task CleanAsync(IReadOnlyList<CartItem> items, string origin)
+    public async Task CleanAsync(IReadOnlyList<CartItem> items, string origin, IProgress<CleanProgress>? progress = null, CancellationToken stop = default)
     {
-        var outcome = await Cleanup.CleanAsync(items, Analyze.Session, origin);
+        var outcome = await Cleanup.CleanAsync(items, Analyze.Session, origin, progress, stop);
         CloseReview();
         if (Analyze.Session is { } session)
         {
             Analyze.RefreshCurrent();
             OnScanCompleted(session);
         }
-        var message = outcome.Count == 0
+        var message = (outcome.Count == 0
             ? "Nothing was cleaned."
-            : $"Moved {outcome.Count} {(outcome.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(outcome.FreedBytes)}) to the {Services.RecycleBinName}.";
+            : $"Moved {outcome.Count} {(outcome.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(outcome.FreedBytes)}) to the {Services.RecycleBinName}.")
+            + (outcome.Stopped ? $" Stopped as you asked: {outcome.NotStarted} {(outcome.NotStarted == 1 ? "item was" : "items were")} left as they were." : "");
         var details = outcome.Failed.Count == 0 ? "" :
             $"{outcome.Failed.Count} could not be moved: " + string.Join("; ", outcome.Failed.Take(3).Select(f => $"{Path.GetFileName(f.Path)} — {f.Reason}"));
         Notice = new NoticeViewModel(this, message, details, outcome.ActionId);
