@@ -12,11 +12,18 @@ public sealed class CleanupService(AppServices services)
     public async Task<CleanupOutcome> CleanAsync(IReadOnlyList<CartItem> items, ScanSession? session, string origin,
         IProgress<int>? progress = null, CancellationToken ct = default)
     {
+        var dirs = items.Where(i => session?.FindNode(i.Path) is { } id ? session.Tree.IsDir(id) : Directory.Exists(i.Path))
+            .Select(i => i.Path).ToHashSet();
         var result = await services.Recycler.RecycleAsync(items.Select(i => i.Path).ToList(), progress, ct);
         long actionId = 0;
         if (result.Recycled.Count > 0)
+        {
             actionId = services.Actions.Add("recycle",
                 result.Recycled.Select(r => new ActionItem(r.OriginalPath, r.TrashLocation, r.Bytes)).ToList(), origin);
+            var recycled = result.Recycled.Select(r => r.OriginalPath).ToHashSet();
+            new LearningService(services).RecordCleaned(items.Where(i => recycled.Contains(i.Path))
+                .Select(i => (i.Path, dirs.Contains(i.Path), i.Verdict, i.Reason)));
+        }
         // Items already gone from disk shouldn't linger in the cart or the scan either.
         var gone = result.Recycled.Select(r => r.OriginalPath)
             .Concat(result.Failed.Select(f => f.Path).Where(p => !File.Exists(p) && !Directory.Exists(p)))
@@ -38,6 +45,8 @@ public sealed class CleanupService(AppServices services)
             action.Items.Select(i => new RecycledItem(i.OriginalPath, i.TrashLocation, i.Bytes)).ToList(), ct);
         // Keep whatever couldn't be restored, so Undo can be tried again after the conflict is fixed.
         var left = action.Items.Where(i => !result.Restored.Contains(i.OriginalPath)).ToList();
+        if (result.Restored.Count > 0)
+            new LearningService(services).RecordRestored(result.Restored.Select(p => (p, Directory.Exists(p))));
         if (left.Count == 0) services.Actions.MarkUndone(actionId);
         else if (left.Count < action.Items.Count) services.Actions.UpdateItems(actionId, left);
         return result;

@@ -16,6 +16,9 @@ public sealed class AppServices : IDisposable
         Database = db;
         Settings = new SettingsRepository(db);
         Actions = new ActionsRepository(db);
+        Decisions = new DecisionsRepository(db);
+        RulesStore = new RulesRepository(db);
+        Suggestions = new SuggestionsRepository(db);
         Scanner = scanner;
         Rules = rules;
         Guard = guard;
@@ -30,6 +33,13 @@ public sealed class AppServices : IDisposable
     public MiuDatabase Database { get; }
     public SettingsRepository Settings { get; }
     public ActionsRepository Actions { get; }
+    public DecisionsRepository Decisions { get; }
+    /// <summary>Rules you made or accepted. Built-in rules are in <see cref="Rules"/>.</summary>
+    public RulesRepository RulesStore { get; }
+    public SuggestionsRepository Suggestions { get; }
+
+    /// <summary>Built-in rules plus your own and learned ones (the guard still comes first).</summary>
+    public IReadOnlyList<Rule> AllRules() => [.. Rules, .. RulesStore.All()];
     public IScanner Scanner { get; }
     public IReadOnlyList<Rule> Rules { get; }
     public ProtectedPathGuard Guard { get; }

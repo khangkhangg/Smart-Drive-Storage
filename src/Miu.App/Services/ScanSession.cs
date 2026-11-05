@@ -8,7 +8,7 @@ namespace Miu.App.Services;
 /// <summary>The result of one scan plus everything derived from it: verdicts, projects, safe total.</summary>
 public sealed class ScanSession
 {
-    private readonly RuleEngine _engine;
+    private RuleEngine _engine;
     private readonly ProtectedPathGuard _guard;
     private readonly bool _ci;
     private Dictionary<int, DetectedProject> _projectsByNode;
@@ -39,7 +39,7 @@ public sealed class ScanSession
         return await Task.Run(() =>
         {
             var now = DateTime.UtcNow;
-            var engine = new RuleEngine(services.Rules, services.Guard, services.CaseInsensitivePaths);
+            var engine = new RuleEngine(services.AllRules(), services.Guard, services.CaseInsensitivePaths);
             var session = new ScanSession(tree, engine, services.Guard, services.CaseInsensitivePaths, ProjectDetector.Detect(tree, now), now);
             session.CollectSafeItems(ct);
             return session;
@@ -85,6 +85,13 @@ public sealed class ScanSession
             id = next.Value;
         }
         return id;
+    }
+
+    /// <summary>Re-evaluates every verdict after rules changed (a Keep, an accepted suggestion, an import).</summary>
+    public void ReplaceRules(IEnumerable<Rule> rules)
+    {
+        _engine = new RuleEngine(rules, _guard, _ci);
+        RemoveAndRefresh([]);
     }
 
     /// <summary>Takes cleaned items out of the scan and recomputes projects, verdicts and the safe total.</summary>
