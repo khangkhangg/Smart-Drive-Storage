@@ -714,7 +714,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F1.8 Types & Largest views
 - [ ] F1.9 Search query language
 - [x] F1.10 Details pane
-- [ ] F1.11 Snapshots & What grew
+- [x] F1.11 Snapshots & What grew
 
 ### Phase 2 — Safety & Clean
 - [x] F2.1 Protected-paths guard
@@ -753,18 +753,18 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F3.8 Import/export
 
 ### Phase 4 — Background & Automations
-- [ ] F4.1 Agent + tray
-- [ ] F4.2 Background toggle
-- [ ] F4.3 IPC
-- [ ] F4.4 USN watcher
-- [ ] F4.5 Watches + scheduler
-- [ ] F4.6 Watch runner
-- [ ] F4.7 Templates
-- [ ] F4.8 Sentence editor
-- [ ] F4.9 Resource guards
-- [ ] F4.10 Toasts
-- [ ] F4.11 Forecast
-- [ ] F4.12 Weekly digest
+- [ ] F4.1 Agent + tray — partial in M4 (tray + background inside the app process; no separate agent yet)
+- [x] F4.2 Background toggle
+- [ ] F4.3 IPC — partial in M4 (not needed while background runs in-process)
+- [ ] F4.4 USN watcher — partial in M4 (watched folders are rescanned instead)
+- [x] F4.5 Watches + scheduler
+- [x] F4.6 Watch runner
+- [x] F4.7 Templates
+- [x] F4.8 Sentence editor
+- [x] F4.9 Resource guards
+- [x] F4.10 Toasts
+- [x] F4.11 Forecast
+- [x] F4.12 Weekly digest
 
 ### Phase 5 — Telegram
 - [ ] F5.1 Pairing wizard
@@ -795,7 +795,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 ### Phase 8 — Polish & Release
 - [ ] F8.1 Onboarding
 - [ ] F8.2 Explorer context menu
-- [ ] F8.3 Settings complete
+- [ ] F8.3 Settings complete — partial in M4 (background, automatic cleaning, quiet hours, battery)
 - [ ] F8.4 Packaging & updates
 - [ ] F8.5 Accessibility pass
 - [ ] F8.6 Performance pass

@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 3 (Insights & learning)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 4 (Background & automations)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -32,6 +32,14 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 | Types | Teach Miu |
 |---|---|
 | ![Types](docs/screenshots/types.png) | ![Teach](docs/screenshots/teach.png) |
+
+| Automations | Settings |
+|---|---|
+| ![Automations](docs/screenshots/automations.png) | ![Settings](docs/screenshots/settings.png) |
+
+| Notification | |
+|---|---|
+| ![Notification](docs/screenshots/notification.png) | |
 
 | Splash | About |
 |---|---|
@@ -58,6 +66,13 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
   - **Keep — never suggest** and **Always OK to delete** take effect right away, with an optional reason.
   - When you repeatedly clean or restore similar items, Miu suggests a rule and shows its evidence ("You deleted 3 of 3 such items"). It is only used after you tap **Turn on**.
   - The Rules page lets you see, switch off, delete, import and export rules.
+- **Automations:**
+  - Watch folders on a schedule: every day, week or month, when you sign in, or when space is low.
+  - For each one, Miu can **suggest** what to clean, **clean Safe items automatically** (only after you allow it in Settings), or **just tell you**.
+  - Start from templates (Downloads tidy, Temp & caches, Dev projects, Low-space guard) or write your own in a sentence-style editor.
+- **Background mode:** a tray icon, start at sign-in, and closing keeps Miu in the tray. You can switch it off.
+  - Automations pause on battery, in quiet hours, or when you pause them. A paused run is postponed, not lost.
+- **Notifications** with actions (Review, Undo), a weekly digest, **What grew this week**, and **Full in ~N weeks** on drive cards.
 - **For developers:** clean one project's rebuildable folders, or every idle project at once. **Docker** shows its disk usage and offers safe prunes: build cache, unused image layers and stopped containers. Volumes are never touched.
 - **Folders that hold cleanable files** are labelled with how much inside is safe, e.g. "4.8 GB to clean".
 
@@ -99,7 +114,7 @@ Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage
 1. ~~**Clean:** cleanup cart, Recycle Bin with undo, Quick Clean~~ ✅ · next: duplicates, Types view.
 2. **Developer tools:** ~~Docker cleanup~~ ✅ · WSL/Docker disk compaction, "Make this a rule".
 3. ~~**Learning rules**~~ ✅ · ~~duplicates, Types view~~ ✅
-4. **Background and schedules:** watched folders, scheduled cleanup, notifications.
+4. ~~**Background and schedules**~~ ✅
 5. **Telegram:** alerts with action buttons.
 6. **Network drives and cloud backup.**
 7. **macOS and Linux releases.**
