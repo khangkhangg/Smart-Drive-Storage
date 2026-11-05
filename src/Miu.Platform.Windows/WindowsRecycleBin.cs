@@ -21,10 +21,27 @@ public sealed class WindowsRecycleBin : IRecycleBin
         var i = 0;
         foreach (var raw in paths)
         {
-            ct.ThrowIfCancellationRequested();
+            // Stop between items, but always report what already moved so it is logged and can be undone.
+            if (ct.IsCancellationRequested) break;
             var path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(raw));
             progress?.Report(++i);
-            if (!File.Exists(path) && !Directory.Exists(path)) { failed.Add(new FailedItem(path, "It is no longer there (moved or deleted after the scan).")); continue; }
+            try
+            {
+                RecycleOne(path, done, failed);
+            }
+            catch (Exception ex)
+            {
+                failed.Add(new FailedItem(path, "Something went wrong: " + ex.Message));
+            }
+        }
+        return new RecycleResult(done, failed);
+    }, ct);
+
+    private static void RecycleOne(string path, List<RecycledItem> done, List<FailedItem> failed)
+    {
+            if (!File.Exists(path) && !Directory.Exists(path)) { failed.Add(new FailedItem(path, "It is no longer there (moved or deleted after the scan).")); return; }
+            // Without a Recycle Bin (network shares, many USB drives, bin turned off) Windows would delete for good.
+            if (!HasRecycleBin(path)) { failed.Add(new FailedItem(path, "This drive has no Recycle Bin, so Miu won't delete from it.")); return; }
             var bytes = SizeOf(path);
             var bin = BinFolder(path);
             var before = bin is null ? [] : IndexFiles(bin).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -33,21 +50,46 @@ public sealed class WindowsRecycleBin : IRecycleBin
             if (rc != 0 || aborted || File.Exists(path) || Directory.Exists(path))
             {
                 failed.Add(new FailedItem(path, rc == 0 ? "Cancelled, or it is in use." : $"It is in use or can't be moved (error 0x{rc:X})."));
-                continue;
+                return;
             }
 
             var trashLocation = "";
             if (bin is not null)
                 foreach (var index in IndexFiles(bin).Where(f => !before.Contains(f)))
-                    if (RecycleBinIndex.Parse(File.ReadAllBytes(index)) is { } e && string.Equals(e.OriginalPath, path, StringComparison.OrdinalIgnoreCase))
+                    if (ReadIndex(index) is { } e && string.Equals(e.OriginalPath, path, StringComparison.OrdinalIgnoreCase))
                     {
                         trashLocation = Path.Combine(bin, "$R" + Path.GetFileName(index)[2..]);
                         break;
                     }
+            if (trashLocation.Length == 0)
+            {
+                // Gone, but there is no Recycle Bin copy: never report that as "moved".
+                failed.Add(new FailedItem(path, "Windows removed it but no Recycle Bin copy was found; it may be deleted permanently."));
+                return;
+            }
             done.Add(new RecycledItem(path, trashLocation, bytes));
+    }
+
+    /// <summary>True only for local fixed drives whose Recycle Bin Windows reports as available.</summary>
+    public static bool HasRecycleBin(string path)
+    {
+        try
+        {
+            if (path.StartsWith(@"\\", StringComparison.Ordinal)) return false;
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal)) return false;
+            if (new DriveInfo(root).DriveType != DriveType.Fixed) return false;
+            var info = new Shell.SHQUERYRBINFO { cbSize = Marshal.SizeOf<Shell.SHQUERYRBINFO>() };
+            return Shell.SHQueryRecycleBinW(root, ref info) == 0;
         }
-        return new RecycleResult(done, failed);
-    }, ct);
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { return false; }
+    }
+
+    private static RecycleBinEntry? ReadIndex(string file)
+    {
+        try { return RecycleBinIndex.Parse(File.ReadAllBytes(file)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
 
     public Task<RestoreResult> RestoreAsync(IReadOnlyList<RecycledItem> items, CancellationToken ct) => Task.Run(() =>
     {
@@ -55,19 +97,25 @@ public sealed class WindowsRecycleBin : IRecycleBin
         var failed = new List<FailedItem>();
         foreach (var item in items)
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) break;
             try
             {
                 if (string.IsNullOrEmpty(item.TrashLocation)) { failed.Add(new FailedItem(item.OriginalPath, "Restore it from the Recycle Bin.")); continue; }
                 if (File.Exists(item.OriginalPath) || Directory.Exists(item.OriginalPath)) { failed.Add(new FailedItem(item.OriginalPath, "Something with that name already exists there.")); continue; }
                 var isDir = Directory.Exists(item.TrashLocation);
-                if (!isDir && !File.Exists(item.TrashLocation)) { failed.Add(new FailedItem(item.OriginalPath, "It is no longer in the Recycle Bin.")); continue; }
+                var indexFile = Path.Combine(Path.GetDirectoryName(item.TrashLocation)!, "$I" + Path.GetFileName(item.TrashLocation)[2..]);
+                // Names in the bin can be reused after it is emptied: the $I record must still point at the original path.
+                if ((!isDir && !File.Exists(item.TrashLocation)) ||
+                    ReadIndex(indexFile) is not { } entry || !string.Equals(entry.OriginalPath, item.OriginalPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    failed.Add(new FailedItem(item.OriginalPath, "It is no longer in the Recycle Bin."));
+                    continue;
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(item.OriginalPath)!);
                 if (isDir) Directory.Move(item.TrashLocation, item.OriginalPath);
                 else File.Move(item.TrashLocation, item.OriginalPath);
-                var index = Path.Combine(Path.GetDirectoryName(item.TrashLocation)!, "$I" + Path.GetFileName(item.TrashLocation)[2..]);
-                try { File.Delete(index); } catch (IOException) { }
                 restored.Add(item.OriginalPath);
+                try { File.Delete(indexFile); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -107,8 +155,19 @@ public sealed class WindowsRecycleBin : IRecycleBin
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
     }
 
-    private static class Shell
+    internal static class Shell
     {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SHQUERYRBINFO
+        {
+            public int cbSize;
+            public long i64Size;
+            public long i64NumItems;
+        }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        public static extern int SHQueryRecycleBinW(string pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
+
         private const uint FO_DELETE = 3;
         private const ushort FOF_SILENT = 0x0004, FOF_NOCONFIRMATION = 0x0010, FOF_ALLOWUNDO = 0x0040,
             FOF_NOCONFIRMMKDIR = 0x0200, FOF_NOERRORUI = 0x0400, FOF_WANTNUKEWARNING = 0x4000;

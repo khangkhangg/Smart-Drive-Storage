@@ -15,12 +15,16 @@ public sealed class CleanupService(AppServices services)
         var result = await services.Recycler.RecycleAsync(items.Select(i => i.Path).ToList(), progress, ct);
         long actionId = 0;
         if (result.Recycled.Count > 0)
-        {
             actionId = services.Actions.Add("recycle",
                 result.Recycled.Select(r => new ActionItem(r.OriginalPath, r.TrashLocation, r.Bytes)).ToList(), origin);
-            var cleaned = result.Recycled.Select(r => r.OriginalPath).ToList();
-            services.Cart.RemoveAll(cleaned);
-            session?.RemoveAndRefresh(cleaned);
+        // Items already gone from disk shouldn't linger in the cart or the scan either.
+        var gone = result.Recycled.Select(r => r.OriginalPath)
+            .Concat(result.Failed.Select(f => f.Path).Where(p => !File.Exists(p) && !Directory.Exists(p)))
+            .ToList();
+        if (gone.Count > 0)
+        {
+            services.Cart.RemoveWithin(gone);
+            session?.RemoveAndRefresh(gone);
         }
         return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed);
     }
@@ -32,7 +36,10 @@ public sealed class CleanupService(AppServices services)
         if (action is null || action.Undone) return new RestoreResult([], []);
         var result = await services.Recycler.RestoreAsync(
             action.Items.Select(i => new RecycledItem(i.OriginalPath, i.TrashLocation, i.Bytes)).ToList(), ct);
-        if (result.Restored.Count > 0) services.Actions.MarkUndone(actionId);
+        // Keep whatever couldn't be restored, so Undo can be tried again after the conflict is fixed.
+        var left = action.Items.Where(i => !result.Restored.Contains(i.OriginalPath)).ToList();
+        if (left.Count == 0) services.Actions.MarkUndone(actionId);
+        else if (left.Count < action.Items.Count) services.Actions.UpdateItems(actionId, left);
         return result;
     }
 }

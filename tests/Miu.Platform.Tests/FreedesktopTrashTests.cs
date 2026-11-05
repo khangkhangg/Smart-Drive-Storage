@@ -81,4 +81,73 @@ public sealed class FreedesktopTrashTests : IDisposable
         back.Failed.Single().Reason.Should().Contain("already exists");
         File.ReadAllText(dmp).Should().Be("new");
     }
+
+    // ---- Review fixes
+
+    [Fact]
+    public async Task Restore_refuses_a_different_item_that_reused_the_trash_name()
+    {
+        var p1 = Path.Combine(_data, "p1", "node_modules");
+        var p2 = Path.Combine(_data, "p2", "node_modules");
+        Directory.CreateDirectory(p1);
+        Directory.CreateDirectory(p2);
+        File.WriteAllText(Path.Combine(p1, "mine"), "p1");
+        File.WriteAllText(Path.Combine(p2, "mine"), "p2");
+        var first = await Trash().RecycleAsync([p1], null, CancellationToken.None);
+        // The user empties the Trash, then cleans another folder with the same name.
+        Directory.Delete(Path.Combine(_trash, "files"), true);
+        Directory.Delete(Path.Combine(_trash, "info"), true);
+        var second = await Trash().RecycleAsync([p2], null, CancellationToken.None);
+        second.Recycled.Single().TrashLocation.Should().Be(first.Recycled.Single().TrashLocation);
+
+        var back = await Trash().RestoreAsync(first.Recycled, CancellationToken.None);
+
+        back.Restored.Should().BeEmpty();
+        back.Failed.Single().Reason.Should().Contain("no longer in the Trash");
+        Directory.Exists(p1).Should().BeFalse();
+        (await Trash().RestoreAsync(second.Recycled, CancellationToken.None)).Restored.Should().Equal(p2);
+        File.ReadAllText(Path.Combine(p2, "mine")).Should().Be("p2");
+    }
+
+    [Fact]
+    public async Task Trashinfo_path_is_percent_encoded_per_spec()
+    {
+        var odd = Path.Combine(_data, "c%41d 1.txt");
+        File.WriteAllText(odd, "x");
+        await Trash().RecycleAsync([odd], null, CancellationToken.None);
+        var info = File.ReadAllText(Path.Combine(_trash, "info", "c%41d 1.txt.trashinfo"));
+        info.Should().Contain("c%2541d%201.txt");
+    }
+
+    [Fact]
+    public async Task Cancellation_mid_batch_returns_what_was_already_moved()
+    {
+        var a = Path.Combine(_data, "crash.dmp");
+        var b = Path.Combine(_data, "proj", "node_modules");
+        using var cts = new CancellationTokenSource();
+        var progress = new Inline<int>(_ => cts.Cancel());
+        var r = await Trash().RecycleAsync([a, b], progress, cts.Token);
+        r.Recycled.Select(i => i.OriginalPath).Should().Equal(a);
+        Directory.Exists(b).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("/homework/big.iso", "/")]
+    [InlineData("/home/u/x", "/home")]
+    [InlineData("/home", "/home")]
+    public void MountOf_matches_whole_path_segments(string path, string expected) =>
+        FreedesktopTrash.MountOf(path, ["/", "/home", "/dev/shm"]).Should().Be(expected);
+
+    [Fact]
+    public async Task Symlinked_folder_moves_as_a_link()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var link = Path.Combine(_data, "link-to-proj");
+        Directory.CreateSymbolicLink(link, Path.Combine(_data, "proj"));
+        var r = await Trash().RecycleAsync([link], null, CancellationToken.None);
+        r.Failed.Should().BeEmpty();
+        Directory.Exists(Path.Combine(_data, "proj", "node_modules")).Should().BeTrue(); // target untouched
+    }
+
+    private sealed class Inline<T>(Action<T> a) : IProgress<T> { public void Report(T v) => a(v); }
 }

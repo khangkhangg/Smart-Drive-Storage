@@ -90,11 +90,48 @@ public sealed class CleanupServiceTests : IDisposable
         outcome.Failed.Should().ContainSingle();
     }
 
+    [AvaloniaFact]
+    public async Task Partial_undo_keeps_the_rest_undoable()
+    {
+        var bin = new FakeBin();
+        var services = AppServices.Create(":memory:", bin);
+        var session = await ScanSession.RunAsync(services, _root, null, CancellationToken.None);
+        var cleanup = new CleanupService(services);
+        var big = Path.Combine(_root, "a", "big");
+        var locked = Path.Combine(_root, "locked.bin");
+        var outcome = await cleanup.CleanAsync([Item(big, 4000), Item(locked, 500)], session, "app");
+        bin.RestoreFailNames = ["locked.bin"];
+
+        var first = await cleanup.UndoAsync(outcome.ActionId);
+        first.Restored.Should().Equal(big);
+        var action = services.Actions.Get(outcome.ActionId)!;
+        action.Undone.Should().BeFalse();
+        action.Items.Single().OriginalPath.Should().Be(locked);
+
+        bin.RestoreFailNames = [];
+        (await cleanup.UndoAsync(outcome.ActionId)).Restored.Should().Equal(locked);
+        services.Actions.Get(outcome.ActionId)!.Undone.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public async Task Cart_items_inside_cleaned_folders_and_missing_items_are_dropped()
+    {
+        var bin = new FakeBin();
+        var services = AppServices.Create(":memory:", bin);
+        var session = await ScanSession.RunAsync(services, _root, null, CancellationToken.None);
+        var a = Path.Combine(_root, "a");
+        services.Cart.Add(Item(Path.Combine(_root, "gone.bin"), 1));
+        var outcome = await new CleanupService(services).CleanAsync([Item(a, 4100), Item(Path.Combine(_root, "gone.bin"), 1)], session, "app");
+        outcome.Count.Should().Be(1);
+        services.Cart.Items.Should().BeEmpty();
+    }
+
     internal sealed class FakeBin : IRecycleBin
     {
         public List<string> Received { get; } = [];
         public List<string> Restored { get; } = [];
         public string[] FailNames { get; init; } = [];
+        public string[] RestoreFailNames { get; set; } = [];
         public bool IsSupported => true;
 
         public Task<RecycleResult> RecycleAsync(IReadOnlyList<string> paths, IProgress<int>? progress, CancellationToken ct)
@@ -109,8 +146,10 @@ public sealed class CleanupServiceTests : IDisposable
 
         public Task<RestoreResult> RestoreAsync(IReadOnlyList<RecycledItem> items, CancellationToken ct)
         {
-            Restored.AddRange(items.Select(i => i.OriginalPath));
-            return Task.FromResult(new RestoreResult(items.Select(i => i.OriginalPath).ToList(), []));
+            var fail = items.Where(i => RestoreFailNames.Contains(Path.GetFileName(i.OriginalPath))).ToList();
+            var ok = items.Except(fail).Select(i => i.OriginalPath).ToList();
+            Restored.AddRange(ok);
+            return Task.FromResult(new RestoreResult(ok, fail.Select(f => new FailedItem(f.OriginalPath, "exists")).ToList()));
         }
     }
 }

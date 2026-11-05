@@ -58,6 +58,7 @@ public class DockerTests
         await docker.PruneBuildCacheAsync();
         await docker.PruneDanglingImagesAsync();
         await docker.PruneStoppedContainersAsync();
+        runner.Calls.Should().HaveCount(3);
         runner.Calls.Select(c => string.Join(' ', c)).Should().Equal(
             "builder prune -f", "image prune -f", "container prune -f");
     }

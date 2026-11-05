@@ -41,6 +41,15 @@
           <Button Classes="secondary" Content="Remove unused image layers" Command="{Binding PruneImagesCommand}" />
           <Button Classes="secondary" Content="Remove stopped containers" Command="{Binding PruneContainersCommand}" />
         </WrapPanel>
+        <Border Background="#FDF0E1" CornerRadius="8" Padding="12,10" IsVisible="{Binding HasPending}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding PendingText}" Foreground="#8A4600" TextWrapping="Wrap" FontSize="13" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="secondary" Content="Cancel" Command="{Binding CancelPendingCommand}" />
+              <Button Classes="primary" Content="Yes, remove" Command="{Binding ConfirmPendingCommand}" Background="#B4461A" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
         <TextBlock Classes="caption" Text="{Binding StatusText}" TextWrapping="Wrap" />
       </StackPanel>
     </Border>

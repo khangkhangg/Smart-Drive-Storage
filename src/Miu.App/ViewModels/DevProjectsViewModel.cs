@@ -14,7 +14,7 @@ public sealed record ProjectRow(int NodeId, string Name, string Path, string Sta
 public partial class DevProjectsViewModel(MainWindowViewModel shell) : ObservableObject
 {
     public ObservableCollection<ProjectRow> Projects { get; } = [];
-    public DockerViewModel Docker { get; } = new(shell.Services.Docker);
+    public DockerViewModel Docker { get; } = new(shell.Services.Docker, shell.Services.Actions);
 
     [ObservableProperty] private string idleCleanText = "";
     [ObservableProperty] private bool hasIdle;

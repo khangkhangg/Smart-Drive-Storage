@@ -48,6 +48,13 @@ public sealed class CleanupCart(PathStyle style)
         if (_items.RemoveAll(i => set.Any(p => Same(i.Path, p))) > 0) Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Removes the given items and anything inside them.</summary>
+    public void RemoveWithin(IEnumerable<string> paths)
+    {
+        var set = paths.ToList();
+        if (_items.RemoveAll(i => set.Any(p => Same(i.Path, p) || IsInside(i.Path, p))) > 0) Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Clear()
     {
         if (_items.Count == 0) return;

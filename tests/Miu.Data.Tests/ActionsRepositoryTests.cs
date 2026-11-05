@@ -42,4 +42,13 @@ public class ActionsRepositoryTests
         repo.MarkUndone(id);
         repo.Get(id)!.Undone.Should().BeTrue();
     }
+
+    [Fact]
+    public void UpdateItems_keeps_only_what_is_left_to_restore()
+    {
+        var repo = Repo();
+        var id = repo.Add("recycle", [new ActionItem("/a", "/t/a", 1), new ActionItem("/b", "/t/b", 2)], "app");
+        repo.UpdateItems(id, [new ActionItem("/b", "/t/b", 2)]);
+        repo.Get(id)!.Items.Select(i => i.OriginalPath).Should().Equal("/b");
+    }
 }

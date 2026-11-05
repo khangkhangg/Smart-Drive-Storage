@@ -68,8 +68,11 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void OpenReview(IReadOnlyList<CartItem> items, string title, string origin)
     {
-        if (items.Count == 0) return;
-        Review = new ReviewViewModel(this, items, title, origin);
+        // The same top-level-only rule as the cart, so nothing is shown or recycled twice.
+        var unique = new CleanupCart(Miu.Core.Rules.PathNormalizer.Current);
+        unique.AddRange(items);
+        if (unique.Count == 0) return;
+        Review = new ReviewViewModel(this, unique.Items.ToList(), title, origin);
     }
 
     public void CloseReview() => Review = null;

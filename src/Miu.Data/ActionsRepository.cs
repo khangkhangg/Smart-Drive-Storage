@@ -38,6 +38,17 @@ public sealed class ActionsRepository(MiuDatabase db)
         return Read(cmd).FirstOrDefault();
     }
 
+    /// <summary>Keeps only the items still waiting to be restored (after a partial undo).</summary>
+    public void UpdateItems(long id, IReadOnlyList<ActionItem> items)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE actions_log SET items_json = $items, bytes = $b WHERE id = $id";
+        cmd.Parameters.AddWithValue("$items", JsonSerializer.Serialize(items));
+        cmd.Parameters.AddWithValue("$b", items.Sum(i => i.Bytes));
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     public void MarkUndone(long id)
     {
         using var cmd = db.Connection.CreateCommand();

@@ -10,12 +10,14 @@ public partial class ActivityRow(MainWindowViewModel shell, ActionRecord action)
 {
     public long Id => action.Id;
     public string WhenText => HumanTime.Ago(action.TsUtc, DateTime.UtcNow);
-    public string Summary => $"Moved {action.Items.Count} {(action.Items.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(action.Bytes)}) to the {shell.Services.RecycleBinName}";
+    public string Summary => action.Kind == "recycle"
+        ? $"Moved {action.Items.Count} {(action.Items.Count == 1 ? "item" : "items")} ({SizeFormatter.Format(action.Bytes)}) to the {shell.Services.RecycleBinName}"
+        : $"Docker removed {string.Join(", ", action.Items.Take(1).Select(i => i.OriginalPath))}{(action.Items.Count > 1 ? $" and {action.Items.Count - 1} more" : "")} (can't be undone)";
     public string ItemsText => string.Join(", ", action.Items.Take(3).Select(i => Path.GetFileName(i.OriginalPath)))
                                + (action.Items.Count > 3 ? $" and {action.Items.Count - 3} more" : "");
-    public string OriginText => action.Origin switch { "quick-clean" => "Quick Clean", "dev-project" => "Dev projects", _ => "Cleanup cart" };
+    public string OriginText => action.Origin switch { "quick-clean" => "Quick Clean", "dev-project" => "Dev projects", "docker" => "Docker", _ => "Cleanup cart" };
     public bool Undone => action.Undone;
-    public bool CanUndo => !action.Undone;
+    public bool CanUndo => action.Kind == "recycle" && !action.Undone;
 
     [RelayCommand]
     private async Task Undo() => await shell.UndoAsync(action.Id);

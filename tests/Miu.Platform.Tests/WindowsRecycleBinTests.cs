@@ -65,4 +65,12 @@ public class WindowsRecycleBinTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    [Fact]
+    public void Network_paths_have_no_recycle_bin()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        WindowsRecycleBin.HasRecycleBin(@"\\server\share\file.txt").Should().BeFalse();
+        WindowsRecycleBin.HasRecycleBin(Path.GetTempPath()).Should().BeTrue();
+    }
 }
