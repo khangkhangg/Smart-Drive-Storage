@@ -11,6 +11,11 @@ public partial class SettingsViewModel : ObservableObject
     private readonly SettingsRepository _s;
     private bool _loading;
 
+    /// <summary>Settings › Cloud apps: your own Google, Microsoft and Dropbox app keys.</summary>
+    public IReadOnlyList<CloudAppSetupViewModel> CloudApps => _cloudApps ??= new[] { "gdrive", "onedrive", "dropbox" }
+        .Select(p => new CloudAppSetupViewModel(_shell.Automation.Accounts, p, () => _shell.CloudNetwork.Backup.RefreshProviders())).ToList();
+    private IReadOnlyList<CloudAppSetupViewModel>? _cloudApps;
+
     public SettingsViewModel(MainWindowViewModel shell)
     {
         _shell = shell;

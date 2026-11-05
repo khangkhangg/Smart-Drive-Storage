@@ -172,21 +172,16 @@ The **Release** workflow tests and packages on all three systems and publishes t
 - `build/package-macos.sh <version>` (on a Mac)
 - `pwsh build/package-windows.ps1 -Version <version>` (on Windows, with Inno Setup 6)
 
-## Cloud sign-in setup (for builds)
-S3-compatible storage works out of the box. Google Drive, OneDrive and Dropbox need Miu's own app registrations, which have no secrets you must protect: they're public "desktop" clients that use PKCE. To enable them:
-1. Copy `docs/cloud-clients.example.json` to `cloud-clients.json` next to `Miu.App.exe`.
-2. Fill in the IDs. You can also use the environment variables `MIU_GOOGLE_CLIENT_ID`, `MIU_GOOGLE_CLIENT_SECRET`, `MIU_MICROSOFT_CLIENT_ID` and `MIU_DROPBOX_CLIENT_ID`.
+## Cloud sign-in: use your own app keys
+S3-compatible storage (AWS, Backblaze B2, Wasabi, Cloudflare R2, MinIO) works out of the box with its access keys.
 
-How to register each one:
-- **Google:** create a Desktop OAuth client with the scope `https://www.googleapis.com/auth/drive.file`.
-- **Microsoft:**
-  - Register a public client app.
-  - Add the redirect `http://localhost` under "Mobile and desktop applications".
-  - Add the delegated permissions `Files.ReadWrite.AppFolder`, `offline_access` and `User.Read`.
-- **Dropbox:**
-  - Create an "App folder" app.
-  - Add the redirect `http://localhost:53682/`.
-  - Turn on the scopes `files.content.read`, `files.content.write` and `files.metadata.read`.
+Google Drive, OneDrive and Dropbox need an "app" registered with that company. **Each user registers their own, for free, in about 5 minutes.** Nobody depends on someone else's app or its limits, so Miu keeps working for as long as you like.
+
+- In Miu, open **Settings › Cloud apps**. Each provider has step-by-step instructions, a button that opens the right console, and the exact redirect address to enter.
+- Paste your Client ID (Google also needs its client secret, which is kept in your system's secure store), then connect in **Cloud & Network › Cloud backup**.
+- Your sign-in happens in your browser with PKCE. Miu only ever sees its own folder (Google `drive.file`, the OneDrive app folder, a Dropbox app folder).
+
+**Optional, for people who make builds:** a build can include default keys in `cloud-clients.json` next to the app (see `docs/cloud-clients.example.json`), or through the environment variables `MIU_GOOGLE_CLIENT_ID`, `MIU_GOOGLE_CLIENT_SECRET`, `MIU_MICROSOFT_CLIENT_ID` and `MIU_DROPBOX_CLIENT_ID`. Keys a user enters in Settings always take priority.
 
 ## Support Miu
 

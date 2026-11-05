@@ -223,6 +223,14 @@ public sealed record CloudClientIds(string? GoogleClientId, string? GoogleClient
             Env("MIU_MICROSOFT_CLIENT_ID") ?? fromFile.MicrosoftClientId, Env("MIU_DROPBOX_CLIENT_ID") ?? fromFile.DropboxClientId, fromFile.DropboxRedirectPort);
     }
 
+    /// <summary>Your own app keys first, then the build's: whatever is filled in wins, per provider.</summary>
+    public static CloudClientIds Merge(CloudClientIds yours, CloudClientIds build) =>
+        new(yours.GoogleClientId ?? build.GoogleClientId,
+            yours.GoogleClientId is not null ? yours.GoogleClientSecret : build.GoogleClientSecret, // a secret belongs to its own id
+            yours.MicrosoftClientId ?? build.MicrosoftClientId,
+            yours.DropboxClientId ?? build.DropboxClientId,
+            build.DropboxRedirectPort);
+
     public OAuthClient? Google => GoogleClientId is { Length: > 0 } id
         ? new("Google Drive", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", id, GoogleClientSecret,
             "https://www.googleapis.com/auth/drive.file", new Dictionary<string, string> { ["access_type"] = "offline", ["prompt"] = "consent" },

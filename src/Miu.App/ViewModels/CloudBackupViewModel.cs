@@ -56,8 +56,16 @@ public partial class CloudBackupViewModel : ObservableObject
     public CloudBackupViewModel(MainWindowViewModel shell)
     {
         _shell = shell;
-        foreach (var p in Accounts.Providers.Where(p => p.Key != "s3")) Providers.Add(p);
+        RefreshProviders();
         Load();
+    }
+
+    /// <summary>After you add or remove your own app keys in Settings.</summary>
+    public void RefreshProviders()
+    {
+        Providers.Clear();
+        foreach (var p in Accounts.Providers.Where(p => p.Key != "s3")) Providers.Add(p);
+        if (AccountMessageIsError) Say("", false);
     }
 
     public AppServices Services => _shell.Services;
@@ -99,7 +107,13 @@ public partial class CloudBackupViewModel : ObservableObject
     private async Task ConnectOAuth(CloudProviderChoice? choice)
     {
         if (choice is null) return;
-        if (!choice.Available) { Say(choice.Note, true); return; }
+        if (!choice.Available)
+        {
+            // Not set up yet: take you to the step-by-step guide.
+            Say("", false);
+            _shell.Navigate(_shell.Settings);
+            return;
+        }
         IsConnecting = true;
         Say($"Finish signing in to {choice.Name} in your browser…", false);
         try

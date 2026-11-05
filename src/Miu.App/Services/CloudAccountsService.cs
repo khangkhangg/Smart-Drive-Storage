@@ -14,7 +14,68 @@ public sealed class CloudAccountsService(AppServices services)
     private sealed record S3Secret(string Endpoint, string Region, string Bucket, string AccessKey, string SecretKey);
     private sealed record OAuthSecret(string AccessToken, string? RefreshToken, DateTime ExpiresUtc);
 
-    public CloudClientIds ClientIds { get; } = CloudClientIds.Load(Path.Combine(AppContext.BaseDirectory, "cloud-clients.json"));
+    /// <summary>Keys that came with this build (cloud-clients.json next to the app, or environment variables).</summary>
+    public CloudClientIds BuildClientIds { get; } = CloudClientIds.Load(Path.Combine(AppContext.BaseDirectory, "cloud-clients.json"));
+
+    /// <summary>What sign-in uses: your own app keys from Settings › Cloud apps first, then the build's.</summary>
+    public CloudClientIds ClientIds => CloudClientIds.Merge(UserClientIds, BuildClientIds);
+
+    public const string GoogleIdKey = "cloud.app.google.id";
+    public const string MicrosoftIdKey = "cloud.app.microsoft.id";
+    public const string DropboxKeyKey = "cloud.app.dropbox.key";
+    public const string GoogleSecretKey = "cloud.app.google.secret";
+
+    /// <summary>The app keys you entered. Client ids aren't secret (they're in every sign-in link); Google's client
+    /// secret goes to the secret store anyway.</summary>
+    public CloudClientIds UserClientIds
+    {
+        get
+        {
+            string? Get(string k) => services.Settings.Get(k) is { Length: > 0 } v ? v : null;
+            return new CloudClientIds(Get(GoogleIdKey), Get(GoogleIdKey) is null ? null : services.Secrets.Get(GoogleSecretKey), Get(MicrosoftIdKey), Get(DropboxKeyKey));
+        }
+    }
+
+    /// <summary>Saves (or, with an empty id, removes) your own app keys for one provider.</summary>
+    public string? SaveUserApp(string provider, string? id, string? secret = null)
+    {
+        id = id?.Trim() ?? "";
+        secret = secret?.Trim() ?? "";
+        if (id.Length > 0 && (id.Any(char.IsWhiteSpace) || id.Length > 300)) return "That doesn't look like a client id: paste it without spaces.";
+        switch (provider)
+        {
+            case "gdrive":
+                if (id.Length > 0 && !id.EndsWith(".apps.googleusercontent.com", StringComparison.Ordinal))
+                    return "A Google client id ends with .apps.googleusercontent.com.";
+                if (id.Length > 0 && secret.Length == 0 && services.Secrets.Get(GoogleSecretKey) is null)
+                    return "Google desktop apps also need the client secret (it starts with GOCSPX-).";
+                services.Settings.Set(GoogleIdKey, id);
+                if (id.Length == 0) services.Secrets.Delete(GoogleSecretKey);
+                else if (secret.Length > 0) services.Secrets.Set(GoogleSecretKey, secret);
+                break;
+            case "onedrive":
+                if (id.Length > 0 && !Guid.TryParse(id, out _)) return "A Microsoft application (client) id looks like 1a2b3c4d-1234-…: copy it from the app's Overview page.";
+                services.Settings.Set(MicrosoftIdKey, id);
+                break;
+            case "dropbox":
+                services.Settings.Set(DropboxKeyKey, id);
+                break;
+            default: return "Unknown provider.";
+        }
+        return null;
+    }
+
+    /// <summary>Where a provider's keys come from now: "yours", "build" or "none".</summary>
+    public string KeySource(string provider)
+    {
+        var (yours, build) = provider switch
+        {
+            "gdrive" => (UserClientIds.GoogleClientId, BuildClientIds.GoogleClientId),
+            "onedrive" => (UserClientIds.MicrosoftClientId, BuildClientIds.MicrosoftClientId),
+            _ => (UserClientIds.DropboxClientId, BuildClientIds.DropboxClientId),
+        };
+        return yours is not null ? "yours" : build is not null ? "build" : "none";
+    }
 
     public IReadOnlyList<CloudProviderChoice> Providers =>
     [
@@ -25,7 +86,7 @@ public sealed class CloudAccountsService(AppServices services)
     ];
 
     private static CloudProviderChoice Choice(string key, string name, OAuthClient? client) =>
-        new(key, name, client is not null, client is null ? "Not available in this build (needs Miu's app registration)." : "Sign in with your browser. Miu only sees its own folder.");
+        new(key, name, client is not null, client is null ? "Not set up yet: add your own free app in Settings › Cloud apps (about 5 minutes, step by step)." : "Sign in with your browser. Miu only sees its own folder.");
 
     public static string ProviderName(string key) => key switch { "gdrive" => "Google Drive", "onedrive" => "OneDrive", "dropbox" => "Dropbox", _ => "S3" };
 
@@ -41,7 +102,7 @@ public sealed class CloudAccountsService(AppServices services)
     /// <summary>Signs in with the system browser (PKCE, loopback redirect).</summary>
     public async Task<CloudAccount> ConnectOAuthAsync(string provider, Func<Uri, Task>? openBrowser = null, CancellationToken ct = default)
     {
-        var client = ClientFor(provider) ?? throw new CloudException($"{ProviderName(provider)} isn't available in this build.");
+        var client = ClientFor(provider) ?? throw new CloudException($"{ProviderName(provider)} isn't set up: add your own app in Settings › Cloud apps.");
         var tokens = await new LoopbackOAuth(Http, openBrowser ?? OpenBrowserAsync).SignInAsync(client, TimeSpan.FromMinutes(5), ct);
         var id = services.CloudAccounts.Add(provider, ProviderName(provider));
         SaveTokens(id, tokens);
@@ -66,7 +127,7 @@ public sealed class CloudAccountsService(AppServices services)
             var s = JsonSerializer.Deserialize<S3Secret>(secret)!;
             return new S3Storage(Http, new S3Config(s.Endpoint, s.Region, s.Bucket, s.AccessKey, s.SecretKey));
         }
-        var client = ClientFor(account.Provider) ?? throw new CloudException($"{account.DisplayName} isn't available in this build.");
+        var client = ClientFor(account.Provider) ?? throw new CloudException($"{account.DisplayName} isn't set up: add your own app in Settings › Cloud apps.");
         var t = JsonSerializer.Deserialize<OAuthSecret>(secret)!;
         var session = new OAuthSession(Http, client, new OAuthTokens(t.AccessToken, t.RefreshToken, t.ExpiresUtc), tokens => SaveTokens(account.Id, tokens));
         return account.Provider switch

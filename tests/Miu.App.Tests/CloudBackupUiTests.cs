@@ -30,13 +30,14 @@ public sealed class CloudBackupUiTests : IDisposable
     [AvaloniaFact]
     public async Task Accounts_card_explains_what_is_available_and_checks_the_s3_form()
     {
-        var b = Shell(withAccount: false).CloudNetwork.Backup;
+        var shell = Shell(withAccount: false);
+        var b = shell.CloudNetwork.Backup;
         b.HasAccounts.Should().BeFalse();
         b.Providers.Select(p => p.Name).Should().Equal("Google Drive", "OneDrive", "Dropbox");
         var unavailable = b.Providers.First(p => !p.Available);
+        unavailable.Note.Should().Contain("Settings › Cloud apps");
         await b.ConnectOAuthCommand.ExecuteAsync(unavailable);
-        b.AccountMessageIsError.Should().BeTrue();
-        b.AccountMessage.Should().Contain("Not available in this build");
+        shell.CurrentPage.Should().BeSameAs(shell.Settings); // the step-by-step guide
 
         await b.ConnectS3Command.ExecuteAsync(null);
         b.AccountMessage.Should().Contain("Fill in");
