@@ -174,7 +174,7 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
         {
             var body = (lowSpaceNote is null ? "" : lowSpaceNote + " ") +
                        $"{w.Name}: {SizeFormatter.Format(t.Size(t.Root))} in total" + (items.Count > 0 ? $", {count} ({total}) could be cleaned." : ".");
-            notifier.Show(new MiuNotification(lowSpaceNote is null ? w.Name : "Running low on space", body, items.Count > 0 ? [Review()] : []));
+            notifier.Show(new MiuNotification(lowSpaceNote is null ? w.Name : "Running low on space", body, items.Count > 0 ? [Review()] : [], w.Id, items));
             return (body, 0, true);
         }
 
@@ -185,7 +185,7 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
         {
             var body = $"{count} ({total}) in {w.Name} can be cleaned." +
                        (w.Mode == WatchMode.AutoCleanSafe ? " Automatic cleaning is off for this folder — turn it on in Settings, or pick a narrower folder." : "");
-            notifier.Show(new MiuNotification(w.Name, body, [Review()]));
+            notifier.Show(new MiuNotification(w.Name, body, [Review()], w.Id, items));
             return (body, 0, true);
         }
 
@@ -200,6 +200,13 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
         return (cleaned, outcome.FreedBytes, true);
     }
 
+    public (string Title, string Body) BuildDigest(DateTime now)
+    {
+        var weekAgoUtc = now.ToUniversalTime().AddDays(-7);
+        var freed = services.Actions.Recent(500).Where(a => a.TsUtc >= weekAgoUtc && !a.Undone && a.Kind == "recycle").Sum(a => a.Bytes);
+        return Digest.Build(freed, [], services.Suggestions.Pending().Count, 0);
+    }
+
     private void MaybeDigest(DateTime now)
     {
         try
@@ -211,9 +218,7 @@ public sealed class AutomationService(AppServices services, INotifier notifier, 
                 return;
             }
             if (now - lastAt < TimeSpan.FromDays(7)) return;
-            var weekAgoUtc = now.ToUniversalTime().AddDays(-7);
-            var freed = services.Actions.Recent(500).Where(a => a.TsUtc >= weekAgoUtc && !a.Undone && a.Kind == "recycle").Sum(a => a.Bytes);
-            var (title, body) = Digest.Build(freed, [], services.Suggestions.Pending().Count, 0);
+            var (title, body) = BuildDigest(now);
             notifier.Show(new MiuNotification(title, body, []));
             services.Settings.Set(SettingKeys.LastDigest, now.ToString("O", CultureInfo.InvariantCulture));
         }

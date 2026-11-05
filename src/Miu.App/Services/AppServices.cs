@@ -12,8 +12,11 @@ namespace Miu.App.Services;
 public sealed class AppServices : IDisposable
 {
     private AppServices(MiuDatabase db, IScanner scanner, IReadOnlyList<Rule> rules, ProtectedPathGuard guard, IRecycleBin recycleBin,
-        IStartupRegistration startup, IPowerState power)
+        IStartupRegistration startup, IPowerState power, ISecretStore secrets)
     {
+        Secrets = secrets;
+        Telegram = new TelegramRepository(db);
+        RemoteActions = new RemoteActionsRepository(db);
         Startup = startup;
         Power = power;
         Database = db;
@@ -38,6 +41,9 @@ public sealed class AppServices : IDisposable
     public DockerService Docker { get; }
     public IStartupRegistration Startup { get; }
     public IPowerState Power { get; }
+    public ISecretStore Secrets { get; }
+    public TelegramRepository Telegram { get; }
+    public RemoteActionsRepository RemoteActions { get; }
 
     public MiuDatabase Database { get; }
     public SettingsRepository Settings { get; }
@@ -62,14 +68,20 @@ public sealed class AppServices : IDisposable
     public bool CanClean => Recycler.IsSupported;
     public string RecycleBinName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
-    public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null, IStartupRegistration? startup = null, IPowerState? power = null)
+    public static AppServices Create(string databasePath, IRecycleBin? recycleBin = null, IStartupRegistration? startup = null, IPowerState? power = null,
+        ISecretStore? secrets = null)
     {
         var db = new MiuDatabase(databasePath);
         db.Migrate();
         var rules = RuleLoader.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "builtin"));
         return new AppServices(db, new ManagedScanner(), rules, ProtectedPathGuard.ForCurrentOs(), recycleBin ?? DefaultRecycleBin(),
-            startup ?? DefaultStartup(), power ?? DefaultPower());
+            startup ?? DefaultStartup(), power ?? DefaultPower(), secrets ?? DefaultSecrets());
     }
+
+    private static ISecretStore DefaultSecrets() =>
+        OperatingSystem.IsWindows()
+            ? new WindowsCredentialStore()
+            : new FileSecretStore(Path.GetDirectoryName(MiuDatabase.DefaultPath)!);
 
     private static IStartupRegistration DefaultStartup()
     {
