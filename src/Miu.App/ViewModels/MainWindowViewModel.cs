@@ -10,10 +10,11 @@ public sealed record NavItem(string Title, string Icon, object Page);
 
 public partial class MainWindowViewModel : ObservableObject
 {
-    public MainWindowViewModel(AppServices services, INotifier? notifier = null)
+    public MainWindowViewModel(AppServices services, INotifier? notifier = null, Func<string, Miu.Notify.ITelegramApi>? telegramApi = null)
     {
         Services = services;
-        Notifier = notifier ?? new ToastNotifier();
+        var composite = new CompositeNotifier(notifier ?? new ToastNotifier());
+        Notifier = composite;
         Automation = new AutomationService(services, Notifier, services.Power, () => DateTime.Now,
             items =>
             {
@@ -21,6 +22,10 @@ public partial class MainWindowViewModel : ObservableObject
                 Navigate(Home!);
                 if (!IsReviewOpen) OpenReview(items, "Review suggestions", "cart");
             });
+        Telegram = new TelegramService(services, Automation,
+            telegramApi ?? (token => new Miu.Notify.TelegramBotApi(new HttpClient { Timeout = TimeSpan.FromSeconds(70) }, token)),
+            () => DateTime.UtcNow);
+        composite.Add(new TelegramNotifier(Telegram, services.Settings));
         Cleanup = new CleanupService(services);
         Learning = new LearningService(services);
         Cart = new CartViewModel(this, services.Cart);
@@ -61,6 +66,7 @@ public partial class MainWindowViewModel : ObservableObject
     public SettingsViewModel Settings { get; }
     public AutomationsViewModel Automations { get; }
     public INotifier Notifier { get; }
+    public TelegramService Telegram { get; }
 
     /// <summary>Brings the main window back (set by the app; Miu may be hidden in the tray).</summary>
     public Action? ShowWindow { get; set; }

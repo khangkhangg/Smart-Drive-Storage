@@ -17,6 +17,7 @@ public partial class App : Application
     private MainWindowViewModel? _vm;
     private MainWindow? _main;
     private DispatcherTimer? _timer;
+    private readonly CancellationTokenSource _stopping = new();
     private bool _exiting;
     private IDisposable? _instanceLock;
     private FileSystemWatcher? _signalWatcher;
@@ -98,11 +99,21 @@ public partial class App : Application
         else if (!TrayIsReliable) { _main.Show(); _main.WindowState = WindowState.Minimized; }
         splash?.Close();
 
+        _ = RunTelegramAsync(_vm.Telegram);
+
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _timer.Tick += async (_, _) => await SafeTick();
         _timer.Start();
         if (!showWindow) await _vm.Automation.RunAtSignInAsync();
         await SafeTick();
+    }
+
+    /// <summary>Listens for Telegram commands and button taps (handled on the UI thread, like everything else).</summary>
+    private async Task RunTelegramAsync(TelegramService telegram)
+    {
+        try { await telegram.RunAsync(_stopping.Token); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { System.Diagnostics.Trace.WriteLine("Telegram loop stopped: " + ex); }
     }
 
     private async Task SafeTick()
@@ -180,6 +191,7 @@ public partial class App : Application
     {
         _exiting = true;
         _timer?.Stop();
+        _stopping.Cancel();
         _signalWatcher?.Dispose();
         _instanceLock?.Dispose();
         desktop.Shutdown();

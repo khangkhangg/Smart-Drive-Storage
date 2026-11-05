@@ -23,7 +23,10 @@ public partial class SettingsViewModel : ObservableObject
         quietStart = quietHoursEnabled ? qs : 22;
         quietEnd = int.TryParse(_s.Get(SettingKeys.QuietEndHour), out var qe) ? qe : 7;
         _loading = false;
+        Telegram = new TelegramSettingsViewModel(shell);
     }
+
+    public TelegramSettingsViewModel Telegram { get; }
 
     public IReadOnlyList<int> Hours { get; } = Enumerable.Range(0, 24).ToList();
     public string Version => $"Miu Smart Storage v{Services.AppInfo.Version}";

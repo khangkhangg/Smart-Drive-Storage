@@ -51,6 +51,39 @@
         </StackPanel>
       </Border>
 
+      <Border Classes="card" DataContext="{Binding Telegram}" x:DataType="vm:TelegramSettingsViewModel">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Telegram" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Get alerts on your phone with buttons like Clean now and Snooze, and send commands such as /status. From Telegram, Miu only moves Safe items to the Recycle Bin, after you confirm, and you can undo it." />
+          <StackPanel Spacing="8" IsVisible="{Binding IsNotPaired}">
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="1. In Telegram, talk to @BotFather, send /newbot and copy the token it gives you.  2. Paste it here and press Connect.  3. Send the pairing code to your bot." />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Text="{Binding Token}" PasswordChar="•" Watermark="123456789:AA…" Width="380" />
+              <Button Classes="primary" Content="Connect" Command="{Binding ConnectCommand}" />
+            </StackPanel>
+            <Border Background="#EEF4FB" CornerRadius="8" Padding="12,10" IsVisible="{Binding IsPairing}">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding PairingCode}" FontSize="26" FontWeight="SemiBold" LetterSpacing="4" Foreground="{StaticResource MiuAccent}" />
+                <TextBlock Text="{Binding Instruction}" TextWrapping="Wrap" FontSize="13" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel Spacing="8" IsVisible="{Binding IsPaired}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Send alerts to Telegram" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding SendAlerts}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="secondary" Content="Send a test message" Command="{Binding SendTestCommand}" />
+              <Button Content="Unpair" Command="{Binding UnpairCommand}" Background="Transparent" Foreground="#A4262C" />
+            </StackPanel>
+          </StackPanel>
+          <TextBlock Classes="muted" Text="{Binding Status}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
       <TextBlock Classes="caption" Text="{Binding Version}" />
     </StackPanel>
   </ScrollViewer>

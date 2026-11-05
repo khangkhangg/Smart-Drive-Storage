@@ -23,7 +23,9 @@ public class ScreenshotTests
         try
         {
             var trash = Path.Combine(Path.GetDirectoryName(root)!, "Trash"); // never the real Recycle Bin
-            var vm = new MainWindowViewModel(AppServices.Create(":memory:", new Miu.Platform.Portable.FreedesktopTrash(trash)));
+            var vm = new MainWindowViewModel(
+                AppServices.Create(":memory:", new Miu.Platform.Portable.FreedesktopTrash(trash), secrets: new TelegramServiceTests.MemorySecrets()),
+                telegramApi: _ => new TelegramServiceTests.FakeTelegram());
             var window = new MainWindow { DataContext = vm, Width = 1360, Height = 860 };
             window.Show();
             await vm.Analyze.ScanPathAsync(root);
@@ -94,7 +96,11 @@ public class ScreenshotTests
             vm.Automations.Editor.OlderThanDays = 90;
             Save(window, Path.Combine(outDir, "automations.png"));
             vm.Navigate(vm.Settings);
+            vm.Settings.Telegram.Token = "123456789:AAExampleToken";
+            await vm.Settings.Telegram.ConnectCommand.ExecuteAsync(null);
+            window.Height = 1100;
             Save(window, Path.Combine(outDir, "settings.png"));
+            window.Height = 860;
             var toast = new ToastWindow(new MiuNotification("Downloads tidy",
                 "12 items (3.4 GB) in Downloads can be cleaned.",
                 [new NotificationAction("Review", () => Task.CompletedTask), new NotificationAction("Later", () => Task.CompletedTask)]));

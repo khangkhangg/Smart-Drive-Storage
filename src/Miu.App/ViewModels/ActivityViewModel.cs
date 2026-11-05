@@ -15,7 +15,7 @@ public partial class ActivityRow(MainWindowViewModel shell, ActionRecord action)
         : $"Docker removed {string.Join(", ", action.Items.Take(1).Select(i => i.OriginalPath))}{(action.Items.Count > 1 ? $" and {action.Items.Count - 1} more" : "")} (can't be undone)";
     public string ItemsText => string.Join(", ", action.Items.Take(3).Select(i => Path.GetFileName(i.OriginalPath)))
                                + (action.Items.Count > 3 ? $" and {action.Items.Count - 3} more" : "");
-    public string OriginText => action.Origin switch { "quick-clean" => "Quick Clean", "dev-project" => "Dev projects", "docker" => "Docker", _ => "Cleanup cart" };
+    public string OriginText => action.Origin switch { "quick-clean" => "Quick Clean", "dev-project" => "Dev projects", "docker" => "Docker", "telegram" => "Telegram", "auto" => "Automation", _ => "Cleanup cart" };
     public bool Undone => action.Undone;
     public bool CanUndo => action.Kind == "recycle" && !action.Undone;
 
