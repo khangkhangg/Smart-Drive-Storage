@@ -37,13 +37,138 @@ public partial class AnalyzeViewModel : ObservableObject
     public bool SelectedInCart => Selected is { } s && _services.Cart.Contains(s.FullPath);
     public bool CanAddSelected => Selected is { } s && s.Verdict.Verdict != Miu.Core.Rules.Verdict.Protected && !SelectedInCart;
 
-    partial void OnSelectedChanged(NodeItemViewModel? value) => CartChanged();
+    partial void OnSelectedChanged(NodeItemViewModel? value)
+    {
+        CartChanged();
+        UpdateExplanation(value);
+        if (value is null || !SelectedItems.Contains(value)) SetSelection(value is null ? [] : [value]);
+    }
+
+    // ---------- What is this? ----------
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasExplanation))] private ExplanationViewModel? explanation;
+    public bool HasExplanation => Explanation is not null;
+
+    private void UpdateExplanation(NodeItemViewModel? item)
+    {
+        if (item is null) { Explanation = null; return; }
+        var e = _services.Explainer.Find(item.FullPath, item.Name, item.IsDir,
+            childExists: n => item.IsDir && AnyEntry(item.FullPath, n),
+            siblingExists: n => Path.GetDirectoryName(item.FullPath) is { } dir && AnyEntry(dir, n));
+        Explanation = e is null ? null : new ExplanationViewModel(e, item.FullPath, item.Name, item.IsDir);
+        if (Explanation is { IsWorktree: true } card) _ = card.CheckGitAsync(_services.NewGit());
+    }
+
+    private static bool AnyEntry(string dir, string pattern)
+    {
+        try { return Directory.EnumerateFileSystemEntries(dir, pattern).Any(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return false; }
+    }
+
+    /// <summary>A web search for the selected item's name (never its path).</summary>
+    [RelayCommand]
+    private void SearchWeb(NodeItemViewModel? item)
+    {
+        item ??= Selected;
+        if (item is null) return;
+        var e = _services.Explainer.Find(item.FullPath, item.Name, item.IsDir);
+        ShellIntegration.Open(ExplanationViewModel.SearchUrlFor(Miu.Core.Explain.Explainer.SearchQuery(item.Name, item.IsDir, e)));
+    }
+
+    // ---------- Several selected ----------
+
+    public ObservableCollection<NodeItemViewModel> SelectedItems { get; } = [];
+    public bool IsMultiSelection => SelectedItems.Count > 1;
+    public bool IsSingleSelection => HasSelection && !IsMultiSelection;
+    public string MultiTitle => $"{SelectedItems.Count:N0} items selected";
+    public string MultiSizeText => SizeFormatter.Format(SelectedItems.Sum(i => i.Size));
+    public string MultiNote
+    {
+        get
+        {
+            var addable = SelectedItems.Count(CanAddMany);
+            var inCart = SelectedItems.Count(i => _services.Cart.Contains(i.FullPath));
+            var held = SelectedItems.Count - addable - inCart;
+            var parts = new List<string>();
+            if (inCart > 0) parts.Add($"{inCart} already in the cart");
+            if (held > 0) parts.Add($"{held} you keep or Miu protects (left out)");
+            return parts.Count == 0 ? "Ctrl-click or Shift-click to change the selection. Space adds them to the cart." : string.Join(" · ", parts) + ".";
+        }
+    }
+    public string AddSelectedText => SelectedItems.Count(CanAddMany) is var n && n > 0
+        ? $"Add {n:N0} to cleanup cart ({SizeFormatter.Format(SelectedItems.Where(CanAddMany).Sum(i => i.Size))})"
+        : "Nothing to add";
+
+    /// <summary>Called by the list when its selection changes (Ctrl/Shift-click).</summary>
+    public void SetSelection(IEnumerable<NodeItemViewModel> items)
+    {
+        var list = items.Distinct().ToList();
+        if (list.SequenceEqual(SelectedItems)) return;
+        SelectedItems.Clear();
+        foreach (var i in list) SelectedItems.Add(i);
+        SelectionChanged();
+    }
+
+    private void SelectionChanged()
+    {
+        OnPropertyChanged(nameof(IsMultiSelection));
+        OnPropertyChanged(nameof(IsSingleSelection));
+        OnPropertyChanged(nameof(MultiTitle));
+        OnPropertyChanged(nameof(MultiSizeText));
+        OnPropertyChanged(nameof(MultiNote));
+        OnPropertyChanged(nameof(AddSelectedText));
+        AddSelectedToCartCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Several at once: things you keep (or Miu protects) are left out.</summary>
+    private bool CanAddMany(NodeItemViewModel item) =>
+        CanAdd(item) && item.Verdict.Verdict != Miu.Core.Rules.Verdict.Keep;
+
+    private IReadOnlyList<NodeItemViewModel> Chosen => SelectedItems.Count > 0 ? SelectedItems : Selected is { } s ? [s] : [];
+
+    private bool CanAddChosen() => Chosen.Any(i => SelectedItems.Count > 1 ? CanAddMany(i) : CanAdd(i));
+
+    [RelayCommand(CanExecute = nameof(CanAddChosen))]
+    private void AddSelectedToCart()
+    {
+        var many = Chosen.Count > 1;
+        foreach (var item in Chosen.ToList())
+            if (many ? CanAddMany(item) : CanAdd(item))
+                _services.Cart.Add(new Miu.Core.Cleanup.CartItem(item.FullPath, item.Name, item.Size, item.Verdict.Verdict, item.Reason));
+    }
+
+    public static string RevealLabel => OperatingSystem.IsWindows() ? "Show in Explorer" : OperatingSystem.IsMacOS() ? "Show in Finder" : "Show in folder";
+
+    /// <summary>Opens a folder in Miu, or a file in its own app.</summary>
+    [RelayCommand]
+    private void OpenItem(NodeItemViewModel? item)
+    {
+        item ??= Selected;
+        if (item is null) return;
+        if (item.IsDir) ShowNode(item.Id);
+        else ShellIntegration.Open(item.FullPath);
+    }
+
+    /// <summary>Set by the view: shows the Quick preview window for an item.</summary>
+    public Action<PreviewContent>? ShowPreview { get; set; }
+
+    [RelayCommand]
+    private void Preview(NodeItemViewModel? item)
+    {
+        item ??= Selected;
+        if (item is null) return;
+        var children = item.IsDir && Session is { } s
+            ? s.Tree.Children(item.Id).Take(12).Select(c => (s.Tree.Name(c), s.Tree.Size(c), s.Tree.IsDir(c))).ToList()
+            : null;
+        ShowPreview?.Invoke(PreviewContent.For(item.FullPath, item.Name, item.IsDir, item.Size, item.ModifiedText, Explanation?.Title, children));
+    }
 
     private void CartChanged()
     {
         OnPropertyChanged(nameof(SelectedInCart));
         OnPropertyChanged(nameof(CanAddSelected));
         AddToCartCommand.NotifyCanExecuteChanged();
+        SelectionChanged();
     }
 
     private bool CanAdd(NodeItemViewModel? item) =>
@@ -85,7 +210,7 @@ public partial class AnalyzeViewModel : ObservableObject
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsIdle))] private bool isScanning;
     [ObservableProperty] private string progressText = "Pick a drive or folder and press Scan.";
     [ObservableProperty] private string totalText = "";
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSelection))] private NodeItemViewModel? selected;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSelection), nameof(IsSingleSelection))] private NodeItemViewModel? selected;
     [ObservableProperty] private bool hasResult;
 
     public bool IsIdle => !IsScanning;
@@ -220,17 +345,21 @@ public partial class AnalyzeViewModel : ObservableObject
     private void Teach(Miu.Core.Learning.DecisionAction action)
     {
         if (Selected is not { } item || Session is null) return;
-        if (item.Verdict.Verdict == Miu.Core.Rules.Verdict.Protected) return;
-        _shell.Learning.Teach(item.FullPath, item.IsDir, action, SelectedReason, Session);
+        var targets = Chosen.Where(i => i.Verdict.Verdict != Miu.Core.Rules.Verdict.Protected).ToList();
+        if (targets.Count == 0) return;
+        foreach (var t in targets) _shell.Learning.Teach(t.FullPath, t.IsDir, action, SelectedReason, Session);
         SelectedReason = null;
+        var what = targets.Count == 1 ? targets[0].Name : $"these {targets.Count} items";
         RefreshCurrent();
         _shell.OnScanCompleted(Session);
         _shell.Rules.Load();
         _shell.Notice = new NoticeViewModel(_shell, action == Miu.Core.Learning.DecisionAction.Keep
-            ? $"Got it. Miu will keep {item.Name} and never suggest it."
-            : $"Got it. Miu will treat {item.Name} as safe to delete.", "", 0);
+            ? $"Got it. Miu will keep {what} and never suggest it."
+            : $"Got it. Miu will treat {what} as safe to delete.", "", 0);
     }
     public bool HasSelection => Selected is not null;
+
+
 
     [RelayCommand]
     private async Task Scan()

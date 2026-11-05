@@ -227,6 +227,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void OnScanCompleted(ScanSession session)
     {
+        // Things deleted outside Miu since they went into the cart leave it.
+        Services.Cart.Refresh([], p => File.Exists(p) || Directory.Exists(p));
         Home.Update(session);
         DevProjects.Update(session);
     }

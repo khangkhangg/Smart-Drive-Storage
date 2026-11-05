@@ -56,6 +56,25 @@ public sealed class CleanupCart(PathStyle style)
         if (_items.RemoveAll(i => set.Any(p => Same(i.Path, p) || IsInside(i.Path, p))) > 0) Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// After a clean: drops items that no longer exist, and makes items smaller by what was removed from inside them
+    /// (for example a worktree in the cart whose build folder was just cleaned).
+    /// </summary>
+    public void Refresh(IEnumerable<(string Path, long Bytes)> removed, Func<string, bool> exists)
+    {
+        var gone = removed.ToList();
+        var changed = _items.RemoveAll(i => !exists(i.Path)) > 0;
+        for (var n = 0; n < _items.Count; n++)
+        {
+            var item = _items[n];
+            var freed = gone.Where(g => IsInside(g.Path, item.Path)).Sum(g => g.Bytes);
+            if (freed <= 0) continue;
+            _items[n] = item with { Bytes = Math.Max(0, item.Bytes - freed) };
+            changed = true;
+        }
+        if (changed) Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Clear()
     {
         if (_items.Count == 0) return;

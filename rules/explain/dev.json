@@ -1,0 +1,981 @@
+{
+  "entries": [
+    {
+      "id": "git-worktree",
+      "match": {
+        "path": "**/{.claude/worktrees,.worktrees,worktrees}/*",
+        "isDir": true
+      },
+      "title": "Git worktree (extra checkout of a project)",
+      "what": "A second working copy of the same git project, checked out on its own branch, next to the main one. Tools like Claude Code create one per parallel session (in .claude/worktrees) so sessions don't step on each other. You can also make them yourself with \"git worktree add\".",
+      "safety": "Careful",
+      "safetyText": "The copy's own files are cheap to recreate, but its branch may have work that isn't merged or pushed anywhere. Miu checks this with git before cleaning.",
+      "whyBig": "Each copy has its own node_modules, build output and caches, so a project that is 15 GB with dependencies costs another 15 GB per worktree.",
+      "howTo": [
+        "Make sure the branch is merged or pushed (Miu shows the branch and whether it's pushed when git is installed).",
+        "From the main project folder, remove it with git, which also tidies git's own records.",
+        "If you already deleted the folder by hand, run the prune command so git forgets it.",
+        "Only want the space back but keep the worktree? Clean its node_modules, build output and caches instead: they're rebuildable."
+      ],
+      "commands": [
+        {
+          "label": "Remove a worktree",
+          "text": "git worktree remove \"<path>\""
+        },
+        {
+          "label": "Forget deleted worktrees",
+          "text": "git worktree prune"
+        },
+        {
+          "label": "List worktrees",
+          "text": "git worktree list"
+        }
+      ],
+      "requiresChildMarker": [
+        ".git"
+      ],
+      "search": "git worktree remove what is a worktree",
+      "priority": 900
+    },
+    {
+      "id": "git-dir",
+      "match": {
+        "names": [
+          ".git"
+        ],
+        "isDir": true
+      },
+      "title": "Git repository data (.git)",
+      "what": "The complete history of a git project: every commit, branch and stash. It's what makes the folder a git repository.",
+      "safety": "Never",
+      "safetyText": "Deleting it erases the project's history, branches and any commits that were never pushed. Don't delete it to save space.",
+      "whyBig": "Projects with big binary files in their history, or many branches, can grow to gigabytes.",
+      "howTo": [
+        "To make it smaller without losing anything, let git compact it.",
+        "Large files in history? Use Git LFS or rewrite history only if you know what you're doing."
+      ],
+      "commands": [
+        {
+          "label": "Compact the repository",
+          "text": "git gc --prune=now"
+        },
+        {
+          "label": "See what's big",
+          "text": "git count-objects -vH"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "git-lfs",
+      "match": {
+        "path": "**/.git/lfs",
+        "isDir": true
+      },
+      "title": "Git LFS objects",
+      "what": "Large files (images, videos, models) stored by Git Large File Storage, outside the normal history.",
+      "safety": "UseTool",
+      "safetyText": "Old versions can be pruned safely with git lfs; files you still have checked out are kept.",
+      "howTo": [
+        "Run git lfs prune in the project to remove old local copies that are also on the server."
+      ],
+      "commands": [
+        {
+          "label": "Prune old LFS files",
+          "text": "git lfs prune"
+        }
+      ],
+      "priority": 950
+    },
+    {
+      "id": "node-modules",
+      "match": {
+        "names": [
+          "node_modules"
+        ],
+        "isDir": true
+      },
+      "title": "node_modules (JavaScript dependencies)",
+      "what": "The packages a JavaScript or TypeScript project downloaded from npm, pnpm, yarn or bun. They're listed in package.json and the lock file, so they can be reinstalled exactly.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt by your package manager. Expect a few minutes and a download next time you work on the project.",
+      "whyBig": "Every project keeps its own copy of every dependency, often 300 MB to several GB, and many small files.",
+      "howTo": [
+        "Remove it (Miu sends it to the Recycle Bin / Trash).",
+        "When you come back to the project, reinstall."
+      ],
+      "commands": [
+        {
+          "label": "Reinstall (npm)",
+          "text": "npm ci"
+        },
+        {
+          "label": "Reinstall (pnpm)",
+          "text": "pnpm install"
+        },
+        {
+          "label": "Reinstall (yarn)",
+          "text": "yarn install"
+        },
+        {
+          "label": "Reinstall (bun)",
+          "text": "bun install"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "next-build",
+      "match": {
+        "names": [
+          ".next"
+        ],
+        "isDir": true
+      },
+      "title": "Next.js build output (.next)",
+      "what": "Compiled pages, server bundles and the build cache from \"next build\" or \"next dev\".",
+      "safety": "Safe",
+      "safetyText": "Recreated the next time you run the dev server or build.",
+      "whyBig": "The build cache keeps compiled versions of every page and image.",
+      "howTo": [
+        "Remove it; run next dev or next build again."
+      ],
+      "commands": [
+        {
+          "label": "Rebuild",
+          "text": "npm run build"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "nuxt-build",
+      "match": {
+        "names": [
+          ".nuxt",
+          ".output"
+        ],
+        "isDir": true
+      },
+      "title": "Nuxt build output (.nuxt / .output)",
+      "what": "Generated files from a Nuxt app's dev server or build.",
+      "safety": "Safe",
+      "safetyText": "Recreated automatically.",
+      "howTo": [
+        "Remove it; it comes back on the next dev or build."
+      ],
+      "priority": 700
+    },
+    {
+      "id": "svelte-kit",
+      "match": {
+        "names": [
+          ".svelte-kit"
+        ],
+        "isDir": true
+      },
+      "title": "SvelteKit generated files (.svelte-kit)",
+      "what": "Types and build output generated by SvelteKit.",
+      "safety": "Safe",
+      "safetyText": "Recreated automatically.",
+      "priority": 800
+    },
+    {
+      "id": "angular-cache",
+      "match": {
+        "path": "**/.angular/cache",
+        "isDir": true
+      },
+      "title": "Angular build cache (.angular/cache)",
+      "what": "Angular CLI's build cache that speeds up rebuilds.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt on the next build (the first one is slower).",
+      "commands": [
+        {
+          "label": "Clear it the official way",
+          "text": "ng cache clean"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "turbo-cache",
+      "match": {
+        "names": [
+          ".turbo",
+          ".nx"
+        ],
+        "isDir": true
+      },
+      "title": "Turborepo / Nx cache",
+      "what": "Cached task results (builds, tests) so monorepo tools can skip work.",
+      "safety": "Safe",
+      "safetyText": "Only makes the next run slower.",
+      "commands": [
+        {
+          "label": "Clear (Nx)",
+          "text": "npx nx reset"
+        }
+      ],
+      "priority": 700
+    },
+    {
+      "id": "parcel-cache",
+      "match": {
+        "names": [
+          ".parcel-cache",
+          ".vite",
+          ".eslintcache"
+        ]
+      },
+      "title": "Parcel / Vite / ESLint caches",
+      "what": "Build-tool caches (.parcel-cache, node_modules/.vite, .eslintcache).",
+      "safety": "Safe",
+      "safetyText": "Rebuilt automatically.",
+      "priority": 700
+    },
+    {
+      "id": "js-dist",
+      "match": {
+        "names": [
+          "dist",
+          "build",
+          "out"
+        ],
+        "isDir": true
+      },
+      "title": "Build output (dist / build / out)",
+      "what": "Files your project's build step produced (bundled JavaScript, compiled code, packaged apps).",
+      "safety": "Careful",
+      "safetyText": "Usually rebuildable, but some projects keep hand-written files or releases here. Miu only calls it Safe when the project has a build script and git ignores the folder.",
+      "howTo": [
+        "Check it isn't tracked in git (Miu does this).",
+        "Remove it and run the build again when needed."
+      ],
+      "commands": [
+        {
+          "label": "Rebuild",
+          "text": "npm run build"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "package.json"
+      ],
+      "priority": 600
+    },
+    {
+      "id": "coverage",
+      "match": {
+        "names": [
+          "coverage",
+          ".nyc_output",
+          "htmlcov"
+        ],
+        "isDir": true
+      },
+      "title": "Test coverage reports",
+      "what": "HTML and data files produced by test coverage tools (coverage, .nyc_output, htmlcov).",
+      "safety": "Safe",
+      "safetyText": "Recreated by running tests with coverage.",
+      "priority": 600
+    },
+    {
+      "id": "pycache",
+      "match": {
+        "names": [
+          "__pycache__"
+        ],
+        "isDir": true
+      },
+      "title": "Python bytecode cache (__pycache__)",
+      "what": "Compiled .pyc files Python writes next to your code to start faster.",
+      "safety": "Safe",
+      "safetyText": "Python recreates them automatically.",
+      "priority": 800
+    },
+    {
+      "id": "python-venv",
+      "match": {
+        "names": [
+          ".venv",
+          "venv",
+          "env",
+          ".env"
+        ],
+        "isDir": true
+      },
+      "title": "Python virtual environment (.venv / venv / env)",
+      "what": "A private copy of Python plus the packages a project installed with pip, uv or poetry.",
+      "safety": "Safe",
+      "safetyText": "Can be recreated from requirements.txt / pyproject.toml. Miu only calls it Safe when it really is a venv (it contains pyvenv.cfg).",
+      "whyBig": "Data-science packages (torch, tensorflow, CUDA libraries) can be several GB each.",
+      "howTo": [
+        "Remove it.",
+        "Recreate it when you need the project again."
+      ],
+      "commands": [
+        {
+          "label": "Recreate (pip)",
+          "text": "python -m venv .venv && .venv/bin/pip install -r requirements.txt"
+        },
+        {
+          "label": "Recreate (uv)",
+          "text": "uv sync"
+        },
+        {
+          "label": "Recreate (poetry)",
+          "text": "poetry install"
+        }
+      ],
+      "requiresChildMarker": [
+        "pyvenv.cfg"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "py-tool-caches",
+      "match": {
+        "names": [
+          ".pytest_cache",
+          ".mypy_cache",
+          ".ruff_cache",
+          ".tox",
+          ".hypothesis"
+        ],
+        "isDir": true
+      },
+      "title": "Python tool caches",
+      "what": "Caches from pytest, mypy, ruff, tox and similar tools.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt on the next run.",
+      "priority": 700
+    },
+    {
+      "id": "pip-cache",
+      "match": {
+        "path": "**/{pip/cache,pip/Cache,.cache/pip,uv/cache,.cache/uv}",
+        "isDir": true
+      },
+      "title": "pip / uv download cache",
+      "what": "Downloaded Python packages kept so reinstalls are fast.",
+      "safety": "UseTool",
+      "safetyText": "Safe to clear; packages are downloaded again when needed.",
+      "commands": [
+        {
+          "label": "Clear pip's cache",
+          "text": "pip cache purge"
+        },
+        {
+          "label": "Clear uv's cache",
+          "text": "uv cache clean"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "conda-pkgs",
+      "match": {
+        "path": "**/{anaconda3,miniconda3,.conda,miniforge3}/pkgs",
+        "isDir": true
+      },
+      "title": "Conda package cache (pkgs)",
+      "what": "Downloaded conda packages and unpacked copies kept after installs.",
+      "safety": "UseTool",
+      "safetyText": "Let conda remove what no environment uses.",
+      "whyBig": "Every version of every package you ever installed can stay here.",
+      "commands": [
+        {
+          "label": "Clean conda",
+          "text": "conda clean --all"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "rust-target",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "title": "Rust build output (target)",
+      "what": "Compiled crates and binaries from cargo build / cargo test.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt by cargo (it can take a while for big projects).",
+      "whyBig": "Debug and release builds of every dependency, per project: often 2-20 GB.",
+      "commands": [
+        {
+          "label": "Clean the project",
+          "text": "cargo clean"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "Cargo.toml"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "cargo-registry",
+      "match": {
+        "path": "**/.cargo/registry",
+        "isDir": true
+      },
+      "title": "Cargo download cache",
+      "what": "Crates downloaded by cargo, shared by all your Rust projects.",
+      "safety": "UseTool",
+      "safetyText": "Safe to trim; cargo downloads crates again when needed.",
+      "commands": [
+        {
+          "label": "Trim with cargo-cache",
+          "text": "cargo install cargo-cache && cargo cache --autoclean"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "java-target",
+      "match": {
+        "names": [
+          "target"
+        ],
+        "isDir": true
+      },
+      "title": "Java / Maven build output (target)",
+      "what": "Compiled classes and packaged jars from Maven.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt by mvn package.",
+      "commands": [
+        {
+          "label": "Clean",
+          "text": "mvn clean"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "pom.xml"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "gradle-build",
+      "match": {
+        "names": [
+          "build",
+          ".gradle"
+        ],
+        "isDir": true
+      },
+      "title": "Gradle build output (build / .gradle)",
+      "what": "Compiled output and the project-local Gradle cache.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt by Gradle.",
+      "commands": [
+        {
+          "label": "Clean",
+          "text": "./gradlew clean"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "settings.gradle.kts"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "gradle-caches",
+      "match": {
+        "path": "**/.gradle/caches",
+        "isDir": true
+      },
+      "title": "Gradle global caches (~/.gradle/caches)",
+      "what": "Downloaded libraries and build caches shared by all Gradle projects.",
+      "safety": "Safe",
+      "safetyText": "Gradle downloads what it needs again (first builds are slower). Stop Gradle daemons first.",
+      "whyBig": "Every library version every project ever used.",
+      "howTo": [
+        "Stop running Gradle daemons.",
+        "Remove the caches folder."
+      ],
+      "commands": [
+        {
+          "label": "Stop daemons",
+          "text": "./gradlew --stop"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "maven-repo",
+      "match": {
+        "path": "**/.m2/repository",
+        "isDir": true
+      },
+      "title": "Maven local repository (~/.m2/repository)",
+      "what": "Every library Maven downloaded for your projects.",
+      "safety": "Safe",
+      "safetyText": "Re-downloaded when a project needs it (slower first build).",
+      "commands": [
+        {
+          "label": "Purge unused (per project)",
+          "text": "mvn dependency:purge-local-repository"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "dotnet-bin-obj",
+      "match": {
+        "names": [
+          "bin",
+          "obj"
+        ],
+        "isDir": true
+      },
+      "title": ".NET build output (bin / obj)",
+      "what": "Compiled assemblies and intermediate files from dotnet build or Visual Studio.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt by the next build.",
+      "commands": [
+        {
+          "label": "Clean",
+          "text": "dotnet clean"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "*.csproj",
+        "*.fsproj",
+        "*.vbproj",
+        "*.sln"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "nuget-packages",
+      "match": {
+        "path": "**/{.nuget/packages,NuGet/v3-cache}",
+        "isDir": true
+      },
+      "title": "NuGet package cache",
+      "what": "Packages downloaded by dotnet and Visual Studio, shared by all .NET projects.",
+      "safety": "UseTool",
+      "safetyText": "Use dotnet to clear it safely.",
+      "whyBig": "Every version of every package ever restored.",
+      "commands": [
+        {
+          "label": "Clear all NuGet caches",
+          "text": "dotnet nuget locals all --clear"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "vs-cache",
+      "match": {
+        "names": [
+          ".vs",
+          "ipch"
+        ],
+        "isDir": true
+      },
+      "title": "Visual Studio cache (.vs / ipch)",
+      "what": "Visual Studio's per-solution cache: IntelliSense databases, browse info and settings.",
+      "safety": "Safe",
+      "safetyText": "Visual Studio rebuilds it (window layout for that solution resets). Close Visual Studio first.",
+      "priority": 700
+    },
+    {
+      "id": "go-build",
+      "match": {
+        "path": "**/{.cache,Caches,AppData/Local}/go-build",
+        "isDir": true
+      },
+      "title": "Go build cache",
+      "what": "Compiled packages Go keeps to speed up builds.",
+      "safety": "UseTool",
+      "safetyText": "Safe; use go to clear it.",
+      "commands": [
+        {
+          "label": "Clear",
+          "text": "go clean -cache"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "go-mod",
+      "match": {
+        "path": "**/go/pkg/mod",
+        "isDir": true
+      },
+      "title": "Go module cache (go/pkg/mod)",
+      "what": "Downloaded Go modules. Files are read-only, so deleting by hand often fails.",
+      "safety": "UseTool",
+      "safetyText": "Use go to clear it (it fixes the read-only permissions).",
+      "commands": [
+        {
+          "label": "Clear",
+          "text": "go clean -modcache"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "composer-vendor",
+      "match": {
+        "names": [
+          "vendor"
+        ],
+        "isDir": true
+      },
+      "title": "PHP Composer dependencies (vendor)",
+      "what": "Packages installed by Composer for a PHP project.",
+      "safety": "Safe",
+      "safetyText": "Reinstalled from composer.lock.",
+      "commands": [
+        {
+          "label": "Reinstall",
+          "text": "composer install"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "composer.json"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "ruby-bundle",
+      "match": {
+        "path": "**/vendor/bundle",
+        "isDir": true
+      },
+      "title": "Ruby gems (vendor/bundle)",
+      "what": "Gems installed for a Ruby project.",
+      "safety": "Safe",
+      "safetyText": "Reinstalled from Gemfile.lock.",
+      "commands": [
+        {
+          "label": "Reinstall",
+          "text": "bundle install"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "dart-tool",
+      "match": {
+        "names": [
+          ".dart_tool"
+        ],
+        "isDir": true
+      },
+      "title": "Dart / Flutter build files (.dart_tool / build)",
+      "what": "Generated files and build output of a Flutter or Dart project.",
+      "safety": "Safe",
+      "safetyText": "Rebuilt on the next run.",
+      "commands": [
+        {
+          "label": "Clean",
+          "text": "flutter clean"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "pods",
+      "match": {
+        "names": [
+          "Pods"
+        ],
+        "isDir": true
+      },
+      "title": "CocoaPods (Pods)",
+      "what": "iOS/macOS libraries installed by CocoaPods.",
+      "safety": "Safe",
+      "safetyText": "Reinstalled from Podfile.lock.",
+      "commands": [
+        {
+          "label": "Reinstall",
+          "text": "pod install"
+        }
+      ],
+      "requiresSiblingMarker": [
+        "Podfile"
+      ],
+      "priority": 800
+    },
+    {
+      "id": "xcode-deriveddata",
+      "match": {
+        "path": "**/Library/Developer/Xcode/DerivedData*",
+        "isDir": true
+      },
+      "title": "Xcode DerivedData",
+      "what": "Build products, indexes and logs Xcode keeps for every project you opened.",
+      "safety": "Safe",
+      "safetyText": "Xcode rebuilds it (the next build and indexing take longer). Close Xcode first.",
+      "whyBig": "Old projects you no longer open keep their data here forever.",
+      "howTo": [
+        "Quit Xcode.",
+        "Remove the project folders inside DerivedData (or all of it)."
+      ],
+      "commands": [
+        {
+          "label": "Remove all",
+          "text": "rm -rf ~/Library/Developer/Xcode/DerivedData/*"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "xcode-devicesupport",
+      "match": {
+        "path": "**/Library/Developer/Xcode/*DeviceSupport/*",
+        "isDir": true
+      },
+      "title": "Xcode device support files",
+      "what": "Debug symbols copied from each iPhone/iPad/Watch OS version you connected.",
+      "safety": "Careful",
+      "safetyText": "Safe for OS versions you no longer debug on; Xcode copies them again when you connect such a device.",
+      "priority": 900
+    },
+    {
+      "id": "ios-simulators",
+      "match": {
+        "path": "**/Library/Developer/CoreSimulator/Devices",
+        "isDir": true
+      },
+      "title": "iOS Simulator devices",
+      "what": "Simulator devices and their apps and data.",
+      "safety": "UseTool",
+      "safetyText": "Let Xcode remove simulators for OS versions you no longer have.",
+      "commands": [
+        {
+          "label": "Delete unavailable simulators",
+          "text": "xcrun simctl delete unavailable"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "android-avd",
+      "match": {
+        "path": "**/.android/avd",
+        "isDir": true
+      },
+      "title": "Android emulator images (AVD)",
+      "what": "Virtual Android devices you created in Android Studio, each with its own disk image.",
+      "safety": "Careful",
+      "safetyText": "Each device's data (installed apps, logins) is lost. Remove unused devices from Android Studio's Device Manager.",
+      "whyBig": "Each emulator is a full Android system image, often 2-10 GB.",
+      "howTo": [
+        "Open Android Studio › Device Manager.",
+        "Delete devices you don't use."
+      ],
+      "priority": 800
+    },
+    {
+      "id": "android-sdk-images",
+      "match": {
+        "path": "**/{Android/Sdk,Android/sdk,Library/Android/sdk}/system-images",
+        "isDir": true
+      },
+      "title": "Android SDK system images",
+      "what": "Android versions downloaded for emulators.",
+      "safety": "UseTool",
+      "safetyText": "Remove versions you don't need from the SDK Manager.",
+      "howTo": [
+        "Android Studio › Settings › Android SDK › SDK Platforms: untick old versions."
+      ],
+      "priority": 800
+    },
+    {
+      "id": "terraform",
+      "match": {
+        "names": [
+          ".terraform"
+        ],
+        "isDir": true
+      },
+      "title": ".terraform (Terraform plugins)",
+      "what": "Provider plugins and modules Terraform downloaded for this configuration.",
+      "safety": "Safe",
+      "safetyText": "Downloaded again with terraform init.",
+      "commands": [
+        {
+          "label": "Re-download",
+          "text": "terraform init"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "npm-cache",
+      "match": {
+        "path": "**/{npm-cache,.npm,.pnpm-store,pnpm/store,Yarn/Cache,.yarn/berry/cache,.cache/yarn,.bun/install/cache}",
+        "isDir": true
+      },
+      "title": "npm / pnpm / yarn / bun cache",
+      "what": "Shared download caches of JavaScript package managers.",
+      "safety": "UseTool",
+      "safetyText": "Safe to clear with the tool; packages are downloaded again when needed.",
+      "commands": [
+        {
+          "label": "npm",
+          "text": "npm cache clean --force"
+        },
+        {
+          "label": "pnpm",
+          "text": "pnpm store prune"
+        },
+        {
+          "label": "yarn",
+          "text": "yarn cache clean"
+        },
+        {
+          "label": "bun",
+          "text": "bun pm cache rm"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "playwright",
+      "match": {
+        "path": "**/{ms-playwright,.cache/puppeteer,Cypress/Cache}",
+        "isDir": true
+      },
+      "title": "Playwright / Puppeteer / Cypress browsers",
+      "what": "Whole browser builds downloaded for automated testing.",
+      "safety": "Safe",
+      "safetyText": "Downloaded again by the test tool when needed.",
+      "whyBig": "Each browser version is 150-400 MB, and old versions stay after upgrades.",
+      "commands": [
+        {
+          "label": "Reinstall Playwright browsers",
+          "text": "npx playwright install"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "hf-cache",
+      "match": {
+        "path": "**/.cache/huggingface",
+        "isDir": true
+      },
+      "title": "Hugging Face cache",
+      "what": "AI models and datasets downloaded by transformers, diffusers and other Hugging Face tools.",
+      "safety": "UseTool",
+      "safetyText": "Re-downloadable, but models can be huge to fetch again. Remove the ones you no longer use.",
+      "whyBig": "A single model can be 5-100 GB.",
+      "commands": [
+        {
+          "label": "Choose what to delete",
+          "text": "huggingface-cli delete-cache"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "ollama-models",
+      "match": {
+        "path": "**/.ollama/models",
+        "isDir": true
+      },
+      "title": "Ollama models",
+      "what": "Local AI models pulled with ollama.",
+      "safety": "UseTool",
+      "safetyText": "Remove models you don't use with ollama (it also cleans shared layers).",
+      "whyBig": "Each model is 2-70 GB.",
+      "commands": [
+        {
+          "label": "List models",
+          "text": "ollama list"
+        },
+        {
+          "label": "Remove one",
+          "text": "ollama rm <model>"
+        }
+      ],
+      "priority": 800
+    },
+    {
+      "id": "lmstudio-models",
+      "match": {
+        "path": "**/{.lmstudio,.cache/lm-studio}/models",
+        "isDir": true
+      },
+      "title": "LM Studio models",
+      "what": "AI models downloaded in LM Studio.",
+      "safety": "Careful",
+      "safetyText": "Delete unused models from LM Studio's My Models screen.",
+      "priority": 800
+    },
+    {
+      "id": "docker-desktop-disk",
+      "match": {
+        "names": [
+          "docker_data.vhdx",
+          "ext4.vhdx",
+          "Docker.raw",
+          "Docker.qcow2"
+        ],
+        "isDir": false
+      },
+      "title": "Docker Desktop disk image",
+      "what": "The virtual disk holding all your Docker images, containers, volumes and build cache.",
+      "safety": "Never",
+      "safetyText": "Deleting it destroys every container and volume (databases included). Free space from inside Docker instead.",
+      "whyBig": "Images and build cache pile up with every build; the virtual disk grows but never shrinks on its own.",
+      "howTo": [
+        "See what uses space.",
+        "Remove unused images, stopped containers and build cache (Miu's Dev Projects › Docker does this safely).",
+        "On Windows/WSL the file doesn't shrink by itself afterwards: compact it."
+      ],
+      "commands": [
+        {
+          "label": "See usage",
+          "text": "docker system df"
+        },
+        {
+          "label": "Remove unused data",
+          "text": "docker system prune"
+        },
+        {
+          "label": "Compact (Windows, PowerShell as admin)",
+          "text": "wsl --shutdown; Optimize-VHD -Path \"<path to ext4.vhdx>\" -Mode Full"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "wsl-disk",
+      "match": {
+        "path": "**/Packages/*/LocalState/ext4.vhdx",
+        "isDir": false
+      },
+      "title": "WSL Linux disk (ext4.vhdx)",
+      "what": "The virtual disk of a Linux distribution installed with WSL: your Linux home folder, packages and files.",
+      "safety": "Never",
+      "safetyText": "Deleting it deletes that whole Linux installation. Clean up inside Linux, then compact the disk.",
+      "whyBig": "It grows as Linux writes files but doesn't shrink when they're deleted.",
+      "howTo": [
+        "Free space inside Linux (apt clean, remove old files).",
+        "Shut WSL down, then compact the disk."
+      ],
+      "commands": [
+        {
+          "label": "Shut down WSL",
+          "text": "wsl --shutdown"
+        },
+        {
+          "label": "Compact (PowerShell as admin)",
+          "text": "Optimize-VHD -Path \"<path to ext4.vhdx>\" -Mode Full"
+        }
+      ],
+      "priority": 950
+    }
+  ]
+}

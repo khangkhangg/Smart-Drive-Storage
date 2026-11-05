@@ -25,6 +25,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="../../rules/builtin/*.json" Link="rules/builtin/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../rules/explain/*.json" Link="rules/explain/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
   <ItemGroup>

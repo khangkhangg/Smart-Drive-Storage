@@ -33,7 +33,7 @@ public sealed class RuleEngine
 
         foreach (var r in _rules)
             if (Matches(r.Match, f) && Holds(r.Conditions, f))
-                return new VerdictResult(r.Verdict, r.Id, r.Reason, Confidence(r.Source), r.RebuildHint);
+                return new VerdictResult(r.Verdict, r.Id, Fill(r.Reason, f.FullPath), Confidence(r.Source), r.RebuildHint);
 
         return new VerdictResult(Verdict.Review, null, NoMatchReason, 0.5, null);
     }
@@ -96,5 +96,22 @@ public sealed class RuleEngine
         var conds = new object?[] { c.OlderThanDays, c.MinSizeMB, c.ProjectIdleDays, c.RequiresSiblingMarker, c.RequiresChildMarker, c.RequiresGitIgnored }
             .Count(x => x is not null);
         return literal + conds * 10;
+    }
+
+    /// <summary>Fills <c>{project}</c> in a reason: the nearest folder above the item that isn't a tool folder
+    /// (".claude", ".worktrees", "worktrees"), e.g. "Miu Music Player" for ...\Miu Music Player\.claude\worktrees\x.</summary>
+    public static string Fill(string reason, string fullPath)
+    {
+        if (!reason.Contains("{project}", StringComparison.Ordinal)) return reason;
+        var dir = Path.GetDirectoryName(fullPath.Replace('\\', '/').TrimEnd('/'));
+        while (dir is { Length: > 0 })
+        {
+            var name = Path.GetFileName(dir);
+            if (name.Length == 0) break;
+            if (!name.StartsWith('.') && !name.Equals("worktrees", StringComparison.OrdinalIgnoreCase))
+                return reason.Replace("{project}", name, StringComparison.Ordinal);
+            dir = Path.GetDirectoryName(dir);
+        }
+        return reason.Replace("{project}", "a project", StringComparison.Ordinal);
     }
 }

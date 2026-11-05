@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Miu.App.ViewModels"
+        x:Class="Miu.App.Views.PreviewWindow"
+        x:DataType="vm:PreviewContent"
+        Title="{Binding Name, StringFormat='Quick preview · {0}'}"
+        Icon="avares://Miu/Assets/miu-256.png"
+        Width="760" Height="560" MinWidth="360" MinHeight="260"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource MiuContentBg}">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <StackPanel Spacing="2" Margin="0,0,0,12">
+      <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+      <TextBlock Classes="caption" Text="{Binding FullPath}" TextWrapping="Wrap" />
+    </StackPanel>
+    <Border Grid.Row="1" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
+      <Panel>
+        <Image x:Name="Picture" IsVisible="{Binding IsImage}" Stretch="Uniform" />
+        <ScrollViewer IsVisible="{Binding IsText}" HorizontalScrollBarVisibility="Auto">
+          <SelectableTextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="12" />
+        </ScrollViewer>
+        <ScrollViewer IsVisible="{Binding IsDetails}">
+          <ItemsControl ItemsSource="{Binding Facts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String"><SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Panel>
+    </Border>
+    <DockPanel Grid.Row="2" Margin="0,12,0,0">
+      <Button DockPanel.Dock="Right" Classes="secondary" Content="Close" Click="OnClose" IsCancel="True" />
+      <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap"
+                 Text="{Binding Facts[0]}" IsVisible="{Binding !IsDetails}" />
+    </DockPanel>
+  </Grid>
+</Window>

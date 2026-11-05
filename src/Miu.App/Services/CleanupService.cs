@@ -87,6 +87,9 @@ public sealed class CleanupService(AppServices services)
             services.Cart.RemoveWithin(gone);
             session?.RemoveAndRefresh(gone);
         }
+        // Folders in the cart that held what was just cleaned get smaller; anything gone from disk leaves the cart.
+        var cleaned = result.Recycled.Select(r => r.OriginalPath).ToHashSet();
+        services.Cart.Refresh(items.Where(i => cleaned.Contains(i.Path)).Select(i => (i.Path, i.Bytes)), p => File.Exists(p) || Directory.Exists(p));
         return new CleanupOutcome(actionId, result.FreedBytes, result.Recycled.Count, result.Failed, stopped, notStarted);
     }
 

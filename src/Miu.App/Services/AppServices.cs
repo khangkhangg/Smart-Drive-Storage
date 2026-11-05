@@ -84,6 +84,9 @@ public sealed class AppServices : IDisposable
     public IReadOnlyList<Rule> AllRules() => [.. Rules, .. RulesStore.All()];
     public IScanner Scanner { get; }
     public IReadOnlyList<Rule> Rules { get; }
+    /// <summary>The "What is this?" knowledge (rules/explain/*.json).</summary>
+    public Miu.Core.Explain.Explainer Explainer { get; } =
+        Miu.Core.Explain.Explainer.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "rules", "explain"), caseInsensitive: true);
     public ProtectedPathGuard Guard { get; }
     public IRecycleBin Recycler { get; }
     public CleanupCart Cart { get; }

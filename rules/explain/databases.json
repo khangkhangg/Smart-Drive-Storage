@@ -1,0 +1,131 @@
+{
+  "entries": [
+    {
+      "id": "mysql-binlog",
+      "match": {
+        "names": [
+          "binlog.[0-9]*",
+          "mysql-bin.[0-9]*",
+          "*-bin.[0-9]*"
+        ],
+        "isDir": false
+      },
+      "title": "MySQL / MariaDB binary log",
+      "what": "The database's change log: every write is recorded here, used for replication and point-in-time recovery. Files are numbered (binlog.000001, mysql-bin.000002, …) and MySQL keeps an index of them.",
+      "safety": "UseTool",
+      "safetyText": "Don't delete them by hand while MySQL is running: the index still lists them and replication or backups may need them. Let MySQL purge old ones.",
+      "whyBig": "Each file grows up to 1 GB (max_binlog_size) and the default keeps 30 days, so busy development databases collect dozens of gigabytes.",
+      "howTo": [
+        "Connect to MySQL as an admin.",
+        "Purge logs older than a few days (or up to a given file).",
+        "To keep it small automatically, set an expiry time."
+      ],
+      "commands": [
+        {
+          "label": "Purge logs older than 3 days",
+          "text": "PURGE BINARY LOGS BEFORE NOW() - INTERVAL 3 DAY;"
+        },
+        {
+          "label": "Keep only 3 days from now on",
+          "text": "SET PERSIST binlog_expire_logs_seconds = 259200;"
+        },
+        {
+          "label": "Using Docker",
+          "text": "docker exec -it <container> mysql -uroot -p -e \"PURGE BINARY LOGS BEFORE NOW() - INTERVAL 3 DAY;\""
+        }
+      ],
+      "search": "mysql binlog PURGE BINARY LOGS free space",
+      "priority": 900
+    },
+    {
+      "id": "mysql-data",
+      "match": {
+        "names": [
+          "ibdata1",
+          "ib_logfile*",
+          "*.ibd",
+          "ibtmp1",
+          "#innodb_redo",
+          "undo_00*"
+        ]
+      },
+      "title": "MySQL / InnoDB data files",
+      "what": "The actual database: tables, indexes and the transaction log (ibdata1, ib_logfile*, #innodb_redo, *.ibd).",
+      "safety": "Never",
+      "safetyText": "Deleting these destroys or corrupts the database. Drop tables or databases from MySQL instead.",
+      "howTo": [
+        "Find big tables with SQL, then drop or truncate what you don't need.",
+        "To shrink ibdata1 itself, dump and re-import the databases."
+      ],
+      "commands": [
+        {
+          "label": "Largest tables",
+          "text": "SELECT table_schema, table_name, ROUND((data_length+index_length)/1024/1024) AS mb FROM information_schema.tables ORDER BY mb DESC LIMIT 20;"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "postgres-wal",
+      "match": {
+        "names": [
+          "pg_wal",
+          "pg_xlog"
+        ],
+        "isDir": true
+      },
+      "title": "PostgreSQL write-ahead log (pg_wal)",
+      "what": "PostgreSQL's transaction log, needed to recover after a crash.",
+      "safety": "Never",
+      "safetyText": "Deleting WAL files by hand corrupts the database. If it keeps growing, a replication slot or archiving is usually stuck.",
+      "howTo": [
+        "Check for unused replication slots and drop them.",
+        "Let PostgreSQL recycle WAL with a checkpoint."
+      ],
+      "commands": [
+        {
+          "label": "List replication slots",
+          "text": "SELECT slot_name, active FROM pg_replication_slots;"
+        },
+        {
+          "label": "Checkpoint",
+          "text": "CHECKPOINT;"
+        }
+      ],
+      "priority": 900
+    },
+    {
+      "id": "redis-dump",
+      "match": {
+        "names": [
+          "dump.rdb",
+          "appendonly.aof",
+          "appendonlydir"
+        ]
+      },
+      "title": "Redis snapshot (dump.rdb / appendonly.aof)",
+      "what": "Redis's saved copy of its data, loaded on restart.",
+      "safety": "Careful",
+      "safetyText": "Deleting it loses Redis's stored data at the next restart.",
+      "priority": 700
+    },
+    {
+      "id": "db-logs",
+      "match": {
+        "path": "**/{mysql,mariadb,postgres*,mongodb,mysql-data}/**",
+        "names": [
+          "*.log",
+          "general.log",
+          "slow.log",
+          "mongod.log"
+        ],
+        "isDir": false
+      },
+      "title": "Database logs",
+      "what": "Error, slow-query or general logs of MySQL, PostgreSQL or MongoDB.",
+      "safety": "Safe",
+      "safetyText": "Old logs are safe to remove; the database keeps writing a new one. The general log can grow very fast: turn it off if you don't need it.",
+      "priority": 600
+    }
+  ]
+}

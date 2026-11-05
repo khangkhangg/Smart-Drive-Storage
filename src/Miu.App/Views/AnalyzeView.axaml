@@ -59,14 +59,23 @@
     </StackPanel>
 
     <!-- Results -->
-    <Grid ColumnDefinitions="2*,3*,320" IsVisible="{Binding HasResult}">
+    <Grid ColumnDefinitions="2*,3*,Auto,380" IsVisible="{Binding HasResult}">
       <ListBox Classes="rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent"
+               SelectionMode="Multiple" SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
                DoubleTapped="OnRowDoubleTapped" Margin="8,0,0,8" IsVisible="{Binding IsFoldersView}">
         <ListBox.ContextMenu>
           <ContextMenu>
-            <MenuItem Header="Add to cleanup cart" Command="{Binding AddToCartCommand}" CommandParameter="{Binding Selected}" />
-            <MenuItem Header="Open folder" Command="{Binding OpenCommand}" CommandParameter="{Binding Selected}" />
-            <MenuItem Header="Show in folder" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" InputGesture="Enter" />
+            <MenuItem Header="{Binding RevealLabel}" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Search the web for this name" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                      ToolTip.Tip="Opens a Google search for the file or folder name only. The path is never sent." />
+            <Separator />
+            <MenuItem Header="Copy path" Click="OnCopyPath" />
+            <MenuItem Header="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}" InputGesture="Space" />
+            <Separator />
+            <MenuItem Header="Keep — never suggest" Command="{Binding TeachKeepCommand}" />
+            <MenuItem Header="Always OK to delete" Command="{Binding TeachOkCommand}" />
           </ContextMenu>
         </ListBox.ContextMenu>
         <ListBox.ItemTemplate>
@@ -114,7 +123,23 @@
 
       <!-- Largest files -->
       <ListBox Grid.ColumnSpan="2" Classes="rows" ItemsSource="{Binding LargestRows}" SelectedItem="{Binding Selected}" Background="Transparent"
+               SelectionMode="Multiple" SelectionChanged="OnListSelectionChanged" KeyDown="OnListKeyDown"
                Margin="8,0,8,8" IsVisible="{Binding IsLargestView}">
+        <ListBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" InputGesture="Enter" />
+            <MenuItem Header="{Binding RevealLabel}" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+            <MenuItem Header="Search the web for this name" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                      ToolTip.Tip="Opens a Google search for the file or folder name only. The path is never sent." />
+            <Separator />
+            <MenuItem Header="Copy path" Click="OnCopyPath" />
+            <MenuItem Header="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}" InputGesture="Space" />
+            <Separator />
+            <MenuItem Header="Keep — never suggest" Command="{Binding TeachKeepCommand}" />
+            <MenuItem Header="Always OK to delete" Command="{Binding TeachOkCommand}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:NodeItemViewModel">
             <Grid ColumnDefinitions="*,Auto,Auto">
@@ -178,9 +203,24 @@
         </ScrollViewer>
       </DockPanel>
 
-      <Border Grid.Column="2" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,0,0,0">
-        <ScrollViewer Padding="20" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Spacing="16" IsVisible="{Binding HasSelection}">
+      <!-- Drag to make the details panel wider or narrower. -->
+      <GridSplitter Grid.Column="2" Width="6" Background="Transparent" ResizeDirection="Columns" ToolTip.Tip="Drag to resize the details panel" />
+      <Border Grid.Column="3" MinWidth="300" Background="{DynamicResource MiuCardBg}" BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1,0,0,0">
+        <!-- Padding goes inside the scroll area: on the ScrollViewer itself it made content wider than the panel. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <Panel Margin="20">
+        <!-- Several selected -->
+        <StackPanel Spacing="14" IsVisible="{Binding IsMultiSelection}">
+          <TextBlock Text="{Binding MultiTitle}" FontSize="20" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding MultiSizeText}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" Text="{Binding MultiNote}" TextWrapping="Wrap" />
+          <Button Classes="primary" Content="{Binding AddSelectedText}" Command="{Binding AddSelectedToCartCommand}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <TextBlock Text="Teach Miu about all of them" FontWeight="SemiBold" FontSize="13" />
+          <Button Classes="secondary" Content="Keep — never suggest" Command="{Binding TeachKeepCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Classes="secondary" Content="Always OK to delete" Command="{Binding TeachOkCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </StackPanel>
+        <StackPanel Spacing="16" IsVisible="{Binding IsSingleSelection}">
           <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Selected.FullPath}" TextWrapping="Wrap" />
             <TextBlock Text="{Binding Selected.Name}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -201,6 +241,56 @@
               <TextBlock Text="{Binding Selected.RuleText}" Foreground="#5D5D5D" FontSize="11" />
             </StackPanel>
           </Border>
+          <!-- What is this? -->
+          <Border BorderBrush="{DynamicResource MiuBorder}" BorderThickness="1" CornerRadius="8" Padding="14" IsVisible="{Binding HasExplanation}">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="caption" Text="WHAT IS THIS?" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Explanation.Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Explanation.What}" FontSize="13" TextWrapping="Wrap" />
+              <TextBlock Classes="muted" Text="{Binding Explanation.WhyBig, StringFormat='Why it gets big: {0}'}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding Explanation.HasWhyBig}" />
+              <TextBlock Text="{Binding Explanation.GitText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding Explanation.IsWorktree}" />
+              <Border Background="{Binding Explanation.SafetyBg}" CornerRadius="6" Padding="10,8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="{Binding Explanation.SafetyLabel}" Foreground="{Binding Explanation.SafetyFg}" FontWeight="Bold" FontSize="13" />
+                  <TextBlock Text="{Binding Explanation.SafetyText}" Foreground="#2B2B2B" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+              <StackPanel Spacing="4" IsVisible="{Binding Explanation.HasSteps}">
+                <TextBlock Text="How to remove it properly" FontWeight="SemiBold" FontSize="12" />
+                <ItemsControl ItemsSource="{Binding Explanation.Steps}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ExplainStep">
+                      <Grid ColumnDefinitions="20,*" Margin="0,2">
+                        <TextBlock Text="{Binding Number, StringFormat='{}{0}.'}" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Explanation.Commands}" IsVisible="{Binding Explanation.HasCommands}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ExplainCommandRow">
+                    <StackPanel Spacing="2" Margin="0,4">
+                      <TextBlock Classes="caption" Text="{Binding Label}" />
+                      <Grid ColumnDefinitions="*,Auto">
+                        <Border Background="{DynamicResource MiuContentBg}" CornerRadius="4" Padding="8,6">
+                          <SelectableTextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" FontSize="11" TextWrapping="Wrap" />
+                        </Border>
+                        <Button Grid.Column="1" Classes="secondary" Content="Copy" Padding="8,4" Margin="6,0,0,0" VerticalAlignment="Top"
+                                Click="OnCopyCommand" Tag="{Binding Text}" ToolTip.Tip="Copy this command" />
+                      </Grid>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="secondary" Content="Search the web for more" Command="{Binding Explanation.SearchCommand}"
+                      ToolTip.Tip="Searches for the name only. The path is never sent." />
+            </StackPanel>
+          </Border>
+          <Button Classes="secondary" Content="What is this? Search the web" Command="{Binding SearchWebCommand}" CommandParameter="{Binding Selected}"
+                  IsVisible="{Binding !HasExplanation}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Searches for the name only. The path is never sent." />
           <!-- Teach Miu -->
           <StackPanel Spacing="8">
             <TextBlock Text="Teach Miu" FontWeight="SemiBold" FontSize="13" />
@@ -224,8 +314,12 @@
             <Button Classes="secondary" Content="Show in folder" Command="{Binding RevealCommand}" CommandParameter="{Binding Selected}" />
             <Button Classes="secondary" Content="Copy path" Click="OnCopyPath" />
           </StackPanel>
-          <Button Classes="secondary" Content="Open folder" Command="{Binding OpenCommand}" CommandParameter="{Binding Selected}" IsVisible="{Binding Selected.IsDir}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="secondary" Content="Open" Command="{Binding OpenItemCommand}" CommandParameter="{Binding Selected}" />
+            <Button Classes="secondary" Content="Quick preview" Command="{Binding PreviewCommand}" CommandParameter="{Binding Selected}" />
+          </StackPanel>
         </StackPanel>
+        </Panel>
         </ScrollViewer>
       </Border>
     </Grid>

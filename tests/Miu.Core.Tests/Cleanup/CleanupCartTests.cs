@@ -63,4 +63,23 @@ public class CleanupCartTests
         cart.Contains(@"C:\CODE\APP").Should().BeTrue();
         cart.Items.Should().ContainSingle();
     }
+
+    [Fact]
+    public void Refresh_shrinks_folders_whose_contents_were_cleaned_and_drops_what_is_gone()
+    {
+        var cart = new CleanupCart(PathStyle.Windows);
+        cart.Add(new CartItem(@"C:\P\.claude\worktrees\a", "a", 16_000, Verdict.Review, "wt"));
+        cart.Add(new CartItem(@"C:\P\.claude\worktrees\b", "b", 14_000, Verdict.Review, "wt"));
+        cart.Add(new CartItem(@"C:\gone", "gone", 500, Verdict.Safe, "x"));
+        var changes = 0;
+        cart.Changed += (_, _) => changes++;
+
+        cart.Refresh([(@"C:\P\.claude\worktrees\a\src-tauri\target", 15_000), (@"C:\elsewhere\target", 9_000)], p => p != @"C:\gone");
+
+        cart.Items.Select(i => (i.Name, i.Bytes)).Should().Equal(("a", 1_000L), ("b", 14_000L));
+        cart.TotalBytes.Should().Be(15_000);
+        changes.Should().Be(1);
+        cart.Refresh([], _ => true);
+        changes.Should().Be(1); // nothing changed, no event
+    }
 }

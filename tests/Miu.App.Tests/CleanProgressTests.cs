@@ -148,6 +148,19 @@ public sealed class CleanProgressTests : IDisposable
         public Task<RestoreResult> RestoreAsync(IReadOnlyList<RecycledItem> items, CancellationToken ct) => Task.FromResult(new RestoreResult([], []));
     }
 
+    [Fact]
+    public async Task Cleaning_inside_a_cart_folder_updates_the_cart()
+    {
+        var s = AppServices.Create(":memory:", new CleanupServiceTests.FakeBin(), secrets: new TelegramServiceTests.MemorySecrets());
+        var wt = Path.Combine(_root, "worktree");
+        Directory.CreateDirectory(Path.Combine(wt, "target"));
+        s.Cart.Add(new CartItem(wt, "worktree", 1000, Verdict.Review, "wt"));
+        s.Cart.Add(new CartItem(Path.Combine(_root, "deleted-elsewhere"), "deleted-elsewhere", 50, Verdict.Safe, "x"));
+        var target = new CartItem(Path.Combine(wt, "target"), "target", 800, Verdict.Safe, "build");
+        await new CleanupService(s).CleanAsync([target], null, "quick-clean");
+        s.Cart.Items.Should().ContainSingle().Which.Bytes.Should().Be(200);
+    }
+
     private sealed class SyncProgressList(List<CleanProgress> list) : IProgress<CleanProgress>
     {
         public void Report(CleanProgress value) => list.Add(value);
