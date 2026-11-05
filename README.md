@@ -7,7 +7,7 @@ Free and for everyone, with extra help for developers and vibe coders, whose dis
 
 Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.com](https://duykhang.com) · [Threads @dkhang](https://www.threads.com/@dkhang)
 
-> Status: **Milestone 2 (Clean)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
+> Status: **Milestone 3 (Insights & learning)**. Miu scans, explains every item, and cleans what you choose: everything goes to the **Recycle Bin (Windows) / Trash (Linux)** and can be undone from the Activity page. macOS cleaning comes later.
 
 | Home | Analyze |
 |---|---|
@@ -24,6 +24,14 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
 | Cleanup cart | Activity |
 |---|---|
 | ![Cart](docs/screenshots/cart.png) | ![Activity](docs/screenshots/activity.png) |
+
+| Duplicates | Rules (learns from you) |
+|---|---|
+| ![Duplicates](docs/screenshots/duplicates.png) | ![Rules](docs/screenshots/rules.png) |
+
+| Types | Teach Miu |
+|---|---|
+| ![Types](docs/screenshots/types.png) | ![Teach](docs/screenshots/teach.png) |
 
 | Splash | About |
 |---|---|
@@ -45,6 +53,11 @@ Made with ♥ by Khang · [vietnamcos.com](https://vietnamcos.com) · [duykhang.
   - **Review & Clean** shows exactly what will move. Items that aren't Safe start unchecked.
   - Everything goes to the Recycle Bin / Trash, and each clean can be undone from **Activity**.
   - Protected locations can't be added, and they are checked again at the moment of deleting.
+- **Types, Largest and Duplicates:** see which kinds of files take the space and the 100 biggest files. Find exact copies: Miu keeps the oldest and offers the rest (as Review).
+- **Miu learns from you:**
+  - **Keep — never suggest** and **Always OK to delete** take effect right away, with an optional reason.
+  - When you repeatedly clean or restore similar items, Miu suggests a rule and shows its evidence ("You deleted 3 of 3 such items"). It is only used after you tap **Turn on**.
+  - The Rules page lets you see, switch off, delete, import and export rules.
 - **For developers:** clean one project's rebuildable folders, or every idle project at once. **Docker** shows its disk usage and offers safe prunes: build cache, unused image layers and stopped containers. Volumes are never touched.
 - **Folders that hold cleanable files** are labelled with how much inside is safe, e.g. "4.8 GB to clean".
 
@@ -85,7 +98,7 @@ docs/superpowers/plans         implementation plans
 Full detail is in the [spec](docs/superpowers/specs/2026-11-05-miu-smart-storage-design.md).
 1. ~~**Clean:** cleanup cart, Recycle Bin with undo, Quick Clean~~ ✅ · next: duplicates, Types view.
 2. **Developer tools:** ~~Docker cleanup~~ ✅ · WSL/Docker disk compaction, "Make this a rule".
-3. **Learning rules:** Miu learns from your Keep and Delete choices.
+3. ~~**Learning rules**~~ ✅ · ~~duplicates, Types view~~ ✅
 4. **Background and schedules:** watched folders, scheduled cleanup, notifications.
 5. **Telegram:** alerts with action buttons.
 6. **Network drives and cloud backup.**

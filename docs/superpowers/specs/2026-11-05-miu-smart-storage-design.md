@@ -711,7 +711,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F1.5 Home drive cards — partial in M1 (basic)
 - [ ] F1.6 Analyze tree — partial in M1 (drill-down list)
 - [x] F1.7 Treemap control
-- [ ] F1.8 Types & Largest views
+- [x] F1.8 Types & Largest views
 - [ ] F1.9 Search query language
 - [x] F1.10 Details pane
 - [ ] F1.11 Snapshots & What grew
@@ -726,7 +726,7 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [x] F2.7 Recycle Bin delete
 - [x] F2.8 Activity & Undo
 - [x] F2.9 Quick Clean
-- [ ] F2.10 Duplicate finder
+- [x] F2.10 Duplicate finder
 - [ ] F2.11 System file explainer
 - [ ] F2.12 Permanent delete option
 
@@ -743,14 +743,14 @@ Each prompt assumes this spec is in the repo. Start every session with:
 - [ ] F2D.10 Dev digest & card
 
 ### Phase 3 — Learning rules
-- [ ] F3.1 Teach Miu UI
-- [ ] F3.2 Decisions + features
-- [ ] F3.3 Implicit signals
-- [ ] F3.4 Pattern miner
-- [ ] F3.5 Suggested rules
-- [ ] F3.6 Rules page
+- [x] F3.1 Teach Miu UI
+- [x] F3.2 Decisions + features
+- [ ] F3.3 Implicit signals — partial in M3 (clean + undo; cart removals / ignored suggestions pending)
+- [x] F3.4 Pattern miner
+- [x] F3.5 Suggested rules
+- [x] F3.6 Rules page
 - [ ] F3.7 Confidence feedback
-- [ ] F3.8 Import/export
+- [x] F3.8 Import/export
 
 ### Phase 4 — Background & Automations
 - [ ] F4.1 Agent + tray
